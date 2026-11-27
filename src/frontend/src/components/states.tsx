@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { CircleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { paths } from "@/lib/router";
 import { Button, buttonVariants } from "./ui/button";
@@ -51,10 +52,17 @@ export function Failed({
   className?: string;
 }) {
   const answered = status === 404 || status === 401 || status === 403;
+  // A whole page that is not there, or not this person's, is the not-found page: one design for both (ARCH-011).
+  if (answered && back)
+    return (
+      <div role="alert" data-state="failed" className={cn("flex flex-1 flex-col", className)}>
+        <NotFoundPage title={title}>{reason}</NotFoundPage>
+      </div>
+    );
   return (
     <div role="alert" data-state="failed" className={cn("flex flex-col gap-3 rounded-md border border-attention-line bg-attention-tint p-5", className)}>
       <div className="flex items-start gap-3">
-        <Icon name="verdict" className="mt-0.5 text-attention-text" />
+        <CircleAlert aria-hidden className="mt-0.5 size-5 shrink-0 text-attention-text" />
         <div className="flex flex-col gap-1">
           <p className="font-semibold text-attention-text">{title}</p>
           <p className="text-sm text-ink">{answered ? reason : `${reason} ${unknown}`}</p>
@@ -84,15 +92,72 @@ export function Stale({ reason, className }: { reason: string; className?: strin
   );
 }
 
-/** A genuinely empty result — the read worked and there is nothing. */
+/**
+ * A genuinely empty result — the read worked and there is nothing. Quiet text and the one thing to do
+ * next: no box, and never a dashed outline (a dashed outline is a drop zone).
+ */
 export function Empty({ icon, title, children, action, className }: { icon: IconName; title: string; children?: ReactNode; action?: ReactNode; className?: string }) {
   return (
-    <div data-state="empty" className={cn("flex flex-col items-start gap-3 rounded-md border border-dashed border-border-strong bg-surface p-6", className)}>
-      <Icon name={icon} tinted className="size-7" />
-      <p className="font-display text-lg font-semibold">{title}</p>
+    <div data-state="empty" className={cn("flex max-w-prose flex-col items-start gap-2 py-2", className)}>
+      <p className="flex items-center gap-2 font-semibold text-ink">
+        <Icon name={icon} className="size-5 text-ink-muted" />
+        {title}
+      </p>
       {children && <div className="text-ink-body">{children}</div>}
-      {action}
+      {action && <div className="pt-1">{action}</div>}
     </div>
+  );
+}
+
+/** Something is being worked out: a spinner and the words, never a greyed button. */
+export function Working({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <p role="status" aria-live="polite" className={cn("flex items-center gap-2 text-ink-body", className)}>
+      <Spinner />
+      {children}
+    </p>
+  );
+}
+
+/** `inherit`: drawn in the text's own colour, for inside a button that is working ("Working it out…"). */
+export function Spinner({ className, inherit = false }: { className?: string; inherit?: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "size-4 shrink-0 animate-spin rounded-full border-2 motion-reduce:animate-none",
+        inherit ? "border-current border-t-transparent" : "border-border-strong border-t-primary",
+        className,
+      )}
+    />
+  );
+}
+
+/**
+ * A page that is not there, or not yours to see: it fills the frame with what happened, what to do,
+ * and the places to go instead. The console's own not-found and every page's answered failure share it.
+ */
+export function NotFoundPage({ title, children, links }: { title: string; children: ReactNode; links?: { label: string; href: string }[] }) {
+  const to = links ?? [
+    { label: "Back to the org chart", href: paths.home() },
+    { label: "Notifications", href: paths.notifications() },
+    { label: "Credits", href: paths.credits() },
+  ];
+  return (
+    <section aria-label={title} className="flex flex-1 items-center justify-center py-10">
+      <div className="flex w-full max-w-form flex-col items-start gap-4 rounded-lg border bg-surface px-8 py-10 shadow-card max-sm:px-5 max-sm:py-7">
+        <img src="/brand/endgame-mark.svg" alt="" width={40} height={40} className="size-10" />
+        <h1 className="font-display text-3xl font-semibold leading-tight tracking-tight max-sm:text-2xl">{title}</h1>
+        <div className="text-ink-body">{children}</div>
+        <nav aria-label="Where to go instead" className="flex flex-wrap gap-2 pt-1">
+          {to.map((l, i) => (
+            <Link key={l.href} href={l.href} className={buttonVariants({ variant: i === 0 ? "primary" : "soft" })}>
+              {l.label}
+            </Link>
+          ))}
+        </nav>
+      </div>
+    </section>
   );
 }
 

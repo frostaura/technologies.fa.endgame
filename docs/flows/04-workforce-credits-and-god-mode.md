@@ -22,8 +22,8 @@ Shared vocabulary used below:
 - **Steps:**
   1. Press "Hiring". The page title reads "Hiring for <name>" with the intro "Hires are proposed when the organisation needs someone: a new division, a project reaching a new stage, or a job that keeps coming back. In auto-mode one that fits the budget is taken on at once; otherwise it waits for you here."
   2. The proposals load (up to 200, newest first). The section "Waiting for you" holds open proposals. The section "Decided" holds accepted and declined ones.
-  3. Each card shows a badge ("Waiting for you" / "Hired" / "Declined"), "<Name>, <Role> for <place>" (the role as written; a name that is the role is said once), "About <n> credits a month" plus ", more than the budget has room for" when it does not fit, then the trigger text and the date.
-  4. The aside holds "Contractor roles that keep coming back" (HIRE-07) and "People let go" (EMP-09). An Admin also sees "Ask for a hire" above the proposals (HIRE-09).
+  3. Each section is one card of rows, every row laid out alike: "<Name>, <Role> for <place>" (the role as written; a name that is the role is said once) over the trigger text and the date; "About <n> credits a month", with "More than the budget has room for" under it when an open proposal does not fit; and its state as a tag ("Waiting for you" / "Hired" / "Declined" / "Withdrawn"). Decided proposals are newest first; past ten, "Show all <n> proposals".
+  4. The side panel holds "Contractor roles that keep coming back" (HIRE-07) and "People let go" (EMP-09). An Admin also sees "Ask for a hire" as the page header's action (HIRE-09).
 - **You know it worked when:** the heading "Hiring for <name>" appears with the "Waiting for you" section, or the empty state.
 - **Variations and refusals:**
   - Empty: "No hires have been proposed here" with "When the work here needs someone, a hire is proposed with its job description and what it would cost a month."
@@ -222,17 +222,17 @@ Shared vocabulary used below:
 - **Starts at:** `/employees/<id>`. Reached from the org chart node (button "<Name>’s record and memory"), the ontology graph, "See <Name>’s record", an idle card "Nothing to do", or a notification.
 - **Needs:** Viewer on the employee's level.
 - **Steps:**
-  1. The header shows the avatar (with a halo while working), the name and a status badge ("Free" / "Working" / "Paused" / "Let go").
+  1. The header shows the avatar (with a halo while working), the name and a status badge ("Free" / "Working" / "Paused" / "Let go"). An Admin sees the actions as one group at the header's right: "Edit the job", "Reassign", "Change budget", "Pause" (or "Resume") and "Let go"; on a phone "Edit the job" stands beside "More", which opens the rest. A chosen action opens its panel under the header.
   2. If idle too long, the header adds "Nothing to do for <n> days".
-  3. The line under the name reads "<Role> · Employee · Hired <time ago>" and " · Reports to <name>". A current run adds the link "Working now: <title>".
+  3. The line under the name reads "<Role> · Employee · Hired <time ago>" and " · Reports to <name>". Under it, "Works at <place>" (a link to that place) — so two employees with the same name and role are told apart by where they work, not by the colour of their avatar — and, with a current run, the link "Working now: <title>".
   4. The track record shows four tiles:
      - "Work accepted": "<a> of <b>" or "No work judged yet". Detail "<n> pieces sent back" / "Nothing sent back", plus " · <n> judgements of others’ work".
      - "Repairs not charged": "<n> repairs of its own mistakes, never billed" or "No repairs of its own work".
      - "Cost so far": "Budget <n> a month, <n> used this month", or "<n> this month; no budget of its own, the one above holds"; when contractors spent some of it, ", including the contractors it briefs; <n> of its own" follows the figure. Both figures count the contractors it briefs, as its budget does (`trackRecord.cost`; its own share is `ownToDateCredits` / `ownMonthCredits`).
      - "Estimates": a headline, or "None scored yet" / "Scored once its first estimated work finishes". Detail "Across <n> pieces of work. The largest miss was <n>%." A run nobody owns is scored to whoever its model calls were mostly charged to, a contractor's calls counting as its briefer's — so a researcher is scored on the research it led.
-  5. "Job description" lists Mandate, Works at, May use, Services, Budget ("… a month, including the contractors it briefs") and Thinking power. Technical mode adds "Identifier".
-  6. "Recent work" shows run chips ("Now: <title>", "Its last piece of work") and the runs it led (`recentRuns`, newest first, up to 12: its own, ones it held a task in, ones charged to it, ones it briefed contractors for), and up to 12 tasks with status — with no tasks, the runs it led are listed as "Work it led" (title, "Finished", "Did not succeed", "Working"…, and when), and an employee with finished work but nothing listed reads "{Name} has finished {n} pieces of work here, none of it split into tasks (research is not)." — ("To do", "In progress", "Blocked", "Done", "Did not succeed", "Cancelled") and "Estimated <n>, cost <n>" or "No estimate".
-  7. "Contractors it has briefed" (EMP-07) and "Talk to <Name>" (EMP-08) follow. The memory sits in the aside (MEM-01).
+  5. "Job description", in the side panel, lists Mandate, Works at, May use, Services, Budget ("… a month, including the contractors it briefs") and Thinking power. Technical mode adds "Identifier".
+  6. "Recent work" is a table — Work, Status, When and, for tasks, Credits — in one status vocabulary: "To do", "Waiting to start", "In progress", "Waiting for you", "Paused", "Done", "Did not succeed", "Cancelled" (a cancelled piece of work never reads "Finished"); "When" reads "Started <time ago>", "Added <time ago>" or "Ended <time ago>"; Credits reads "<actual> of <estimate> estimated", "<estimate> estimated" or "—". It lists the tasks it took (up to 50, newest first); with no tasks, the runs it led (`recentRuns`, newest first, up to 12: its own, ones it held a task in, ones charged to it, ones it briefed contractors for) as "Work it led". The newest ten show, then "Show all <n> pieces of work". "Its last piece of work" links the last run from the section's heading when the table does not already hold it. An employee with finished work but nothing listed reads "{Name} has finished {n} pieces of work here, none of it split into tasks (research is not)."
+  7. "What <Name> remembers" (MEM-01) sits beside the work from 1600 px wide, under it below that; "Talk to <Name>" (EMP-08) follows the work, and "Contractors it has briefed" (EMP-07) is in the side panel.
 - **You know it worked when:** the four track-record tiles and the job description are shown.
 - **Variations and refusals:**
   - Not found: "This employee could not be found", "This was not found, or you cannot see it." and "Back to the org chart" (a not-found is an answer, so there is no retry). Other failure: "The employee could not be loaded".
@@ -385,7 +385,7 @@ Shared vocabulary used below:
 - **Starts at:** `/hires?scope=<path>`, the aside **"People let go"** ("Their memory is kept, so rehiring one is not a cold start."), which links to each record; or the record itself.
 - **Needs:** Admin. The record is a released employee.
 - **Steps:**
-  1. On the record, "Where <Name> works again" starts at where it was ("(where it was)"); choose another place if you like.
+  1. On the record, in the header where the actions were, "Where <Name> works again" starts at where it was ("(where it was)"); choose another place if you like.
   2. Press "Rehire <Name>" ("Its memory comes back with it, so it does not start cold.").
   3. The badge becomes "Free" and the archived memory is restored and editable again. Its old manager is kept if that manager is still on the payroll.
 - **You know it worked when:** the badge reads "Free" and "Works at" shows the place chosen.
@@ -444,11 +444,11 @@ Shared vocabulary used below:
 - **Level:** Core
 - **Learn first:** EMP-01.
 - **What you learn:** memory is curated rather than piled up. Each entry says what kind it is, which place it is about, and where it came from.
-- **Starts at:** `/employees/<id>`, aside "What <Name> remembers".
+- **Starts at:** `/employees/<id>`, the section "What <Name> remembers" (beside the work from 1600 px wide; folded on a phone).
 - **Needs:** nothing.
 - **Steps:**
   1. The copy reads "Written by <Name> after each task and tidied at every review. You can read, correct or remove any of it."
-  2. Each entry shows its title, its body, and a line "<kind> · About <place> · <origin>", plus a link "the task" when it came from a run.
+  2. Each entry shows its title, its body, and a line "<kind> · About <place> · <origin>", plus a link "the task" when it came from a run. The newest ten show, then "Show all <n> entries". Past five entries, a search box ("Search <n> entries") and a filter by kind with counts ("All", "Facts", "How it works here", "Preferences", "Lessons") narrow the list; nothing matching reads "Nothing <Name> remembers matches “<words>”".
   3. Kinds: "A fact", "How it works here", "A preference", "A lesson learned".
   4. Origins: "Added by a person", "Corrected by a person", "Corrected at a review", "Merged at a review", "Learned on a task", "Remembered".
 - **You know it worked when:** the entry list, or "Nothing remembered yet", is shown.
@@ -468,7 +468,7 @@ Shared vocabulary used below:
 - **Level:** Core
 - **Learn first:** MEM-01.
 - **What you learn:** you can teach an employee directly, and it reads your entry before its next task.
-- **Starts at:** the memory aside. Press "Add something <Name> should know".
+- **Starts at:** the memory section. Press "Add something <Name> should know".
 - **Needs:** Builder. The employee is on the payroll.
 - **Steps:**
   1. Fill in "In a few words", "What <Name> should remember" and "Kind".
@@ -521,7 +521,7 @@ Shared vocabulary used below:
 - **Level:** Advanced
 - **Learn first:** MEM-01; following a run (another reader's area).
 - **What you learn:** a review merges what repeats, removes what is stale and corrects bad habits, as a run you can watch.
-- **Starts at:** the memory aside, review panel.
+- **Starts at:** the memory section, the review line under the entries.
 - **Needs:** Builder. The employee is on the payroll.
 - **Steps:**
   1. The panel reads "Not reviewed yet. A review merges what repeats, removes what is stale and corrects bad habits.", or "Last review, <time ago>" with "<n> notes merged, <n> removed as out of date, <n> habits corrected." and the link "See the review".
@@ -574,6 +574,7 @@ Shared vocabulary used below:
      - "You are below zero. <n> credits more can be spent before work stops; the next top-up settles the debt first."
      - "You are below zero, at your limit. Work is paused until a top-up settles the debt."
   3. Three figures follow: "Spent this month", "On AI work", "On hosting".
+  4. Below the budgets (CRED-02) — beside them, on a screen 1,600 wide or more — the month's two figures (CRED-04) and "Top-ups": every top-up made, with its note, its date and "+ <n>".
 - **You know it worked when:** the balance and the three figures are shown.
 - **Variations and refusals:**
   - No organisation: "There are no credits to show until your organisation is named." with a "Start" link.
@@ -592,10 +593,10 @@ Shared vocabulary used below:
 - **Starts at:** `/credits`, section "Budgets" ("A cap set higher up holds for everything beneath it. Work that would break a cap does not start.", with " An Admin or the Owner sets the caps." for anyone below Admin).
 - **Needs:** nothing.
 - **Steps:**
-  1. Rows run in tree order (by name at each level), indented: organisation, divisions, projects, apps; each level's employees with a cap of their own follow it.
-  2. Each row shows a bar "<n> of <n> used" (warning colour at 100%), or which cap holds it: "No cap here; the cap on <Name>, <n> credits, holds" — or "No cap here or above it".
-  3. App and employee names link to their page. An employee's row reads "With the contractors it briefs" and counts their spend too, as its cap does.
-- **You know it worked when:** the tree of rows is shown with bars where caps exist.
+  1. One dense table, columns "Level", "Spent this month" and "Cap" (and, for an Admin, the row's one action). Rows run in tree order (by name at each level), indented: organisation, divisions, projects, apps; each level's employees with a cap of their own follow it, marked "employee" (an app is marked "app"). Each division's row has a chevron that folds away everything in it ("Hide what is in <Name>" / "Show what is in <Name>").
+  2. A row with a cap of its own shows what it spent with a slim meter against the cap ("<n> of <n> used", warning colour at 100%) and the cap in the "Cap" column. A row with none shows "↑ <n>", the cap above that holds it (its name, read aloud and on hover, is "No cap here; the cap on <Name>, <n> credits, holds"), or "—" ("No cap here or above it"). A legend under the table says what "↑" and "—" mean, once. On a phone the cap column folds into "<n> of <cap> this month".
+  3. App and employee names link to their page. The legend says "An employee’s spending is with the contractors it briefs": its row counts their spend too, as its cap does.
+- **You know it worked when:** the tree of rows is shown with meters where caps exist.
 - **Variations and refusals:** "No spending or caps anywhere in the tree yet." when the list is empty.
 - **Where:** `CreditsView.tsx` (BudgetRow), `creditsModel.ts` (`capAbove`, `noCapLine`). `ReadModels.BudgetLinesAsync`.
 - **Reachable from:** UI.
@@ -606,11 +607,11 @@ Shared vocabulary used below:
 - **Level:** Core
 - **Learn first:** CRED-02.
 - **What you learn:** a monthly cap at a level stops work that would exceed it, and pauses the apps beneath it once spent.
-- **Starts at:** `/credits`, any row of "Budgets": **"Set a cap"**, **"Change the cap"** or **"Remove it"**. An app's own cap also on its page (APP-11). Also `PUT/DELETE /api/cascade` (kind `budget`, key `monthly_credits`) and MCP `budget_set`.
+- **Starts at:** `/credits`, any row of "Budgets": its one action, **"Set a cap"** or **"Change the cap"**. An app's own cap also on its page (APP-11). Also `PUT/DELETE /api/cascade` (kind `budget`, key `monthly_credits`) and MCP `budget_set`.
 - **Needs:** Admin at that level.
 - **Steps:**
-  1. Press "Set a cap" (or "Change the cap"), type into "Credits a month" and press "Save the cap". The bar changes at once and "<Name> may spend <n> credits a month." appears (for an employee "…, with the contractors it briefs.").
-  2. "Remove it" takes the cap away at once and says what holds it now: "<Name> has no cap of its own now; the cap on <Above>, <n> credits a month, holds it." — or "…and nothing above it has one: only the balance and the overdraft limit hold it."
+  1. Press "Set a cap" (or "Change the cap"): the row opens a form across its width. Type into "Credits a month" and press "Save the cap" ("Not now" closes it). The meter changes at once and "<Name> may spend <n> credits a month." appears (for an employee "…, with the contractors it briefs.").
+  2. In the same form, a row with a cap offers **"Remove the cap"**, which takes the cap away at once and says what holds it now: "<Name> has no cap of its own now; the cap on <Above>, <n> credits a month, holds it." — or "…and nothing above it has one: only the balance and the overdraft limit hold it."
   3. At 80%, at the cap and after, as before: notifications, refused model calls, paused apps.
 - **You know it worked when:** the row shows "<n> of <cap> used", or which cap holds it.
 - **Variations and refusals:**
@@ -642,7 +643,7 @@ Shared vocabulary used below:
 - **Level:** Advanced
 - **Learn first:** CRED-01, CRED-08.
 - **What you learn:** the organisation may choose to stop sooner than FrostAura allows, never later.
-- **Starts at:** the `/credits` aside "If you run out" ("Nothing stops at zero. You can go below it, down to your limit, and the next top-up settles it."), with "Most FrostAura allows you" and "Your own limit" ("Not set" or "<n> below zero").
+- **Starts at:** the `/credits` aside "If you run out" ("Nothing stops at zero. You can go below it, down to your limit, and the next top-up settles it."), with "Most FrostAura allows" and "Your own limit" ("Not set" or "<n> below zero").
 - **Needs:** Owner.
 - **Steps:**
   1. Press "Change your limit". Fill in "How far below zero you may go", with the hint "FrostAura allows at most <n> below zero. Yours can be tighter, never deeper."
@@ -775,9 +776,9 @@ Shared vocabulary used below:
 - **Starts at:** `/operator`, section "Every organisation" (refreshes every 30 seconds).
 - **Needs:** operator.
 - **Steps:**
-  1. Each card shows the name, "<slug> · since <date>" (plus the status when not active), and a badge "In credit", "Below zero" or "At its limit".
-  2. The card shows "Balance", "Overdraft allowed" ("<n> below zero", with "Their own: <n>; yours: <n>" or "Set by you: <n>"), "Apps" and "Last active" ("Never").
-  3. Waiting requests show "One top-up request is waiting." or "<n> top-up requests are waiting."
+  1. Under the section's line "Entering one is logged where its Owner can read it.", one card per organisation, one under another, every card on the same grid: the name with a badge "In credit", "Below zero" or "At its limit", and "<slug> · since <date>" (plus the status when not active).
+  2. Beside it, in the same four places on every card, "Balance" (red below zero), "Overdraft allowed" ("<n> below zero", with "Their own: <n>; yours: <n>" or "Set by you: <n>"), "Apps" and "Last active" ("Never"). The actions ("Enter <Org>", "Top up", "Deepest overdraft") run along the card's foot, and a form they open spans the card.
+  3. Waiting requests show "One top-up request is waiting." or "<n> top-up requests are waiting." under the name.
 - **You know it worked when:** a card is listed for each organisation.
 - **Variations and refusals:** empty "No organisations yet" with "Provision the first one for an invited Owner." Failed: "The organisations could not be loaded". Technical mode adds the id.
 - **Where:** `OperatorView.tsx` (Organisations, OrganisationCard). `GET /api/operator/organisations`. `OperatorOverview.cs`.
@@ -952,7 +953,7 @@ Shared vocabulary used below:
 - **Needs:** Owner.
 - **Steps:**
   1. The heading reads "Operator access", with "Every time someone from FrostAura entered <Org> or acted on it, newest first. It is never silent, and only the Owner can read it."
-  2. Entries read, for example, "Entered the organisation", "Screened against the red lines: it crosses none (by a model)", "Set up the organisation", "Added <n> credits", "Changed the deepest overdraft to <n> credits below zero", "Answered a top-up request with <n> credits", "Declined a top-up request for <n> credits: <why>", "Changed the prices for every organisation" and "As an Admin: <what they changed>", each with the date and time and "<operator name> · <email>". Technical mode adds the raw action and its detail.
+  2. One list, newest first, every entry on the same grid: the date and time first, then what was done, then who. Entries read, for example, "Entered the organisation", "Screened against the red lines: it crosses none (by a model)", "Set up the organisation", "Added <n> credits", "Changed the deepest overdraft to <n> credits below zero", "Answered a top-up request with <n> credits", "Declined a top-up request for <n> credits: <why>", "Changed the prices for every organisation" and "As an Admin: <what they changed>", each with "<operator name> · <email>". Technical mode adds the raw action and its detail.
 - **You know it worked when:** the log, or its empty state, is shown.
 - **Variations and refusals:**
   - Empty: "No one from FrostAura has entered <Org>" with "If anyone does, it is written here first."

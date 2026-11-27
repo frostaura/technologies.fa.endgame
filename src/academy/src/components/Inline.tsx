@@ -12,7 +12,7 @@ import { INLINE_STYLE as STYLE, type Tone } from "./inlineStyle.ts";
  * every inline style keeps its contrast there.
  */
 
-const TOKEN = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|(?<![*\w])\*[^*\s][^*]*\*(?!\*)|\b[A-Z]{2,5}-\d{2}\b|\{[A-Za-z][A-Za-z0-9 ._-]*\})/g;
+const TOKEN = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|(?<![*\w])\*[^*\s][^*]*\*(?!\*)|\b[A-Z]{2,5}-\d{2}\b|\{[A-Za-z][A-Za-z0-9 ._-]*\}|<[A-Za-z][A-Za-z ._-]{0,15}>)/g;
 
 
 
@@ -37,13 +37,14 @@ export function Inline({ text: raw, self, plainIds = false, tone = "light" }: { 
     if (at > last) out.push(text.slice(last, at));
     const t = m[0];
     if (t.startsWith("**")) out.push(<strong key={k++} className={style.strong}><Inline text={t.slice(2, -2)} self={self} plainIds={plainIds} tone={tone} /></strong>);
-    else if (t.startsWith("`")) out.push(<code key={k++} className={style.code}>{t.slice(1, -1)}</code>);
+    // A short path or command stays on one line; only one too long for a line may break, and then anywhere.
+    else if (t.startsWith("`")) out.push(<code key={k++} className={`${style.code} ${t.length <= 34 ? "whitespace-nowrap" : ""}`}>{t.slice(1, -1)}</code>);
     else if (t.startsWith("[")) {
       const lm = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(t);
       const to = lm ? link(lm[2] ?? "") : null;
       out.push(to ? <a key={k++} href={to} className={style.link}>{lm?.[1]}</a> : <Fragment key={k++}>{lm?.[1] ?? t}</Fragment>);
     } else if (t.startsWith("*")) out.push(<em key={k++}>{t.slice(1, -1)}</em>);
-    else if (t.startsWith("{")) {
+    else if (t.startsWith("{") || t.startsWith("<")) {
       out.push(
         <var key={k++} className={style.variable} title={`Stands for the ${placeholderWords(t)}, which the console fills in`} data-placeholder={t}>
           {placeholderWords(t)}

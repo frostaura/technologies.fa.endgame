@@ -1,7 +1,8 @@
 import { organisationsOf, useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { useId, useState, type FormEvent } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Icon } from "@/components/Icon";
+import { Check, Copy } from "lucide-react";
 import { OneTime } from "@/components/OneTime";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ import { useAppDispatch, useAppSelector } from "@/store";
 import { platformOrigin, useGetMeQuery, useGetTokensQuery, useRevokeTokenMutation } from "@/store/api";
 import { createToken } from "@/store/sensitive";
 import type { AccessToken, AccessTokenCreated, TokenRole, Tree } from "@/store/types";
+import { PageHeader, SECTION } from "@/components/ui/page";
 import { AppShell } from "../shell/AppShell";
 
 const EXPIRY: { days: number | null; label: string }[] = [
@@ -46,24 +48,29 @@ export function AssistantsView() {
 
   return (
     <AppShell crumbs={[...(org ? [{ label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() }] : []), { label: technical ? "MCP" : "AI assistants" }]} aside={org ? <Addresses tree={tree.data} technical={technical} /> : undefined}>
-      <header className={cn("flex flex-col gap-1.5", RISE)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold">
-          <Icon name="assistants" tinted className="size-7" />
-          {title}
-        </h1>
-        <p className="max-w-prose text-ink-body">
-          {technical
+      <PageHeader
+        className={RISE}
+        icon="assistants"
+        title={title}
+        lead={
+          technical
             ? "Personal access tokens (egp_…) for the MCP endpoints: /mcp for the control plane's tools and /mcp/apps/{appId} for each app's own operations. A token acts as you, capped at its role; God mode is never available through one."
-            : "Give an assistant a key and it can do what you can do here — read the org chart, start ideas, look after apps — but never more than the role you give it. It can never make an app public, change the overdraft, top up or download an app."}
-        </p>
-      </header>
+            : "Give an assistant a key and it can do what you can do here — read the org chart, start ideas, look after apps — but never more than the role you give it. It can never make an app public, change the overdraft, top up or download an app."
+        }
+      />
 
       {me.data && !org ? (
         <Empty icon="organisation" title="There is nothing to connect until your organisation is named" />
       ) : org ? (
-        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
-          <div className="flex min-w-0 flex-col gap-3 xl:col-span-2">
-            <h2 className="text-lg font-semibold">{technical ? "Tokens" : "Assistants you have let in"}</h2>
+        // The key form first, at a width its fields can use; the keys made beneath it, newest live ones first.
+        <div className="flex min-w-0 flex-col gap-6">
+          <ErrorBoundary name="Making a key">
+            <NewToken organisation={org.slug} highest={highestIn(me.data, org.slug)} technical={technical} />
+          </ErrorBoundary>
+          <section aria-labelledby="keys-title" className="flex min-w-0 flex-col gap-3">
+            <h2 id="keys-title" className={SECTION}>
+              {technical ? "Tokens" : "Assistants you have let in"}
+            </h2>
             {view.kind === "loading" && (
               <Loading label="Loading the assistants you let in" className="flex flex-col gap-2">
                 <Skeleton className="h-16 rounded-sm" />
@@ -80,27 +87,31 @@ export function AssistantsView() {
                   </Empty>
                 ) : (
                   <ul aria-label="Keys" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
-                    {view.data.map((t) => (
-                      <TokenRow key={t.id} token={t} technical={technical} organisation={orgName(t.organisation)} />
-                    ))}
+                    {[...view.data]
+                      .sort((x, y) => Number(live(y)) - Number(live(x)))
+                      .map((t) => (
+                        <TokenRow key={t.id} token={t} technical={technical} organisation={orgName(t.organisation)} />
+                      ))}
                   </ul>
                 )}
               </>
             )}
-          </div>
-          <ErrorBoundary name="Making a key">
-            <NewToken organisation={org.slug} highest={highestIn(me.data, org.slug)} technical={technical} />
-          </ErrorBoundary>
+          </section>
         </div>
       ) : null}
     </AppShell>
   );
 }
 
-function status(t: AccessToken): { label: string; tone: "success" | "quiet" | "attention-strong" } {
-  if (t.revokedAt) return { label: "Revoked", tone: "quiet" };
-  if (!t.active) return { label: "Expired", tone: "attention-strong" };
-  return { label: "Active", tone: "success" };
+/** A key that still works; a revoked or expired one is retired, drawn quietly after the live ones. */
+function live(t: AccessToken): boolean {
+  return !t.revokedAt && t.active;
+}
+
+function status(t: AccessToken): { label: string; tone: "good" | "neutral" } {
+  if (t.revokedAt) return { label: "Revoked", tone: "neutral" };
+  if (!t.active) return { label: "Expired", tone: "neutral" };
+  return { label: "Active", tone: "good" };
 }
 
 /** When a key stops, as of now: a revoked key says when it was revoked, never an end it will not reach. */
@@ -125,39 +136,39 @@ function TokenRow({ token, technical, organisation }: { token: AccessToken; tech
     }
   };
   return (
-    <li data-token={token.id} className="flex flex-col gap-2 border-b px-5 py-4 last:border-b-0">
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <div className="flex min-w-0 flex-col">
-          <span className="break-words font-semibold">{token.name}</span>
-          <span className="text-sm text-ink-body">
-            {ROLE_NAME[token.role]} in {organisation} · made {formatDate(token.createdAt)}
-            {lifetime(token)}
-          </span>
-          {technical && <code className="font-mono text-xs text-ink-muted">{token.prefix}… · {token.id}</code>}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-ink-muted">{token.lastUsedAt ? `Last used ${timeAgo(token.lastUsedAt)}` : "Never used"}</span>
-          <Badge tone={s.tone}>{s.label}</Badge>
-        </div>
+    <li data-token={token.id} className={cn("grid grid-cols-grow-end items-center gap-x-4 gap-y-2 border-b px-5 py-3.5 last:border-b-0", !live(token) && "bg-ground")}>
+      <div className="flex min-w-0 flex-col">
+        <span className={cn("break-words font-semibold", !live(token) && "font-medium text-ink-muted")}>{token.name}</span>
+        <span className={cn("text-sm", live(token) ? "text-ink-body" : "text-ink-muted")}>
+          {ROLE_NAME[token.role]} in {organisation} · made {formatDate(token.createdAt)}
+          {lifetime(token)}
+        </span>
+        <span className="text-sm text-ink-muted">{token.lastUsedAt ? `Last used ${timeAgo(token.lastUsedAt)}` : "Never used"}</span>
+        {technical && <code className="font-mono text-xs text-ink-muted">{token.prefix}… · {token.id}</code>}
       </div>
-      {token.active && !confirm && (
-        <Button size="sm" variant="ghost" className="self-start" disabled={revoking.isLoading} onClick={() => setConfirm(true)}>
-          Revoke
-        </Button>
-      )}
+      <div className="flex items-center justify-end gap-2">
+        <Badge tone={s.tone}>{s.label}</Badge>
+        {token.active && !confirm && (
+          <Button size="sm" variant="ghost" disabled={revoking.isLoading} onClick={() => setConfirm(true)}>
+            Revoke
+          </Button>
+        )}
+      </div>
       {confirm && (
-        <div role="group" aria-label={`Confirm revoking ${token.name}`} className="flex flex-wrap items-center gap-2 rounded-xs bg-attention-tint px-3 py-2">
-          <span className="text-attention-deep">The assistant using it is shut out at once. This cannot be undone; make a new key to let it back in.</span>
-          <Button size="sm" onClick={() => void drop()}>
-            Revoke it
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>
-            Keep it
-          </Button>
-        </div>
+        <ConfirmCard
+          className="col-span-full"
+          label={`Confirm revoking ${token.name}`}
+          question={`Revoke ${token.name}?`}
+          detail="The assistant using it is shut out at once. This cannot be undone; make a new key to let it back in."
+          confirm="Revoke it"
+          cancel="Keep it"
+          busy={revoking.isLoading}
+          onConfirm={() => void drop()}
+          onCancel={() => setConfirm(false)}
+        />
       )}
       {problem && (
-        <p role="alert" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
+        <p role="alert" className="col-span-full rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
           {problem}
         </p>
       )}
@@ -192,12 +203,12 @@ function NewToken({ organisation, highest, technical }: { organisation: string; 
   };
 
   if (roles.length === 0) {
-    return <p className="rounded-md border bg-surface p-5 text-ink-body shadow-card">You hold no role in this organisation that a key could carry.</p>;
+    return <p className="text-ink-body">You hold no role in this organisation that a key could carry.</p>;
   }
 
   return (
-    <section aria-labelledby={`${ids.name}-title`} className="flex flex-col gap-4 rounded-md border bg-surface p-5 shadow-card">
-      <h2 id={`${ids.name}-title`} className="text-lg font-semibold">
+    <section aria-labelledby={`${ids.name}-title`} className="flex flex-col gap-4 rounded-md border bg-surface p-5 shadow-card sm:p-6">
+      <h2 id={`${ids.name}-title`} className={SECTION}>
         {technical ? "New token" : "Make a key"}
       </h2>
       {made && (
@@ -211,11 +222,11 @@ function NewToken({ organisation, highest, technical }: { organisation: string; 
           {problem}
         </p>
       )}
-      <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-        <Field id={ids.name} label="Which assistant is it for?" hint="A name you will recognise later, such as “My laptop assistant”.">
-          <Input id={ids.name} value={name} maxLength={100} onChange={(e) => setName(e.target.value)} aria-describedby={`${ids.name}-hint`} />
-        </Field>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
+      <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 xl:grid-cols-wide-two">
+          <Field id={ids.name} label="Which assistant is it for?" hint="A name you will recognise later, such as “My laptop assistant”." className="sm:col-span-2 xl:col-span-1">
+            <Input id={ids.name} value={name} maxLength={100} onChange={(e) => setName(e.target.value)} aria-describedby={`${ids.name}-hint`} />
+          </Field>
           <Field id={ids.role} label="What it may do" hint={highest === "owner" ? "As Owner, the most a key can carry is Admin." : "No more than your own role."}>
             <Select id={ids.role} value={role} onChange={(e) => setRole(e.target.value as TokenRole)} aria-describedby={`${ids.role}-hint`}>
               {roles.map((r) => (
@@ -235,10 +246,12 @@ function NewToken({ organisation, highest, technical }: { organisation: string; 
             </Select>
           </Field>
         </div>
-        <p className="text-sm text-ink-body">{ROLE_MAY[role]}</p>
-        <Button type="submit" className="self-start" disabled={!name.trim() || sending}>
-          {sending ? "Making the key…" : technical ? "Create token" : "Make the key"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          <Button type="submit" disabled={!name.trim() || sending}>
+            {sending ? "Making the key…" : technical ? "Create token" : "Make the key"}
+          </Button>
+          <p className="max-w-prose text-sm text-ink-body">{ROLE_MAY[role]}</p>
+        </div>
       </form>
     </section>
   );
@@ -249,7 +262,7 @@ function Addresses({ tree, technical }: { tree: Tree | undefined; technical: boo
   const apps = (tree?.divisions ?? []).flatMap((d) => d.projects.flatMap((p) => p.apps.map((a) => ({ id: a.id, name: a.name }))));
   return (
     <section aria-labelledby="addresses-title" className="flex flex-col gap-3">
-      <h2 id="addresses-title" className="text-lg font-semibold">
+      <h2 id="addresses-title" className="text-base font-semibold">
         {technical ? "Endpoints" : "The addresses to give it"}
       </h2>
       <Address label={technical ? "Control plane" : "The whole organisation"} value={`${origin()}/mcp`} />
@@ -271,16 +284,18 @@ function Addresses({ tree, technical }: { tree: Tree | undefined; technical: boo
   );
 }
 
+/** An address shown whole, breaking only after a "/", with a copy button beside its name. */
 function Address({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
+  const parts = value.split("/");
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <span className="text-sm text-ink-muted">{label}</span>
-      <div className="flex min-w-0 items-center gap-2">
-        <code className="min-w-0 flex-1 break-all rounded-xs bg-ground px-3 py-2 font-mono text-xs">{value}</code>
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-sm font-medium text-ink-body">{label}</span>
         <Button
           size="sm"
-          variant="outline"
+          variant="ghost"
+          className="-mr-2 shrink-0 px-2 text-primary-link hover:text-primary-hover"
           aria-label={`Copy the address for ${label}`}
           onClick={() =>
             void navigator.clipboard.writeText(value).then(
@@ -289,9 +304,22 @@ function Address({ label, value }: { label: string; value: string }) {
             )
           }
         >
+          {copied ? <Check aria-hidden className="size-4" /> : <Copy aria-hidden className="size-4" />}
           {copied ? "Copied" : "Copy"}
         </Button>
       </div>
+      <code className="rounded-xs bg-ground px-3 py-2 font-mono text-xs leading-relaxed break-normal">
+        {parts.map((part, i) => (
+          <span key={i}>
+            {part}
+            {i < parts.length - 1 && (
+              <>
+                /<wbr />
+              </>
+            )}
+          </span>
+        ))}
+      </code>
     </div>
   );
 }

@@ -32,11 +32,20 @@ public static class RunKinds
     public static readonly IReadOnlyList<string> All = [Research, Conversation, Build, Task, Review, Suggest];
 }
 
-/// <summary>The <c>kind</c>s of a conversation run's own <c>message</c> events that the console and the history read (ARCH-011).</summary>
+/// <summary>The <c>kind</c>s of a conversation run's own <c>message</c> events that the console and the history read (ARCH-012).</summary>
 public static class ConversationMessageKinds
 {
     /// <summary>The turn started work — an idea's research, a change, a try again: <c>{ kind, runId, workKind, title }</c>.</summary>
     public const string WorkStarted = "work.started";
+}
+
+/// <summary>
+/// Why the control plane refuses to record where a build was placed (R9-1): a build starts from a new idea, so the app it
+/// names must be new — never one another idea's build or a change made or changed, one that was published, or one that holds data.
+/// </summary>
+public static class PlacementRefusals
+{
+    public const string Taken = "placement_taken";
 }
 
 /// <summary>The run log's event types (ARCH-004, <i>Run log</i>).</summary>

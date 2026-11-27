@@ -94,7 +94,7 @@ export function History({ app, canRestore }: { app: AppDetail; canRestore: boole
                       <time dateTime={v.at} title={formatDate(v.at)}>
                         {timeAgo(v.at)}
                       </time>
-                      {live && <Badge tone="success">Live now</Badge>}
+                      {live && <Badge tone="good">Live now</Badge>}
                       {technical && <code className="font-mono text-xs">{v.commit.slice(0, 12)}</code>}
                       {canRestore && !v.live && !live && confirm?.commit !== v.commit && (
                         <Button size="sm" variant="ghost" className="min-h-touch px-2 text-primary-link" disabled={restoring.isLoading} onClick={() => setConfirm(v)} aria-label={`Bring back “${title}” from ${timeAgo(v.at)}`}>

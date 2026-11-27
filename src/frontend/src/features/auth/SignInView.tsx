@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
+import { TITLE } from "@/components/ui/page";
 import { Button } from "@/components/ui/button";
 import { RISE, stagger } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -101,14 +102,17 @@ export function SignInView() {
   };
 
   return (
-    <div className="grid min-h-screen grid-cols-1 lg:grid-cols-2">
-      <div className="flex flex-col justify-center gap-8 px-4 py-10 sm:px-10 lg:px-16">
+    // One composed page on the house look: the sign-in card and, beside it from md up (under it on a phone),
+    // what Endgame does, both centred in the screen. Black on white, one accent.
+    <div className="flex min-h-screen items-center justify-center bg-ground px-4 py-10 pl-safe-l pr-safe-r sm:px-8">
+      <div className="grid w-full max-w-page grid-cols-1 items-center gap-10 md:grid-cols-2 lg:gap-16">
+      <div className="flex flex-col gap-8 rounded-lg border bg-surface px-6 py-8 shadow-card sm:px-10 sm:py-10">
         <div className="flex items-center gap-2.5">
           <img src="/brand/endgame-mark.svg" alt="" width={40} height={40} className="size-10" />
           <span className="font-display text-2xl font-bold tracking-tight">Endgame</span>
         </div>
         <div className="flex max-w-form flex-col gap-3 animate-rise motion-reduce:animate-none">
-          <h1 className="text-4xl font-semibold leading-tight">{creating ? "Create your passkey" : "Sign in"}</h1>
+          <h1 className={TITLE}>{creating ? "Create your passkey" : "Sign in"}</h1>
           <p className="text-base text-ink-body">
             {creating
               ? "Your device keeps the key; Endgame never sees a password, because there is none."
@@ -140,7 +144,7 @@ export function SignInView() {
                 autoComplete="name"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="min-h-12 rounded-xs border border-border-strong bg-surface px-3.5 text-base"
+                className="min-h-12 rounded-xs border border-border-field bg-surface px-3.5 text-base"
               />
             </div>
             <div className="flex flex-col gap-2">
@@ -154,7 +158,7 @@ export function SignInView() {
                 autoComplete="email webauthn"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="min-h-12 rounded-xs border border-border-strong bg-surface px-3.5 text-base"
+                className="min-h-12 rounded-xs border border-border-field bg-surface px-3.5 text-base"
               />
             </div>
             <div className="flex flex-col gap-2">
@@ -169,7 +173,7 @@ export function SignInView() {
                 aria-describedby={`${codeId}-hint`}
                 value={invitationCode}
                 onChange={(e) => setInvitationCode(e.target.value)}
-                className="min-h-12 rounded-xs border border-border-strong bg-surface px-3.5 font-mono text-base"
+                className="min-h-12 rounded-xs border border-border-field bg-surface px-3.5 font-mono text-base"
               />
               <p id={`${codeId}-hint`} className="text-sm text-ink-muted">
                 The code you were sent or given when you were invited. It works once. Leave it empty only if you are the first person here.
@@ -190,8 +194,8 @@ export function SignInView() {
               <Icon name="secrets" />
               {busy === "login" ? "Waiting for your device…" : "Sign in with a passkey"}
             </Button>
-            <Button variant="ghost" onClick={() => setCreating(true)} disabled={busy !== null}>
-              First time here? Create your passkey
+            <Button variant="ghost" className="px-0 text-primary-link hover:bg-transparent hover:text-primary-hover" onClick={() => setCreating(true)} disabled={busy !== null}>
+              First time here? <span className="font-semibold underline underline-offset-4">Create your passkey</span>
             </Button>
           </div>
         )}
@@ -207,24 +211,23 @@ export function SignInView() {
         />
       </div>
 
-      <aside aria-label="What Endgame does" className="relative hidden overflow-hidden bg-primary px-16 py-16 text-primary-ink lg:flex lg:flex-col lg:justify-center lg:gap-8">
-        <div aria-hidden className="absolute -right-16 -top-20 size-aura animate-drift rounded-full bg-violet opacity-75 blur-aura motion-reduce:animate-none" />
-        <div aria-hidden className="absolute -bottom-36 right-40 size-aura animate-drift rounded-full bg-teal opacity-75 blur-aura animate-delay-5 motion-reduce:animate-none" />
-        <p className="relative text-eyebrow font-semibold uppercase text-primary-ink-soft">One place to run every product you own</p>
-        <ul className="relative flex flex-col gap-6">
+      <aside aria-label="What Endgame does" className="flex flex-col gap-6 px-2 max-md:hidden">
+        <p className="text-eyebrow font-semibold uppercase text-ink-muted">One place to run every product you own</p>
+        <ul className="flex flex-col gap-6">
           {LEADS.map((lead, i) => (
             <li key={lead.title} className={cn("flex gap-4", RISE, stagger(i + 1))}>
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xs bg-surface text-primary">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xs border bg-surface text-primary">
                 <Icon name={lead.icon} />
               </span>
               <div className="flex flex-col gap-1">
                 <span className="font-display text-lg font-semibold">{lead.title}</span>
-                <span className="text-primary-tint">{lead.text}</span>
+                <span className="text-ink-body">{lead.text}</span>
               </div>
             </li>
           ))}
         </ul>
       </aside>
+      </div>
     </div>
   );
 }
@@ -247,7 +250,7 @@ function DevelopmentSignIn({ options, busy, onSignIn }: { options: ReturnType<ty
   }
   if (!options.data?.developmentSignIn) return null;
   return (
-    <div className="flex max-w-form flex-col gap-2 rounded-md border border-dashed border-border-strong p-4">
+    <div className="flex max-w-form flex-col gap-2 rounded-md border bg-ground p-4">
       <span className="text-eyebrow font-semibold uppercase text-ink-muted">Development only</span>
       <p className="text-sm text-ink-body">This deployment is in development and offers a sign-in without a passkey.</p>
       <Button variant="outline" className="self-start" onClick={onSignIn} disabled={busy !== null}>

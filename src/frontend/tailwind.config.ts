@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss";
 import plugin from "tailwindcss/plugin";
-import { blur, cssVariables, layout, motion, radius, screens, shortQuery, surfaces, tailwindColors, typography, viewportQueries } from "./src/lib/tokens";
+import { blur, coarseQuery, cssVariables, layout, motion, radius, railQuery, screens, shortQuery, surfaces, tailwindColors, typography, viewportQueries } from "./src/lib/tokens";
 
 /**
  * The Tailwind theme. It holds no values: every colour, radius, shadow, typeface and motion comes
@@ -33,6 +33,7 @@ const config: Config = {
         aura: layout.width.aura,
         nav: layout.nav,
         bar: layout.bar,
+        rail: layout.rail,
         "nav-safe": layout.navSafe,
         "sheet-gap": layout.sheetGap,
         "safe-t": layout.safe.top,
@@ -68,6 +69,14 @@ const config: Config = {
     // `phone:` — exactly where the console draws its phone layout (`useViewport`), upright or on its side.
     plugin(({ addVariant }) => {
       addVariant("phone", `@media ${viewportQueries.phone}`);
+    }),
+    // `touch:` — worked by touch (a phone or a tablet): controls are a thumb's size.
+    plugin(({ addVariant }) => {
+      addVariant("touch", `@media ${coarseQuery}`);
+    }),
+    // `rail:` — a phone on its side: the side rail, the one-line header, two columns. Registered last, so it wins.
+    plugin(({ addVariant }) => {
+      addVariant("rail", `@media ${railQuery}`);
     }),
     // `delay-*` for animations, read from the same stagger scale.
     plugin(({ matchUtilities, theme }) => {

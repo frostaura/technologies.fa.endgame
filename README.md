@@ -112,7 +112,7 @@ make down
 | --- | --- |
 | [Product spec](docs/specs/endgame-spec.md) | What Endgame is, and every product decision. |
 | [Build plan](docs/specs/endgame-build-plan.md) | How it was built, phase by phase. |
-| [Architecture](docs/architecture/) | `ARCH-001` to `ARCH-010`: services, contracts, hosting, the harness, deploying. |
+| [Architecture](docs/architecture/) | `ARCH-001` to `ARCH-011`: services, contracts, hosting, the harness, deploying, the console's design system. |
 | [Flows](docs/flows/README.md) | Every flow in the product; the source of the academy. |
 | [Use cases](docs/use-cases/) · [Test specs](docs/testing/) | What each part must do, and how that is proven. |
 | [Deploying](docs/architecture/ARCH-008-deploying-on-portainer.md) | GitHub Actions → Docker Hub → Portainer → Cloudflare tunnel. |

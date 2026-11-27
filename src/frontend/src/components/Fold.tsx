@@ -89,13 +89,14 @@ export function Disclosure({
         onClick={() => setOpen((x) => !x)}
         className={cn(
           "flex min-h-touch w-full items-center gap-3 rounded-md text-left",
-          open ? "px-1 text-ink-muted" : "border bg-surface px-4 py-3 shadow-card",
+          open ? "px-1" : "border bg-surface px-4 py-3 shadow-card",
           !open && tone === "attention" && "border-attention-line bg-attention-wash",
         )}
       >
         {icon && <span className="flex shrink-0">{icon}</span>}
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className={cn("font-display font-semibold", echo ? "text-lg text-ink" : open ? "text-sm" : "text-base text-ink")}>{title}</span>
+          {/* Open, every fold's row is the same section heading — whether or not what it holds had its own. */}
+          <span className={cn("font-display font-semibold text-ink", open ? "text-lg" : "text-base")}>{title}</span>
           {summary && !open && <span className="text-sm text-ink-muted">{summary}</span>}
         </span>
         <ChevronDown aria-hidden className={cn("size-5 shrink-0 text-ink-muted transition-transform motion-reduce:transition-none", open && "rotate-180")} />

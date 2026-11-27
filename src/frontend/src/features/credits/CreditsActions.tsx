@@ -6,6 +6,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { formatCredits, formatDate, formatNumber } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
 import { useActiveTree } from "@/lib/useActiveOrganisation";
+import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store";
 import {
   api,
@@ -248,10 +249,10 @@ export function NarrowerLimit({ organisation, credits }: { organisation: string;
   );
 }
 
-const STATUS: Record<TopUpRequest["status"], { label: string; tone: "primary" | "success" | "quiet" }> = {
-  open: { label: "Waiting for FrostAura", tone: "primary" },
-  fulfilled: { label: "Added", tone: "success" },
-  declined: { label: "Declined", tone: "quiet" },
+const STATUS: Record<TopUpRequest["status"], { label: string; tone: "info" | "good" | "neutral" }> = {
+  open: { label: "Waiting for FrostAura", tone: "info" },
+  fulfilled: { label: "Added", tone: "good" },
+  declined: { label: "Declined", tone: "neutral" },
 };
 
 /** Asking FrostAura for a top-up (the Owner), and every request with what became of it. */
@@ -406,6 +407,7 @@ export function CapControl({ line, lines, organisation }: { line: BudgetLine; li
 
   const remove = async () => {
     setResult(null);
+    setOpen(false);
     const undo = patch(null);
     try {
       await write(null);
@@ -422,37 +424,37 @@ export function CapControl({ line, lines, organisation }: { line: BudgetLine; li
     }
   };
 
+  // Two cells of the row's grid: the one action, in the trailing column; and, open, the cap's form across the whole row.
   return (
-    <div className="flex flex-col gap-2 sm:col-span-5">
-      {open ? (
-        <form onSubmit={(e) => void save(e)} aria-label={`Cap for ${line.name}`} className="flex flex-wrap items-end gap-2" noValidate>
-          <Field id={id} label="Credits a month" problem={value.trim() && n === null ? "Type a number of credits." : null} className="min-w-0 flex-1 sm:flex-none">
+    <>
+      <span className="flex justify-end max-sm:col-start-2 max-sm:row-start-1">
+        <Button size="sm" variant="ghost" className="text-primary-link max-sm:px-2" disabled={busy} aria-expanded={open} onClick={() => setOpen(!open)} aria-label={`${line.capCredits === null ? "Set a cap on" : "Change the cap on"} ${line.name}`}>
+          {line.capCredits === null ? "Set a cap" : "Change the cap"}
+        </Button>
+      </span>
+      {open && (
+        <form onSubmit={(e) => void save(e)} aria-label={`Cap for ${line.name}`} className="col-span-full flex flex-wrap items-end gap-2 rounded-xs bg-ground px-4 py-3" noValidate>
+          <Field id={id} label="Credits a month" problem={value.trim() && n === null ? "Type a number of credits." : null} className="min-w-0 flex-1 sm:max-w-48 sm:flex-none">
             <Input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} aria-invalid={!!value.trim() && n === null} />
           </Field>
           <Button type="submit" size="sm" disabled={n === null || busy}>
             Save the cap
           </Button>
+          {line.capCredits !== null && (
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void remove()} aria-label={`Remove the cap on ${line.name}`}>
+              Remove the cap
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
             Not now
           </Button>
         </form>
-      ) : (
-        <div className="flex flex-wrap gap-1">
-          <Button size="sm" variant="ghost" className="text-primary-link" disabled={busy} onClick={() => setOpen(true)} aria-label={`${line.capCredits === null ? "Set a cap on" : "Change the cap on"} ${line.name}`}>
-            {line.capCredits === null ? "Set a cap" : "Change the cap"}
-          </Button>
-          {line.capCredits !== null && (
-            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void remove()} aria-label={`Remove the cap on ${line.name}`}>
-              Remove it
-            </Button>
-          )}
-        </div>
       )}
       {result && (
-        <p role={result.ok ? "status" : "alert"} className={result.ok ? "text-sm text-success-text" : "rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text"}>
+        <p role={result.ok ? "status" : "alert"} className={cn("col-span-full", result.ok ? "text-sm text-success-text" : "rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text")}>
           {result.text}
         </p>
       )}
-    </div>
+    </>
   );
 }

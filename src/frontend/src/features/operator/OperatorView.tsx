@@ -1,13 +1,14 @@
 import { useId, useState, type FormEvent } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { OneTime } from "@/components/OneTime";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmCard } from "@/components/ui/confirm";
+import { PageHeader, SECTION } from "@/components/ui/page";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
-import { formatCredits, formatDate, formatNumber, isValidSlug, possessive, slugify, timeAgo } from "@/lib/format";
+import { formatCredits, formatDate, formatNumber, isValidSlug, slugify, timeAgo } from "@/lib/format";
 import { RISE } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
@@ -32,10 +33,10 @@ import { Fold } from "@/components/Fold";
 import { AppShell } from "../shell/AppShell";
 import { pricingRows } from "./operatorModel";
 
-const STANDING: Record<OperatorOrganisation["standing"], { label: string; tone: "success" | "attention-strong" | "attention" }> = {
-  "in-credit": { label: "In credit", tone: "success" },
-  overdrawn: { label: "Below zero", tone: "attention" },
-  "at-limit": { label: "At its limit", tone: "attention-strong" },
+const STANDING: Record<OperatorOrganisation["standing"], { label: string; tone: "good" | "warn" | "bad" }> = {
+  "in-credit": { label: "In credit", tone: "good" },
+  overdrawn: { label: "Below zero", tone: "warn" },
+  "at-limit": { label: "At its limit", tone: "bad" },
 };
 
 /**
@@ -57,13 +58,7 @@ export function OperatorView() {
         ) : undefined
       }
     >
-      <header className={cn("flex flex-col gap-1.5", RISE)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold">
-          <Icon name="god-mode" tinted className="size-7" />
-          God mode
-        </h1>
-        <p className="max-w-prose text-ink-body">Every organisation on Endgame. Entering one, topping it up or changing its overdraft is written to a log its Owner reads — operator access is never silent.</p>
-      </header>
+      <PageHeader className={RISE} icon="god-mode" title="God mode" lead="Every organisation on Endgame. Entering one, topping it up or changing its overdraft is written to a log its Owner reads — operator access is never silent." />
       {me.data && !operator ? (
         <Failed title="God mode is for FrostAura operators" reason="Your account is not one of FrostAura's operators, so these screens are closed to you." status={403} />
       ) : operator ? (
@@ -97,11 +92,14 @@ function Organisations() {
   const view = viewOf(query);
   return (
     <section aria-labelledby="orgs-title" className="flex flex-col gap-3">
-      <h2 id="orgs-title" className="text-lg font-semibold">
-        Every organisation
-      </h2>
+      <div className="flex flex-col gap-1">
+        <h2 id="orgs-title" className={SECTION}>
+          Every organisation
+        </h2>
+        <p className="text-sm text-ink-muted">Entering one is logged where its Owner can read it.</p>
+      </div>
       {view.kind === "loading" && (
-        <Loading label="Loading every organisation" className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Loading label="Loading every organisation" className="flex flex-col gap-3">
           <Skeleton className="h-48 rounded-md" />
           <Skeleton className="h-48 rounded-md" />
         </Loading>
@@ -115,7 +113,7 @@ function Organisations() {
               Provision the first one for an invited Owner.
             </Empty>
           ) : (
-            <ul aria-label="Organisations" className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <ul aria-label="Organisations" className="flex flex-col gap-3">
               {view.data.map((o) => (
                 <OrganisationCard key={o.id} org={o} />
               ))}
@@ -152,42 +150,40 @@ function OrganisationCard({ org }: { org: OperatorOrganisation }) {
   };
 
   return (
-    <li data-org={org.slug} className="flex min-w-0 flex-col gap-3 rounded-md border bg-surface p-5 shadow-card">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-col">
+    <li data-org={org.slug} className="grid min-w-0 grid-cols-1 gap-x-6 gap-y-4 rounded-md border bg-surface p-5 shadow-card lg:grid-cols-name-wide">
+      <div className="flex min-w-0 flex-col gap-1">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
           <span className="break-words font-display text-lg font-semibold">{org.name}</span>
-          <span className="text-sm text-ink-muted">
-            {org.slug} · since {formatDate(org.createdAt)}
-            {org.status !== "active" ? ` · ${org.status}` : ""}
-          </span>
-          {technical && <code className="break-all font-mono text-xs text-ink-muted">{org.id}</code>}
-        </div>
-        <Badge tone={standing.tone}>{standing.label}</Badge>
+          <Badge tone={standing.tone}>{standing.label}</Badge>
+        </span>
+        <span className="text-sm text-ink-muted">
+          {org.slug} · since {formatDate(org.createdAt)}
+          {org.status !== "active" ? ` · ${org.status}` : ""}
+        </span>
+        {technical && <code className="break-all font-mono text-xs text-ink-muted">{org.id}</code>}
+        {org.openTopUpRequests > 0 && (
+          <p className="flex items-center gap-2 pt-1 text-sm font-medium text-ink">
+            <span aria-hidden className="size-2 shrink-0 rounded-full bg-warn" />
+            {org.openTopUpRequests === 1 ? "One top-up request is waiting." : `${org.openTopUpRequests} top-up requests are waiting.`}
+          </p>
+        )}
       </div>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-        <Figure label="Balance" value={formatNumber(org.balance)} />
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+        <Figure label="Balance" value={formatNumber(org.balance)} tone={org.balance < 0 ? "bad" : undefined} />
         <Figure label="Overdraft allowed" value={`${formatNumber(org.overdraft.effective)} below zero`} note={org.overdraft.ownLimit !== null ? `Their own: ${formatNumber(org.overdraft.ownLimit)}; yours: ${formatNumber(org.overdraft.frostauraLimit)}` : `Set by you: ${formatNumber(org.overdraft.frostauraLimit)}`} />
         <Figure label="Apps" value={formatNumber(org.apps)} />
         <Figure label="Last active" value={org.lastActivityAt ? timeAgo(org.lastActivityAt) : "Never"} />
       </dl>
-      {org.openTopUpRequests > 0 && (
-        <p className="flex items-center gap-2 text-attention-text">
-          <Icon name="credits" className="size-4" />
-          {org.openTopUpRequests === 1 ? "One top-up request is waiting." : `${org.openTopUpRequests} top-up requests are waiting.`}
-        </p>
-      )}
-      {entry ? (
-        <div role="status" className="flex flex-col gap-2 rounded-sm border border-attention-line bg-attention-wash px-4 py-3">
+      {entry && (
+        <div role="status" className="flex flex-col gap-2 rounded-sm border bg-ground px-4 py-3 lg:col-span-2">
           <p className="font-semibold">You entered {org.name} as an Admin, {timeAgo(entry.enteredAt)}.</p>
           <p className="text-ink-body">{entry.logged ? `Logged: ${entry.logged}` : "This entry is logged where its Owner can read it."}</p>
           <Link href={paths.homeOf(org.slug)} className={cn(buttonVariants({ size: "sm" }), "self-start")}>
             Open its org chart
           </Link>
         </div>
-      ) : (
-        <p className="text-sm text-ink-muted">Entering is logged where {possessive(org.name)} Owner can read it.</p>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 lg:col-span-2">
         {!entry && (
           <Button size="sm" onClick={() => void go()} disabled={entering.isLoading}>
             {entering.isLoading ? "Entering…" : `Enter ${org.name}`}
@@ -200,8 +196,13 @@ function OrganisationCard({ org }: { org: OperatorOrganisation }) {
           Deepest overdraft
         </Button>
       </div>
-      {action === "top-up" && <TopUpForm organisation={org.slug} name={org.name} onDone={() => setAction(null)} />}
+      {action === "top-up" && (
+        <div className="lg:col-span-2">
+          <TopUpForm organisation={org.slug} name={org.name} onDone={() => setAction(null)} />
+        </div>
+      )}
       {action === "overdraft" && (
+        <div className="lg:col-span-2">
         <OverdraftForm
           org={org}
           onDone={() => setAction(null)}
@@ -210,14 +211,15 @@ function OrganisationCard({ org }: { org: OperatorOrganisation }) {
             setSaved(text);
           }}
         />
+        </div>
       )}
       {saved && (
-        <p role="status" className="text-sm text-success-text">
+        <p role="status" className="text-sm text-success-text lg:col-span-2">
           {saved}
         </p>
       )}
       {problem && (
-        <p role="alert" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
+        <p role="alert" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text lg:col-span-2">
           {problem}
         </p>
       )}
@@ -225,11 +227,12 @@ function OrganisationCard({ org }: { org: OperatorOrganisation }) {
   );
 }
 
-function Figure({ label, value, note }: { label: string; value: string; note?: string }) {
+/** One of a card's figures: every card has the same four in the same places, each value on one line. */
+function Figure({ label, value, note, tone }: { label: string; value: string; note?: string; tone?: "bad" }) {
   return (
-    <div className="flex min-w-0 flex-col">
-      <dt className="text-sm text-ink-muted">{label}</dt>
-      <dd className="m-0 font-semibold">{value}</dd>
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="truncate text-sm text-ink-muted">{label}</dt>
+      <dd className={cn("m-0 whitespace-nowrap font-semibold tabular-nums", tone === "bad" && "text-attention-text")}>{value}</dd>
       {note && <dd className="m-0 text-xs text-ink-muted">{note}</dd>}
     </div>
   );
@@ -344,7 +347,7 @@ function Requests() {
   const [done, setDone] = useState<string | null>(null);
   return (
     <section aria-labelledby="requests-title" className="flex flex-col gap-3">
-      <h2 id="requests-title" className="text-lg font-semibold">
+      <h2 id="requests-title" className={SECTION}>
         Top-up requests
       </h2>
       {done && (
@@ -381,7 +384,7 @@ function Requests() {
                     <span>
                       {r.organisationName || r.organisation} · {formatCredits(r.credits)}
                     </span>
-                    <Badge tone={r.status === "fulfilled" ? "success" : "quiet"}>{r.status === "fulfilled" ? "Added" : "Declined"}</Badge>
+                    <Badge tone={r.status === "fulfilled" ? "good" : "neutral"}>{r.status === "fulfilled" ? "Added" : "Declined"}</Badge>
                   </li>
                 ))}
               </ul>
@@ -408,7 +411,7 @@ function RequestRow({ request, onAdded }: { request: TopUpRequest; onAdded: (tex
     }
   };
   return (
-    <li data-request={request.id} className="flex flex-col gap-2 rounded-md border border-attention-line bg-surface p-4 shadow-card">
+    <li data-request={request.id} className="flex flex-col gap-2 rounded-md border bg-surface p-4 shadow-card">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="font-semibold">
           {request.organisationName || request.organisation} asks for {formatCredits(request.credits)}
@@ -458,7 +461,7 @@ function TopUps() {
   const view = viewOf(query);
   return (
     <section aria-labelledby="topups-title" className="flex flex-col gap-3">
-      <h2 id="topups-title" className="text-lg font-semibold">
+      <h2 id="topups-title" className={SECTION}>
         Top-ups made
       </h2>
       {view.kind === "loading" && (
@@ -485,7 +488,7 @@ function TopUps() {
                     {t.byEmail ? ` · by ${t.byEmail}` : ""}
                   </span>
                 </span>
-                <span className="font-semibold text-success-text">+ {formatNumber(t.credits)}</span>
+                <span className="whitespace-nowrap font-semibold tabular-nums">+&nbsp;{formatNumber(t.credits)}</span>
               </li>
             ))}
           </ul>
@@ -501,7 +504,7 @@ function PricingPanel() {
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   return (
     <section aria-labelledby="pricing-title" className="flex flex-col gap-3">
-      <h2 id="pricing-title" className="text-lg font-semibold">
+      <h2 id="pricing-title" className={SECTION}>
         The prices
       </h2>
       <p className="max-w-prose text-ink-body">Credits are priced at what the work costs plus one margin, so every bill can be explained line by line. A change applies everywhere within a minute and is kept in the history below.</p>
@@ -610,18 +613,17 @@ function PricingForm({
         ))}
       </div>
       {confirm ? (
-        <div role="alertdialog" aria-label="Confirm the new prices" className="flex flex-col gap-2 rounded-sm border border-attention-line bg-attention-tint px-4 py-3">
-          <p className="font-semibold text-attention-text">Change the prices for every organisation?</p>
-          <p className="text-attention-deep">Work already estimated keeps its estimate; new work is priced with these figures. The change is recorded with your name.</p>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => void save()}>
-              Change the prices
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>
-              Keep them as they are
-            </Button>
-          </div>
-        </div>
+        <ConfirmCard
+          role="alertdialog"
+          label="Confirm the new prices"
+          question="Change the prices for every organisation?"
+          detail="Work already estimated keeps its estimate; new work is priced with these figures. The change is recorded with your name."
+          confirm="Change the prices"
+          cancel="Keep them as they are"
+          destructive={false}
+          onConfirm={() => void save()}
+          onCancel={() => setConfirm(false)}
+        />
       ) : (
         <Button type="submit" className="self-start" disabled={!changed || bad.length > 0 || saving.isLoading}>
           {saving.isLoading ? "Saving…" : "Save the prices"}
@@ -691,7 +693,7 @@ function ProvisionAside() {
 
   return (
     <section aria-labelledby="provision-title" className="flex flex-col gap-3">
-      <h2 id="provision-title" className="text-lg font-semibold">
+      <h2 id="provision-title" className="text-base font-semibold">
         Set up an organisation
       </h2>
       <p className="text-ink-body">For a person FrostAura has invited. They become its Owner; there is no self-serve sign-up.</p>
@@ -744,9 +746,9 @@ function ProvisionAside() {
           <Textarea id={ids.does} value={does} maxLength={1000} rows={3} onChange={(e) => setDoes(e.target.value)} aria-describedby={`${ids.does}-hint`} />
         </Field>
         {manual && (
-          <fieldset className="flex flex-col gap-3 rounded-sm border border-attention-line bg-attention-tint px-4 py-3">
-            <legend className="px-1 font-semibold text-attention-text">Screen it yourself</legend>
-            <p className="text-sm text-attention-deep">No model could be reached to screen it. Decide yourself whether what it does crosses one of FrostAura&rsquo;s red lines, and say why; your decision and reason are written to its operator log.</p>
+          <fieldset className="flex flex-col gap-3 rounded-sm border border-border-strong bg-ground px-4 py-3">
+            <legend className="px-1 font-semibold">Screen it yourself</legend>
+            <p className="text-sm text-ink-body">No model could be reached to screen it. Decide yourself whether what it does crosses one of FrostAura&rsquo;s red lines, and say why; your decision and reason are written to its operator log.</p>
             <Field id={ids.decision} label="Your decision">
               <Select id={ids.decision} value={decision} onChange={(e) => setDecision(e.target.value === "breach" ? "breach" : "clear")}>
                 <option value="clear">It crosses no red line</option>

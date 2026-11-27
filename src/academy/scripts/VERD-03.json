@@ -10,7 +10,7 @@
       "kind": "demo",
       "highlight": {
         "text": "Verdict ·",
-        "note": "The banner: the stamp, the headline and a two-sentence summary."
+        "note": "The verdict: its tag, the headline and two sentences of the summary."
       }
     },
     {
@@ -18,7 +18,7 @@
       "kind": "demo",
       "highlight": {
         "text": "No red line is crossed",
-        "note": "A red-line alert would sit at the top when one is breached; here none is."
+        "note": "A red-line alert would sit beside the headline when one is breached; here none is."
       }
     },
     {

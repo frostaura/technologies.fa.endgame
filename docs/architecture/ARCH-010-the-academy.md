@@ -64,8 +64,26 @@ src/academy/scripts/<ID>.json ─▶ tools/validate-scripts.ts ─┼─▶ src/
   index are bundled. Progress lives on the device (see **Progress** below).
 - **The step is the address.** `#/flow/<ID>/step/<n>` is the one source of truth for the step being
   read: the highlighted card, "Step n of m", the console and its caption all follow it. Choosing a
-  step and the arrow keys push an address (so Back and Forward walk the steps); scrolling replaces
-  it with the step crossing the reading line; an address changed by hand moves the step.
+  step and the arrow keys push an address (so Back and Forward walk the steps); scrolling the steps
+  column replaces it with the step crossing its reading line; an address changed by hand moves the
+  step.
+- **The player's three layouts** (`pages/FlowPage.tsx`, `stage/Stage.tsx`). On a wide screen
+  (`split:`, not `short:`) the player is one view under the header (`h-player`): a compact title
+  band, the console as the hero filling the remaining height and the width after a side column
+  (`grid-cols-player`, 26–30 rem), and Previous, the step bar, Next, "Try it yourself" and "Show me
+  again" pinned to the console's foot. The steps, "You know it worked when", "What else can happen"
+  and "About this flow" are in the side column, which scrolls on its own; the page does not scroll,
+  so the console never slides under the header, and the controls are in view on arrival at every
+  size from 1280×800 up. On a phone or tablet held upright, the console takes `60svh` with its
+  caption under it and the step's words in the bottom pager; on a short window (`short:`) the
+  console takes the whole height with a slim step bar over its foot. Terminal, request, code and
+  e-mail steps sit in the same frame chrome (`FrameChrome`) and are as tall as what they show.
+- **The caption is shown once.** A step's highlight note is drawn inside the console beside its ring
+  (wide and short layouts); the line under the console carries it only when it cannot be — a phone
+  held upright (the academy sends the highlight without its note), a highlight that found nothing
+  (`DemoFrame`'s `onSpotlight`), or a step's own `note`. The frame is named with `aria-label`, never
+  `title` (a browser draws a title as a tooltip over the page), and nothing is drawn over it while it
+  plays: the click shield that hands the console over is transparent.
 - **Progress** (`src/progress/`) is plain data and pure functions (`model.ts`: seen, done, resume,
   clamp, merge, the streak, the export code; `derive.ts`: per-path counts, next up, milestones), a
   store over `localStorage` (`store.ts`), and one instance wired to the content (`lib/progress.ts`).
@@ -73,15 +91,13 @@ src/academy/scripts/<ID>.json ─▶ tools/validate-scripts.ts ─┼─▶ src/
   seen, or by "Mark as done". It is read synchronously before the first paint, so nothing that
   shows progress moves the page when it appears. Details under **Data**.
 - **Small screens.** Below the `split:` query (`theme/tokens.ts`: 1024 px wide, or a phone or small
-  tablet on its side) the stage sits on top, sticky under a one-row header, at `50svh`; the steps
-  scroll under it; and a step pager (Previous, "Step n of m" with one segment per step, Next) is
-  sticky to the bottom edge of the article, above the home indicator — so the step, its caption and
-  the controls are always in reach of a thumb, and it comes to rest above the footer. A sideways
-  swipe over the stage or the steps walks them (`lib/swipe.ts`; a mostly vertical stroke, a short
-  one, or one that starts in a field or something that scrolls sideways is left alone). "Larger
-  console" grows the stage to everything but the header and the pager, which then carries the
-  step's words. At `split:` the steps sit beside the stage and the pager sits under it; on a short
-  screen (`short:`, under 600 px tall) the stage's controls fold into one row with the pager. On a
+  tablet on its side) the console sits at the top of the page, and a step pager (the step's words,
+  then Previous, "Step n of m" with one segment per step, Next) is sticky to the bottom edge, above
+  the home indicator — so the step and the controls are always in reach of a thumb. Choosing a step
+  in the list below goes back up to the console. A sideways swipe over the stage or the steps walks
+  them (`lib/swipe.ts`; a mostly vertical stroke, a short one, or one that starts in a field or
+  something that scrolls sideways is left alone). "Larger console" grows the stage to everything
+  but the header and the pager. The stage's actions are labelled buttons in one style. On a
   phone the header is the mark, the way back to where the learner left off, search and a menu; the
   rest opens as a sheet from the bottom edge (`components/Sheet.tsx`, the browser's `<dialog>`).
   Heights use `svh` (the stage never jumps as the address bar collapses), the full-screen demo
@@ -184,7 +200,7 @@ project **Court booking**, and the Admin **Ada Lovelace**.
 | `make academy-pdf` | `site/academy.pdf` and `site/operator-handbook.pdf`, headless Chromium |
 | `make academy-e2e` | Playwright against `site/` served under `/technologies.fa.endgame/` |
 | `make academy-shots` | plays every step script against the built demo (fixed clock and viewport, reduced motion, each act played as the academy plays the step and awaited) and saves one WebP per demo step and per variation's last step under `public/shots/<FLOW-ID>/`, with `index.json`; a picture identical to the step before is named, not saved again, and unchanged files are not rewritten. `ACADEMY_FLOWS` limits it; `SHOTS_PORT` (default 5691) moves its server |
-| `make site` | shots, build, assemble, PDFs — the print version sets each step's picture beside its text |
+| `make site` | shots, build, assemble, PDFs — the print version sets each step's picture beside its text: a detail around the ring at twice the pixels (its words print at 7 pt or more), or the whole screen across the page; never the caption bubble or the cursor. Each PDF page past the cover has a running header and its number, and the contents give each flow's page (`tools/render-pdf.ts` renders twice, reading the pages from the first pass's named destinations) |
 | `npm run script:new -- <FLOW-ID>` | scaffolds `scripts/<FLOW-ID>.json` from the parsed flow |
 
 `DEMO_DIST` (default `src/demo/dist`) names the demo build that `site/demo/` is copied from.
@@ -258,7 +274,8 @@ The browser keeps `endgame-academy:progress:v2` in `localStorage`:
 | Spotlights by visible text, quoted exactly as the flow quotes it | The console carries almost no `data-testid`s, and the flows already name every control's words | CSS selectors into the console's markup |
 | PDFs rendered from the site's own print route | One source; the print version is a page like any other | A second, PDF-only template |
 | Progress per device, in `localStorage`, moved between devices by a file or a code | The site is static with no server, and makes no request beyond its own files; accounts would add a service and personal data for a learning aid | Accounts and a sync service; a URL that carries the progress (it would leak into history and shared links) |
-| On a phone the stage stays on top and the pager sits on the bottom edge, rather than the steps as a sheet over a full-screen console | It keeps the scrolling list, the address-as-step model and the reading line exactly as on desktop; the console stays visible while reading; "Larger console" gives the sheet-like view when wanted | A bottom sheet of step text over the console (a second way of reading the same steps, and it hides the console's lower half) |
+| On a wide screen the player is one view with the steps in a column that scrolls beside the console, rather than a long page with a sticky console | The console, the title and every control are in view on arrival at any size, the console never slides under the header, and on a 2560 screen the console gets the width | A long page with the console sticky beside the steps (controls fell below the fold; the console was capped at about 850 px) |
+| On a phone the console is on top at 60% of the height and the pager carries the step's words, rather than the steps as a sheet over a full-screen console | The console is what is taught and stays readable; the step's words and the controls are in reach of a thumb; "Larger console" gives the console the rest when wanted | A sticky half-height console with the steps scrolling under it (too small to teach with: 341×274 on a 375 phone) |
 | `svh` for the stage, `dvh` only for the full-screen demo | The stage must not resize as the address bar collapses mid-scroll (the frame would reflow under the learner) | `vh` (too tall with the bar shown on iOS); `dvh` (jumps) |
 | Captured images are generated, not committed (`public/shots/*/` is git-ignored); the Pages workflow makes them | They are reproducible from the scripts and the demo, and committing hundreds of binaries would churn the repository on every screen change | Committing them (repository growth, stale pictures) |
 

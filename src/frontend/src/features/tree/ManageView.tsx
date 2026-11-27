@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
@@ -57,16 +57,9 @@ export function ManageView() {
         ...(org ? [{ label: org.name, href: entered ? paths.homeOf(entered) : paths.home() }] : []),
         ...(step === "part" && selected ? [{ label: "Manage", href: outlineHref }, { label: selected.name }] : [{ label: "Manage" }]),
       ]}
-      aside={
-        selected && step !== "outline" ? (
-          <ErrorBoundary name="What this is" resetKey={selected.scope}>
-            <ContextPanel key={selected.scope} scope={selected.scope} name={selected.name} level={selected.level} canWrite={roleRank(roleOf(selected.scope)) >= roleRank("builder")} nameOf={nameOf} />
-          </ErrorBoundary>
-        ) : undefined
-      }
     >
       <div className={cn("flex flex-col gap-2", RISE)}>
-        <h1 className="text-3xl font-semibold">{org ? `Manage ${view.kind === "loaded" ? (view.data.organisation?.name ?? org.name) : org.name}` : "Manage the organisation"}</h1>
+        <h1 className="text-3xl font-semibold max-sm:text-2xl">{org ? `Manage ${view.kind === "loaded" ? (view.data.organisation?.name ?? org.name) : org.name}` : "Manage the organisation"}</h1>
         <p className="max-w-prose text-ink-body">Add divisions, projects and apps, rename them, say what each one is, and archive what you no longer use. A part&rsquo;s address is set when it is made and never changes.</p>
       </div>
 
@@ -76,16 +69,17 @@ export function ManageView() {
         </Empty>
       )}
       {(active.isLoading || (org && view.kind === "loading")) && (
-        <Loading label="Loading the organisation" className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <Skeleton className="h-80 rounded-md" />
-          <Skeleton className="h-80 rounded-md lg:col-span-2" />
+        <Loading label="Loading the organisation" className="flex flex-col gap-6 lg:flex-row">
+          <Skeleton className="h-80 rounded-md lg:w-aside 3xl:w-aside-wide" />
+          <Skeleton className="h-80 rounded-md lg:flex-1" />
         </Loading>
       )}
       {org && view.kind === "failed" && <Failed title="The organisation could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
       {view.kind === "loaded" && selected && (
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+          {/* Two panes: the outline, as wide as a side panel, and the part chosen filling the rest. */}
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
             {step !== "part" && <Outline nodes={nodes} selected={step === "outline" ? "" : selected.scope} onSelect={select} />}
             {step === "part" && (
               <Link href={outlineHref} className="flex min-h-touch items-center gap-1 self-start rounded-xs font-semibold text-primary-link">
@@ -95,7 +89,20 @@ export function ManageView() {
             )}
             {step !== "outline" && (
               <ErrorBoundary name="The part chosen" resetKey={selected.scope}>
-                <NodePanel key={selected.scope} node={selected} nodes={nodes} role={roleOf(selected.scope)} tree={arg} onSelect={select} startAdding={search.get("add") === "1"} />
+                <NodePanel
+                  key={selected.scope}
+                  node={selected}
+                  nodes={nodes}
+                  role={roleOf(selected.scope)}
+                  tree={arg}
+                  onSelect={select}
+                  startAdding={search.get("add") === "1"}
+                  context={
+                    <ErrorBoundary name="What this is" resetKey={selected.scope}>
+                      <ContextPanel key={selected.scope} scope={selected.scope} name={selected.name} level={selected.level} canWrite={roleRank(roleOf(selected.scope)) >= roleRank("builder")} nameOf={nameOf} />
+                    </ErrorBoundary>
+                  }
+                />
               </ErrorBoundary>
             )}
           </div>
@@ -107,7 +114,7 @@ export function ManageView() {
 
 function Outline({ nodes, selected, onSelect }: { nodes: ManagedNode[]; selected: string; onSelect: (scope: string) => void }) {
   return (
-    <nav aria-label="Every part of the organisation" className="flex flex-col overflow-hidden rounded-md border bg-surface py-2 shadow-card">
+    <nav aria-label="Every part of the organisation" className="flex flex-col overflow-hidden rounded-md border bg-surface py-2 shadow-card lg:w-aside lg:shrink-0 3xl:w-aside-wide">
       <ul className="flex flex-col">
         {nodes.map((n) => (
           <li key={n.scope}>
@@ -122,9 +129,10 @@ function Outline({ nodes, selected, onSelect }: { nodes: ManagedNode[]; selected
                 n.archived && "text-ink-muted",
               )}
             >
-              <Icon name={ICON[n.level]} tinted={!n.archived} className="size-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{n.name}</span>
-              {n.archived && <Badge tone="quiet">Archived</Badge>}
+              <Icon name={ICON[n.level]} className={cn("size-4 shrink-0", n.archived ? "text-ink-muted" : "text-ink-body")} />
+              {/* Names are never cut: a long one wraps under itself. */}
+              <span className="min-w-0 flex-1 break-words">{n.name}</span>
+              {n.archived && <Badge tone="neutral">Archived</Badge>}
               <ChevronRight aria-hidden className="size-4 shrink-0 text-ink-muted sm:hidden" />
             </button>
           </li>
@@ -134,7 +142,23 @@ function Outline({ nodes, selected, onSelect }: { nodes: ManagedNode[]; selected
   );
 }
 
-function NodePanel({ node, nodes, role, tree, onSelect, startAdding }: { node: ManagedNode; nodes: ManagedNode[]; role: MemberRole | null; tree: TreeArg; onSelect: (scope: string) => void; startAdding: boolean }) {
+function NodePanel({
+  node,
+  nodes,
+  role,
+  tree,
+  onSelect,
+  startAdding,
+  context,
+}: {
+  node: ManagedNode;
+  nodes: ManagedNode[];
+  role: MemberRole | null;
+  tree: TreeArg;
+  onSelect: (scope: string) => void;
+  startAdding: boolean;
+  context: ReactNode;
+}) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const [adding, setAdding] = useState(startAdding);
   const child = childLevel(node.level);
@@ -147,7 +171,7 @@ function NodePanel({ node, nodes, role, tree, onSelect, startAdding }: { node: M
   // One message at a time in the panel (D37): renaming, archiving and deleting replace each other's note.
   return (
     <CardNotesProvider>
-      <section aria-label={`${LEVEL_NAME[node.level]}: ${node.name}`} className="flex flex-col gap-5 rounded-md border bg-surface px-5 py-5 shadow-card lg:col-span-2">
+      <section aria-label={`${LEVEL_NAME[node.level]}: ${node.name}`} className="flex min-w-0 flex-1 flex-col gap-6 rounded-md border bg-surface px-6 py-6 shadow-card max-sm:px-4 max-sm:py-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
             <span className="text-eyebrow font-semibold uppercase text-ink-muted">
@@ -159,80 +183,95 @@ function NodePanel({ node, nodes, role, tree, onSelect, startAdding }: { node: M
             {technical && <code className="break-all font-mono text-xs text-ink-muted">{node.id}</code>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {node.archived ? <Badge tone="quiet">Archived</Badge> : <Badge tone="success">Active</Badge>}
+            {node.archived ? <Badge tone="neutral">Archived</Badge> : <Badge tone="good">Active</Badge>}
             {node.level === "app" && (
-              <Link href={paths.app(node.id)} className="rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+              <Link href={paths.app(node.id)} className={buttonVariants({ variant: "outline", size: "sm" })}>
                 The app&rsquo;s page
               </Link>
             )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <h3 className="font-display text-base font-semibold">Its name</h3>
-            {may("rename", node.level, role) ? (
-              <RenameNode level={managed ?? "organisation"} id={node.id} name={node.name} slug={node.slug} tree={tree} />
-            ) : (
-              <p className="text-sm text-ink-muted">{capital(whoMay("rename", node.level))} renames {node.level === "organisation" ? "the organisation" : `${article(node.level)} ${node.level}`}.</p>
-            )}
-          </div>
-
-          {child && (
-            <div className="flex flex-col gap-2">
-              <h3 className="font-display text-base font-semibold">What is in it</h3>
-              {children.length === 0 ? (
-                <p data-state="empty" className="text-sm text-ink-muted">
-                  No {plural(child)} in {node.name} yet.
-                </p>
+        {/* What it is called and holds, and archiving it; beside them at wide sizes (under them on narrower ones), what it is. */}
+        <div className="grid grid-cols-1 items-start gap-x-10 gap-y-6 2xl:grid-cols-2">
+          <div className="flex min-w-0 flex-col divide-y">
+            <section aria-labelledby={`${node.scope}-name`} className="flex flex-col gap-3 py-6 first:pt-0 last:pb-0">
+              <h3 id={`${node.scope}-name`} className={SUB}>
+                Its name
+              </h3>
+              {may("rename", node.level, role) ? (
+                <RenameNode level={managed ?? "organisation"} id={node.id} name={node.name} slug={node.slug} tree={tree} />
               ) : (
-                <ul aria-label={`In ${node.name}`} className="flex flex-wrap gap-2">
-                  {children.map((c) => (
-                    <li key={c.scope}>
-                      <Button size="sm" variant="soft" onClick={() => onSelect(c.scope)}>
-                        {c.name}
-                        {c.archived && <Badge tone="quiet">Archived</Badge>}
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
+                <p className="text-sm text-ink-muted">{capital(whoMay("rename", node.level))} renames {node.level === "organisation" ? "the organisation" : `${article(node.level)} ${node.level}`}.</p>
               )}
-              {may("create", node.level, role) ? (
-                adding ? (
-                  <CreateChild level={child} parent={node.scope} parentName={node.name} onCancel={() => setAdding(false)} onCreated={(made) => onSelect(made.path)} />
+            </section>
+
+            {child && (
+              <section aria-labelledby={`${node.scope}-in`} className="flex flex-col gap-3 py-6 first:pt-0 last:pb-0">
+                <h3 id={`${node.scope}-in`} className={SUB}>
+                  What is in it
+                </h3>
+                {children.length === 0 ? (
+                  <p data-state="empty" className="text-sm text-ink-muted">
+                    No {plural(child)} in {node.name} yet.
+                  </p>
                 ) : (
-                  <Button size="sm" variant="outline" className="self-start" onClick={() => setAdding(true)}>
-                    Add {article(child)} {child}
-                  </Button>
-                )
-              ) : (
-                <p className="text-sm text-ink-muted">
-                  {capital(whoMay("create", node.level))} adds {article(child)} {child} here.
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {managed && (
-          <div className="flex flex-col gap-3 border-t pt-4">
-            <h3 className="font-display text-base font-semibold">Archive or delete</h3>
-            {may("archive", node.level, role) ? (
-              <ArchiveNode level={managed} id={node.id} name={node.name} archived={node.archived} published={published} tree={tree} />
-            ) : (
-              <p className="text-sm text-ink-muted">{capital(whoMay("archive", node.level))} archives {article(node.level)} {node.level}.</p>
+                  <ul aria-label={`In ${node.name}`} className="flex flex-col divide-y rounded-sm border">
+                    {children.map((c) => (
+                      <li key={c.scope}>
+                        <button type="button" onClick={() => onSelect(c.scope)} className={cn("flex min-h-touch w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-ground", c.archived && "text-ink-muted")}>
+                          <Icon name={ICON[c.level]} className="size-4 shrink-0 text-ink-muted" />
+                          <span className="min-w-0 flex-1 break-words">{c.name}</span>
+                          {c.archived && <Badge tone="neutral">Archived</Badge>}
+                          <ChevronRight aria-hidden className="size-4 shrink-0 text-ink-muted" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {may("create", node.level, role) ? (
+                  adding ? (
+                    <CreateChild level={child} parent={node.scope} parentName={node.name} onCancel={() => setAdding(false)} onCreated={(made) => onSelect(made.path)} />
+                  ) : (
+                    <Button size="sm" variant="outline" className="self-start" onClick={() => setAdding(true)}>
+                      Add {article(child)} {child}
+                    </Button>
+                  )
+                ) : (
+                  <p className="text-sm text-ink-muted">
+                    {capital(whoMay("create", node.level))} adds {article(child)} {child} here.
+                  </p>
+                )}
+              </section>
             )}
-            {may("delete", node.level, role) ? (
-              <DeleteNode level={managed} id={node.id} name={node.name} tree={tree} onDeleted={() => onSelect(node.parent ?? node.scope)} />
-            ) : (
-              <p className="text-sm text-ink-muted">{capital(whoMay("delete", node.level))} deletes {article(node.level)} {node.level} with nothing in it.</p>
+
+            {managed && (
+              <section aria-labelledby={`${node.scope}-archive`} className="flex flex-col gap-3 py-6 first:pt-0 last:pb-0">
+                <h3 id={`${node.scope}-archive`} className={SUB}>
+                  Archive or delete
+                </h3>
+                {may("archive", node.level, role) ? (
+                  <ArchiveNode level={managed} id={node.id} name={node.name} archived={node.archived} published={published} tree={tree} />
+                ) : (
+                  <p className="text-sm text-ink-muted">{capital(whoMay("archive", node.level))} archives {article(node.level)} {node.level}.</p>
+                )}
+                {may("delete", node.level, role) ? (
+                  <DeleteNode level={managed} id={node.id} name={node.name} tree={tree} onDeleted={() => onSelect(node.parent ?? node.scope)} />
+                ) : (
+                  <p className="text-sm text-ink-muted">{capital(whoMay("delete", node.level))} deletes {article(node.level)} {node.level} with nothing in it.</p>
+                )}
+              </section>
             )}
           </div>
-        )}
+          <div className="min-w-0 border-t pt-6 2xl:border-l 2xl:border-t-0 2xl:pl-10 2xl:pt-0">{context}</div>
+        </div>
       </section>
     </CardNotesProvider>
   );
 }
+
+/** A heading inside the part's card. */
+const SUB = "font-display text-base font-semibold";
 
 const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const article = (word: string) => (word === "app" || word === "organisation" ? "an" : "a");

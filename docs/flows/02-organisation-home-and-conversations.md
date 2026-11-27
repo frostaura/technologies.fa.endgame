@@ -154,17 +154,17 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 
 ### ORG-06 Use the shortcut row for the selected level
 - **Who:** depends on the link (below).
-- **Starts at:** `/`, the row of soft buttons below "needs you" (`nav` "Manage").
+- **Starts at:** `/`, the secondary navigation below "needs you" (`nav` "Manage"): one line of links that never wraps; whatever does not fit the width goes, in order, into **"More"** at its end. On a phone the More sheet already holds the organisation's pages, so with the top level selected the row is not drawn; with a division, project, app or employee selected it is one folded row, "Pages for {name}", that opens to the same links.
 - **Needs:** an organisation exists.
 - **Level:** Core · **Learn first:** ORG-07 · **What you learn:** the links follow the selection, so each one opens that screen for the level you chose.
-- **Steps:** the person selects a level (ORG-07); the row rebuilds for it. Possible links:
+- **Steps:** the person selects a level (ORG-07); the row rebuilds for it. Possible links, in this order:
   - "Manage": always. Goes to `/tree?scope={path}` (TREE-13).
-  - "Autonomy for {level name}": always. Goes to `/autonomy?scope={path}`.
   - "Hiring": always. Goes to `/hires?scope={path}`.
-  - "Ideas from your portfolio": only when the whole organisation or a division is selected. Goes to `/suggestions?scope={path}`.
+  - "Autonomy for {level name}": always. Goes to `/autonomy?scope={path}`.
   - "People": Admin, Owner or operator. Goes to `/people?scope={path}`.
-  - "AI assistants" (reads "MCP access" in technical mode): always. Goes to `/assistants`, which is not scoped to the level.
   - "Secrets for {level name}": Admin, Owner or operator. Goes to `/secrets?scope={path}`.
+  - "Ideas from your portfolio": only when the whole organisation or a division is selected. Goes to `/suggestions?scope={path}`.
+  - "AI assistants" (reads "MCP access" in technical mode): always. Goes to `/assistants`, which is not scoped to the level.
   - "Operator access": Owner only. Goes to `/operator-access`.
   - "{employee}’s record and memory": only when an employee is selected, and then first in the row. Goes to `/employees/{id}`. The other links use the level the employee sits on.
 - **You know it worked when:** the destination opens, already scoped to the level you chose (its own heading names it).
@@ -185,7 +185,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
      - a project card's name;
      - an employee chip (on the band, a division or a project).
 
-     The selected card gains a blue ring; an employee chip gains a violet ring.
+     The selected card gains a blue ring; so does a selected employee chip.
   3. The breadcrumb becomes the trail, for example "Northwind / Technologies / Court booking". Every step except the last is a button that selects that level in place.
   4. The conversation re-scopes and fetches that level's history (TALK-01 to TALK-05). The shortcut row rebuilds (ORG-06).
   5. To return to everything, the person selects the organisation name in the band or the first breadcrumb step. The conversation's hint says "Select the organisation band to talk to everything again."
@@ -206,18 +206,18 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Starts at:** `/`, the "The organisation" tab.
 - **Needs:** at least one division.
 - **Level:** Foundation · **Learn first:** ORG-04 · **What you learn:** a division groups projects, and its spend is the sum beneath it.
-- **Steps:** each division is a column. It shows:
-  - a letter badge in that division's colour (blue, then violet, then teal, repeating);
-  - "Division" and its name; divisions are ordered by name;
-  - this month's spend as a badge, and "Manage" (TREE-13);
+- **Steps:** the chart is a masonry of columns — as many as its width holds, up to four — and each division stacks under whichever column is shortest, so a short division leaves no hole. Each division shows:
+  - its letter in an ink badge (one look for every division);
+  - "Division" and its name; a long name wraps rather than being cut;
+  - "· {credits}", this month's spend summed beneath it, beside "Division", and "Manage" (TREE-13);
   - its own employees as chips;
-  - a wire down to its projects. When anything beneath it is working, a dot travels down the wire. A lone division takes the full width, with its projects side by side.
+  - a wire down to its projects: each project (and the row of the division's own people) hangs off it with the same node, and the wire ends at the last project. A lone division takes the full width, with its projects side by side.
 
-  After the last division, Admins and the Owner see the tile "Add a division" (TREE-02).
+  Admins and the Owner see **"Add a division"** at the end of the chart's header row, beside the view tabs (TREE-02).
 - **You know it worked when:** the column shows its name and spend.
 - **Variations and refusals:**
   - With no projects: "No projects in {division} yet."
-  - An archived division is drawn with a dashed header and the badge "Archived" (TREE-07).
+  - Archived divisions are folded away after the chart, under one row "Archived ({n})" naming them; opened, each is drawn muted with the badge "Archived" (TREE-07).
   - A division the person holds no role in, shown only on the way to their own level, cannot be selected and has no "Manage" (ORG-19).
 - **Where:** `OrgChart.tsx` (`DivisionColumn`); `ReadModels.TreeAsync`.
 - **Reachable from:** UI.
@@ -231,12 +231,12 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Steps:**
   1. The card shows its name (a selection button) and "Manage".
   2. A stage chip appears unless the project is live with apps. The stages the server sends are "Researching", "Reviewing", "Building", "Planning", "Live" and "Paused".
-  3. The card shows "{credits} this month" (an amount below 0.1 reads "0 credits this month") and an optional note: "Waiting for your approval.", "Work here is paused.", "The last piece of work failed." or "Archived.". A live project with apps has no chip at all.
+  3. Under its name the card shows its stage chip and "{credits} this month" (an amount below 0.1 reads "0 credits this month"), then an optional note: "Waiting for your approval.", "Work here is paused.", "The last piece of work failed." or "Archived.". A live project with apps has no chip at all. A project that is one app of the same name, with the same spend, says its name and spend once: the app's row carries its chips, **"Open the app"** and its two figures.
   4. If work is under way: "{stage}, step {x} of {y}" — {x} the step under way, counted from 1 (`progress.step`) — (just "{stage}" until a step of the plan has begun: never "step 0 of {y}"), then "{spent} of an estimated {estimate}" (or "{spent} so far" when there is no estimate, or an estimate of 0), a moving progress bar once there is a plan, filled by the finished steps (`progress.done`), and the link "Watch the work", which goes to `/runs/{id}`.
   5. Below that: its apps (ORG-10) and its people (ORG-11).
 - **You know it worked when:** "Watch the work" opens the live run.
 - **Variations and refusals:**
-  - An archived project is a dashed card with the badge "Archived" in place of its stage.
+  - An archived project is a muted card with the badge "Archived" in place of its stage.
   - Dead branches in the UI: the "verdict" stage (a dashed amber card, "Idea · paused at verdict", "Read the verdict") is never sent by `ReadModels.ProjectStage`, and neither are "idea", "evaluating", "publishing" or "dropped". Research does not make a project at all: an idea is placed in the tree only when it is built (TREE-01).
 - **Where:** `OrgChart.tsx` (`ProjectCard`), `treeModel.ts` (`stageChip`); `ReadModels.ProjectStage`.
 - **Reachable from:** UI.
@@ -370,9 +370,10 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
   1. A coral band "God mode" sits above the header on every screen: "You are a FrostAura operator. Entering an organisation is logged where its Owner can read it." with the link "Every organisation".
   2. Home shows the panel "God mode", "You run Endgame for FrostAura. Every organisation is one step away.", and "List them, set one up for an invited Owner, top one up or enter it. Each entry is written where that organisation’s Owner can read it."
   3. The button "Every organisation" goes to `/operator` (OP-01).
+  4. Beside it, every organisation at a glance: "Organisations", "Top-ups asked for" (with "Waiting for your answer" when any are) and "Below zero" ("—" until they are read).
 - **You know it worked when:** the coral "God mode" band is visible.
 - **Variations and refusals:** an operator who holds a role in an organisation (FrostAura's own, where top-up requests reach them) lands on that organisation's home instead, under the same band.
-- **Where:** `HomeView.tsx` (`OperatorHome`), `shell/GodModeBand.tsx`.
+- **Where:** `HomeView.tsx`, `operator/OperatorHome.tsx`, `shell/GodModeBand.tsx`.
 - **Reachable from:** UI.
 - **Covered by tests:** `breadth.spec.ts`: "is marked on every screen, lists every organisation, enters one and says it is logged".
 
@@ -433,13 +434,13 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   3. The build starts ("Build it", or on its own in auto mode). Its placement step (`BuildWorkflow.PlaceAsync`) works out where it goes:
      - if the idea was raised at a division, it uses that division;
      - otherwise it uses research's proposed division slug, defaulting to `labs`;
-     - it creates the division if missing (`POST /internal/tree/nodes`), then the project (named after the proposal, or the idea's first line), then an app (slug from the proposal, default `web`).
-  4. The run's log says "{name} will live in a new division, {Division}, as the project {project}." (or "will live in {Division}…" when the division existed).
+     - it creates the division if missing (`POST /internal/tree/nodes`), then a **new** project (named after the proposal, or the idea's first line) and a new app in it (slug from the proposal, default `web`). A build from an idea is always a new app: a project slug that is already taken gets the next free one (`dive-club-tools-2`), never the project that has it (R9-1).
+  4. The run's log says "{name} is a new app. It will live in a new division, {Division}, as a new project of its own." (or "…It will live in {Division} as a new project of its own." when the division existed; "…, beside {project}." when the suggested address was another project's).
   5. Within 15 seconds, home shows the new division column with the project card.
 - **You know it worked when:** a new division column appears on the chart.
 - **Variations and refusals:**
   - To choose the division yourself, pick it in "Where it goes" (TREE-05), or make it first on "Manage" (TREE-02).
-  - A concurrent placement with the same slug reuses the existing node.
+  - A division with the same slug is reused (the idea belongs there); a project or an app never is. A Runner that dies after making the project finds its own project again from its log.
   - A new division can raise a hire proposal (HIRE-01).
 - **Where:** `features/start/StartView.tsx`; `Runner/Workflows/BuildWorkflow.cs` (`PlaceAsync`); `FactoryEndpoints` `POST /internal/tree/nodes`; `TreeService.EnsureChildAsync`.
 - **Reachable from:** UI (indirectly, through an idea).
@@ -447,11 +448,11 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 
 ### TREE-02 Create a division directly
 - **Who:** Admin or Owner at the organisation.
-- **Starts at:** the org chart's **"Add a division"** tile (Admins only), which opens `/tree?scope={organisation}&add=1`; or "Manage", the organisation chosen, **"Add a division"**. Also API `POST /api/divisions {parent, name, slug}` and MCP `node_create`.
+- **Starts at:** the org chart's **"Add a division"** action (Admins only), which opens `/tree?scope={organisation}&add=1`; or "Manage", the organisation chosen, **"Add a division"**. Also API `POST /api/divisions {parent, name, slug}` and MCP `node_create`.
 - **Needs:** Admin at the organisation.
 - **Level:** Core · **Learn first:** ORG-07, TREE-13 · **What you learn:** a node's address is made from its name once, when it is made, and never changes.
 - **Steps:**
-  1. On the chart, after the last division, the dashed tile **"Add a division"**.
+  1. On the chart's header row, beside the view tabs, **"Add a division"**.
   2. It opens "Manage" with the organisation chosen and the form "A new division in {organisation}" open, with **"Name"** and **"Its address"**.
   3. Type the name. "Its address" fills itself from it (`Field Trips` → `field-trips`); its hint reads "{organisation}/{slug}. It cannot be changed once it is made." You may change the address before pressing the button.
   4. Press **"Add the division"**. The new division is listed in "Every part of the organisation" and chosen.
@@ -544,7 +545,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Steps:**
   1. Press **"Archive {name}"**. The confirmation reads "Archive {name}?" and "It is marked archived and keeps its history, spending and people. None of its apps is served until it is reactivated."
   2. Press **"Yes, archive {name}"** ("Keep it active" cancels). "{name} is archived. Nothing in it was deleted." appears; the routing table is recalculated at once, and the outline marks it "Archived".
-  3. On the org chart it is drawn archived: a dashed header or card with the badge "Archived".
+  3. On the org chart it is drawn archived: a division folds into "Archived ({n})" after the chart; a project is a muted card with the badge "Archived".
   4. To bring it back, press **"Reactivate {name}"**: "{name} is active again." and its apps are served again.
 - **You know it worked when:** the badge "Archived" shows, and its apps no longer answer.
 - **Variations and refusals:**
@@ -630,7 +631,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   1. Each entry says "Said here" or "From {level}", and "Set {date}".
   2. "Said differently beneath it" lists what lower levels set, each with "{level} replaces it" (it replaces an entry that applies here) or "Only for {level}".
   3. **"Say it differently here"** on an inherited entry, then **"Save it"**: it is now "Said here", with "Replaces what {level} says".
-  4. **"Remove it; {level}'s applies again"** (or "Remove it", when nothing is inherited) removes the entry set here; the inherited one shows again.
+  4. **"Remove it; {level}'s applies again"** (or "Remove it", when nothing is inherited) asks first — "Remove {entry} from {name}?", with what follows — and **"Yes, remove it"** removes the entry set here ("Keep it" or Escape keeps it); the inherited one shows again.
 - **You know it worked when:** after removing, the entry from above is listed with "From {level}".
 - **Variations and refusals:** "Nothing beneath {name} replaces or adds to this." · "What lower levels say could not be loaded" · removal refused: "It was not removed: {reason} It is still said here." `/cascade/below` refuses `permission` (roles are listed by `/api/members`) and never returns a secret's value.
 - **Where:** `ContextPanel.tsx`; `TreeEndpoints` `/cascade`, `/cascade/below`; `CascadeService.BelowAsync`.
@@ -648,7 +649,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   3. The panel for the chosen part shows its level and parent ("Division in {organisation}"), its name, "Its address: {path}", and the badge "Active" or "Archived".
   4. "Its name" (TREE-06), and "What is in it", with **"Add a {level}"** (TREE-02 to TREE-04).
   5. "Archive or delete" (TREE-07 to TREE-09).
-  6. Beside it, the side panel "What this is" (TREE-11, TREE-12).
+  6. "What this is" (TREE-11, TREE-12): in the same card, beside the rest on a wide screen and under it on a narrower one. The page is two panes — the outline as wide as a side panel, and the part chosen filling the rest — from 1024 wide up.
   7. Autonomy, hiring, people and secrets stay on their own screens, from the shortcut row (ORG-06); budgets on `/credits`.
 - **You know it worked when:** the panel shows the part chosen.
 - **Variations and refusals:** each control is shown only to the role that may use it; anyone else reads who may. Loading draws skeletons; a failed read says "The organisation could not be loaded" with **"Try again"**; with no organisation: "There is no organisation to manage yet".
@@ -682,16 +683,16 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Core · **Learn first:** ONT-01 · **What you learn:** who is responsible for what, and who reports to whom.
 - **Steps:**
   1. While loading: a skeleton (label "Drawing the organisation").
-  2. A key lists the edge types present: "Holds", "Works on", "Reports to". It ends with "Drag to move around. Generated {time}."
+  2. A key lists the edge types present: "Holds", "Works on", "Reports to" — told apart by ink, the accent and a dash, never by a hue of their own. It ends with "Point at a line, or use the arrow keys, to name it." (or "Drag to move around." when the drawing is wider than its frame) and "Generated {time}."
   3. A left-to-right layered drawing shows:
      - the organisation, then its divisions, projects and apps (linked by "holds");
      - employees and contractors one column beyond what they work on ("works on" with their role, and "now on {run}" while working, animated);
      - "reports to" dashed lines (including "briefed by");
      - members as "Person" nodes (works on, with their role);
      - secrets by name (held by the node that set them).
-  4. Each node card shows its type ("Organisation", "Division", "Project", "App", "Employee", "Contractor", "Person", "Secret"), " · working" when working, and its name (cut at 26 characters).
-  5. Hovering an edge shows a title like "{A} works on {B} ({label})".
-  6. Dragging with the mouse pans the frame. The page itself never scrolls sideways.
+  4. Each node card shows its type ("Organisation", "Division", "Project", "App", "Employee", "Contractor", "Person", "Secret"), " · working" when working, and its name (cut only when it outgrows the card; the whole name is its tooltip).
+  5. The drawing fills its frame: given room, nodes widen and columns part; with less, it scales down to three-quarters and then scrolls inside its frame. Pointing at a line, or reaching it with the arrow keys once the drawing has focus, names it on the drawing ("{A} works on {B}"); pointing at a node brings its own lines forward.
+  6. When it scrolls, dragging with the mouse pans the frame. The page itself never scrolls sideways.
 - **You know it worked when:** you see your employees drawn beside what they work on.
 - **Variations and refusals:** empty state "Nobody works on anything yet". **Finding:** in practice this is unreachable, because the "holds" edges from the organisation to its divisions always exist whenever this tab is shown. Secret names appear in normal mode.
 - **Where:** `OntologyView.tsx`, `ontologyModel.ts` (`layoutGraph`); `GET /api/ontology` (`OntologyService.BuildAsync`).
@@ -708,8 +709,8 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Steps:**
   1. The key shows "Relies on" and "Sends data to".
   2. The drawing shows apps, the platform services they have actually used, and each app's declared webhooks ("Incoming data") and schedules ("Schedule"). Services are named by what they do in normal mode; the internal name shows in technical mode.
-  3. "Sends data to" edges are animated, with labels drawn on the line: "inbound calls", "scheduled calls", "prompts", "outbound mail", "signed-in people", "operational telemetry".
-- **You know it worked when:** an app that sends mail shows a moving line labelled "outbound mail".
+  3. "Sends data to" edges are animated. What each carries — "inbound calls", "scheduled calls", "prompts", "outbound mail", "signed-in people", "operational telemetry" — is named on the line when it is pointed at or reached with the arrow keys, so no two labels are ever drawn over each other; two lines between the same pair are drawn side by side.
+- **You know it worked when:** pointing at an app's moving line names it "{app} sends data to {service} (outbound mail)".
 - **Variations and refusals:** empty state "No data flows yet" with "Once an app signs people in, sends mail, calls a model or receives data, the flow appears here."
 - **Where:** as ONT-02.
 - **Reachable from:** UI.
@@ -724,7 +725,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Foundation · **Learn first:** ONT-01 · **What you learn:** the graph is also a plain list.
 - **Steps:**
   1. Below md width the drawing is hidden, and a list takes its place; a screen reader reads the list at any width.
-  2. Each card in the list shows a node that has outgoing edges: its type, its name (a link for employees, contractors and apps), and lines like "works on {Name} ({label})".
+  2. Each card in the list shows a node that has outgoing edges: its type, its name (a link for employees, contractors and apps), and lines like "works on {Name} ({label})", each marked with the same short line the key above it uses, so the key reads the list as it reads the drawing. Every link in it is a full-size touch target.
   3. On a phone the list is grouped by kind — "Organisations · 1", "Employees · 12", "Projects · 8"… — each group a row naming its first few, the first group open, the rest one tap away.
 - **You know it worked when:** you see a list of cards under the tabs instead of a drawing.
 - **Variations and refusals:** none further.
@@ -1221,22 +1222,19 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Steps:**
   1. The breadcrumb reads "{organisation} / Notifications".
   2. Heading "Notifications", with: "What needs you, newest first. The urgent ones — a cap reached, credits at zero, the overdraft, an app that stopped, a security finding — are e-mailed too, when e-mail is set up."
-  3. The feed shows "Nothing unread." or "{n} unread", plus "Mark all read". On a phone it shows every unread notice and the newest ten, then **"Show older ({k} of {n})"**, which adds ten more each time.
+  3. The feed shows "Nothing unread." or "{n} unread", plus "Mark all read". At every size it shows every unread notice and the newest ten, newest first and grouped under the day they came ("Today", "Yesterday", then the date), then **"Show older ({k} of {n})"**, which adds ten more each time.
   4. Each row shows:
-     - a badge: "Verdict", "Approval", "Hire", "Budget", "Credits", "Overdraft", "App", "Security" or "Top-up request" (anything else "Update"); amber for urgent, blue otherwise;
-     - "New" when unread;
-     - how long ago;
-     - the title as a link;
-     - one line of detail — a notice raised before details were written plainly, whose detail is a raw tool line ("adjust_setting: …", "try_again: …") with no technical line beside it, shows no detail in normal mode; technical mode shows that line;
-     - "Mark read" when unread;
-     - "Answered" (green) in place of "New" and "Mark read" when what it asked is already answered — or "Closed" (grey) for an approval whose work ended before anyone answered it; its badge is quiet and its title plain;
+     - a blue dot when unread (read aloud as "Unread"), with the title in bold — the only way unread is marked; a read row has neither;
+     - the title as a link, cut at a word and never inside a quotation;
+     - one line of detail, cut the same way — a notice raised before details were written plainly, whose detail is a raw tool line ("adjust_setting: …", "try_again: …") with no technical line beside it, shows no detail in normal mode; technical mode shows that line;
+     - a tag: "Verdict", "Approval", "Hire", "Budget", "Credits", "Overdraft", "App", "Security" or "Top-up request" (anything else "Update"); amber for an urgent one not yet answered, grey otherwise;
+     - "Answered" (green) when what it asked is already answered — or "Closed" (grey) for an approval whose work ended before anyone answered it; such a row has no dot and no "Mark read", and its title is plain;
      - "Also e-mailed" when it was;
-     - in technical mode, the raw kind.
-
-     Unread urgent rows are tinted amber; other unread rows are tinted blue.
+     - in technical mode, the raw kind;
+     - at the row's end, how long ago, and "Mark read" when unread (on a phone, at the end of the tag line).
   5. An aside "What you are told about" (on a phone a folded row, "Verdicts, approvals, hires, budgets, credits, apps and security") lists: "A verdict waiting for your call", "An approval the work is waiting on", "A hire proposed", "A budget at 80% and at its cap", "Credits at zero, halfway to the overdraft limit, and at it", "An app that stopped working", "A security review that found a problem", "For FrostAura’s operators: an Owner asking for a top-up". It adds: "Owners and Admins are told about what their grant covers; others see an empty feed."
 - **You know it worked when:** the page lists your notices, newest first.
-- **Variations and refusals:** the UI asks for at most 50. A verdict, approval or hire that has been answered (by anyone) comes back resolved and read, its title saying what happened — "You approved “Accept this plan?”", "Theo was hired as Software engineer", "Dean chose to build: …", "Auto-mode chose to build: …" (a verdict auto-mode acted on) — and it no longer counts as unread. An approval whose run ended before anyone answered it is closed with the run (expired, never "declined") and reads "No longer waiting: “{question}” — the work ended before it was answered"; it is not on the "Needs you" strip, and its row reads "Closed" rather than "Answered". Such a row has no "New" and no "Mark read", here and in the bell's popover.
+- **Variations and refusals:** the UI asks for at most 50. A verdict, approval or hire that has been answered (by anyone) comes back resolved and read, its title saying what happened — "You approved “Accept this plan?”", "Theo was hired as Software engineer", "Dean chose to build: …", "Auto-mode chose to build: …" (a verdict auto-mode acted on) — and it no longer counts as unread. An approval whose run ended before anyone answered it is closed with the run (expired, never "declined") and reads "No longer waiting: “{question}” — the work ended before it was answered"; it is not on the "Needs you" strip, and its row reads "Closed" rather than "Answered". Such a row has no unread dot and no "Mark read", here and in the bell's popover.
 - **Where:** `notifications/NotificationsView.tsx`, `NotificationFeed.tsx`, `notificationModel.ts`; `NotificationService.FeedAsync` (`resolved`).
 - **Reachable from:** UI.
 - **Covered by tests:** `Notifications.test.tsx`: "lists each with a short title, one line and where it leads…".
@@ -1251,7 +1249,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   - otherwise, `/credits` for budget, credits or overdraft kinds;
   - otherwise, `/hires?scope=…` for a hire;
   - otherwise, `/notifications`.
-- **You know it worked when:** the subject's page opens and the row no longer shows "New".
+- **You know it worked when:** the subject's page opens and the row no longer shows the unread dot.
 - **Variations and refusals:** an employee's budget notice goes to the employee's page, not credits, because the subject wins. Every notice the control plane raises today names its subject or is a budget, credits or overdraft kind, so the last two are fallbacks.
 - **Where:** `notificationModel.ts` (`notificationHref`).
 - **Reachable from:** UI.
@@ -1264,7 +1262,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Foundation · **Learn first:** NOTE-03 · **What you learn:** read state is yours alone.
 - **Steps:**
   1. Select "Mark read". The row and the count update at once (`POST /api/notifications/{id}/read`), on the page and on the bell. The read is recorded for this person only.
-- **You know it worked when:** "New" disappears and the count drops by one.
+- **You know it worked when:** the unread dot disappears and the count drops by one.
 - **Variations and refusals:** refused: the change is rolled back and the row says "Not marked read: {reason}". A notice the person cannot see gives 404 "The notification".
 - **Where:** `NotificationFeed.tsx` (`Row`), `store/api.ts` (`markRead`); `NotificationService.MarkReadAsync`.
 - **Reachable from:** UI; API. **MCP has no tool for this.**
@@ -1379,12 +1377,12 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Advanced · **Learn first:** SYS-01 · **What you learn:** each service is asked directly, and the whole is healthy only if every part is.
 - **Steps:**
   1. Heading "System status", with "Every service, asked directly whether it is healthy." and a "Check again" button. On first load: "Checking every service…".
-  2. A summary card shows "All services healthy" (green) or "{n} of {m} services unhealthy" (amber), and "Checked at {hh:mm:ss}".
-  3. One card per configured service, in this order: "Control plane", "Edge", "Runner", "Dock", "Database", "Console", "Cloudflare and backups", "Telemetry collector", then any extras. Each shows its latency ("{n} ms" or "{n.n} s"), a "Healthy" / "Unhealthy" badge, and any detail.
+  2. A white summary card across the page shows "All services healthy" with a green tick and the tag "Healthy", or "{n} of {m} services unhealthy" with a warning sign and the tag "Needs attention", and "Checked at {hh:mm:ss}".
+  3. Beneath it, one card per configured service (two, three or four across as the screen widens), in this order: "Control plane", "Edge", "Runner", "Dock", "Database", "Console", "Cloudflare and backups", "Telemetry collector", then any extras. Each shows its latency ("{n} ms" or "{n.n} s"), a "Healthy" / "Unhealthy" badge, and any detail.
   4. The page re-checks every 10 seconds while focused. "Check again" forces a check, spinning while it runs.
 - **You know it worked when:** "All services healthy" with one card per service.
 - **Variations and refusals:**
-  - An unhealthy service turns the summary amber and its card says why, in its probe's own words, for example "No answer within 2000 ms." or "Unreachable: {reason}".
+  - An unhealthy service changes the summary and its card says why, in its probe's own words, for example "No answer within 2000 ms." or "Unreachable: {reason}".
   - A service whose address is not configured is not probed or listed.
   - A probe that throws still yields a row, marked unhealthy, with the error.
 - **Where:** `features/status/SystemStatusView.tsx`, `statusModel.ts`; `GET /api/system/status` (`Program.cs`, `Application/Status/GetSystemStatus.cs`, `Infrastructure/Health/StatusOptions.cs`, `HttpHealthProbe.cs`, `DatabaseHealthProbe.cs`).

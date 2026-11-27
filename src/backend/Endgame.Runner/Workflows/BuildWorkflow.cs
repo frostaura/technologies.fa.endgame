@@ -48,7 +48,26 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
 
         // What is built: the idea, plus every change agreed after research (the owner's own, or research's that the owner accepted).
         var request = WithAgreedChanges(idea, Json.Strings(owner, "changes"));
-        var placement = await run.Journal.OnceAsync("placement", () => PlaceAsync(run, idea, cancellationToken), cancellationToken);
+        JsonObject placement;
+        var placing = !run.Journal.Done("placement");
+        try
+        {
+            placement = await run.Journal.OnceAsync("placement", () => PlaceAsync(run, idea, cancellationToken), cancellationToken);
+        }
+        catch (Harness.Model.ServiceProblemException refused) when (refused.Code == PlacementRefusals.Taken)
+        {
+            // Code below the model said no: whatever placement found, an app that is not new is never built over (R9-1).
+            return WorkflowOutcome.Failure($"Placement named an app that already exists and is not this idea's, so nothing was built: {refused.Detail}")
+                with
+            { ForOwner = "This build was about to be placed in an app that already exists, so it stopped before anything was planned or built. That app is untouched. “Try again” places it as a new app." };
+        }
+
+        if (placing)
+        {
+            // Said once the control plane has accepted where it goes: never "Placed" for a placement it refused.
+            await Workforce.SayAsync(run, "builder", "Placed", WhereItGoes(placement), cancellationToken, "placed");
+        }
+
         var task = $"Plan the app described below. It starts from the app kit's template (the Notes example), which it replaces.\n\nThe idea, word for word:\n{request}\n\nConstraints: {Json.Str(owner, "constraints")}";
         return await PipelineAsync(run, new Job(request, task, placement, Change: false), cancellationToken);
     }
@@ -122,7 +141,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var placement = job.Placement;
         var appId = Guid.Parse(Json.Str(placement, "appId")!);
         var crew = await StaffAsync(run, placement, cancellationToken);
-        var (workspace, recreated) = await run.Workspaces.EnsureAsync(run.Run.Id, appId, run.LeaseExpiry(), run.StartFrom(), cancellationToken);
+        var (workspace, recreated) = await run.Workspaces.EnsureAsync(run.Run.Id, appId, run.LeaseExpiry(), StartFrom(run), cancellationToken);
         var root = workspace.Root;
 
         // The plan: a contract, proposed in plan mode, accepted only once it is valid.
@@ -150,7 +169,10 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
 
             if (Checkpoint(run, "plan"))
             {
-                var answer = await new Harness.Platform.ControlPlaneApprovals(run.ControlPlane, run.Run.Id).AskAsync(job.Change ? "Accept this plan for the change?" : "Accept this plan?", Sentences.Flatten(plan.ForOwner(), 2000), ApprovalConsequence.Stops, cancellationToken);
+                // Where the work goes comes first, so the owner reads which app this is before the plan (R9: a plan to
+                // "replace the existing Dives example" was put to the owner with nothing saying it was a live app).
+                var detail = Sentences.Flatten($"{WhereItGoes(placement, job.Change)} {plan.ForOwner()}", 2000);
+                var answer = await new Harness.Platform.ControlPlaneApprovals(run.ControlPlane, run.Run.Id).AskAsync(job.Change ? "Accept this plan for the change?" : "Accept this plan?", detail, ApprovalConsequence.Stops, cancellationToken);
                 if (!answer.Approved)
                 {
                     var note = string.IsNullOrWhiteSpace(answer.Note) ? "" : $" Your note: \"{OutputText.Truncate(answer.Note.Trim(), 300)}\"";
@@ -228,6 +250,12 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
     /// </summary>
     public const string ChangeWins = "Where an agreed change replaces something the idea says (for example the idea says members sign in, and the change says they open a link with no account), the change wins: list the idea's words it replaces as a requirement in leftOut, with the reason \"replaced by the change agreed after research\", and build only the change.";
 
+    /// <summary>
+    /// Where the workspace starts: the earlier attempt's branch on "Try again", except when that attempt was in an app that was
+    /// not its own and this one was placed afresh — then the new app's own line, which is the kit's template (R9-1).
+    /// </summary>
+    private static string? StartFrom(RunContext run) => Json.Bool(run.Journal.Get("carried"), "placedAfresh") == true ? null : run.StartFrom();
+
     /// <summary>The idea, then each change agreed after research, so the planner holds the app to both.</summary>
     public static string WithAgreedChanges(string idea, IReadOnlyList<string> changes)
     {
@@ -250,6 +278,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         {
             ["name"] = Json.Str(project, "name") ?? Json.Str(app, "name"),
             ["division"] = Json.Str(Level("division"), "path"),
+            ["divisionName"] = Json.Str(Level("division"), "name"),
             ["divisionCreated"] = false,
             ["projectPath"] = Json.Str(project, "path") ?? Json.Str(app, "path"),
             ["appPath"] = Json.Str(app, "path"),
@@ -378,11 +407,28 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         }
 
         var steps = new WorkflowJournal(events, run.Sink);
-        foreach (var key in new[] { "placement", "screen", "earlier" })
+        // The project an attempt made is carried only when it died before recording where its app went.
+        var keys = steps.Done("placement") ? new[] { "placement", "screen", "earlier" } : ["placement.project", "screen", "earlier"];
+        foreach (var key in keys)
         {
-            if (steps.Get(key) is { } data)
+            if (steps.Get(key) is not { } data)
+            {
+                continue;
+            }
+
+            try
             {
                 await run.Journal.RecordAsync(key, data, cancellationToken);
+            }
+            catch (Harness.Model.ServiceProblemException refused) when (key == "placement" && refused.Code == PlacementRefusals.Taken)
+            {
+                // The earlier attempt was placed in an app that already existed (a build from before R9-1): that app is not
+                // this idea's, so nothing it agreed is carried. This attempt is placed afresh, as a new app, and planned anew.
+                await run.Journal.RecordAsync("carried", new JsonObject { ["from"] = earlier.ToString(), ["items"] = new JsonArray(), ["placedAfresh"] = true }, cancellationToken);
+                await Workforce.SayAsync(run, "runner", "Placed afresh",
+                    "The earlier attempt was placed in an app that already existed and is not this idea's, so it is left as it is. This attempt builds a new app, planned from the start.",
+                    cancellationToken, "carried");
+                return;
             }
         }
 
@@ -833,7 +879,7 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             try
             {
                 // The preview is of this run's own work, which is on its branch until it is published (R2-4).
-                var image = await dock.BuildRunAsync(appId, run.Run.Id, run.StartFrom(), cancellationToken);
+                var image = await dock.BuildRunAsync(appId, run.Run.Id, StartFrom(run), cancellationToken);
                 // The preview's own token: what it e-mails is held, never sent, and the live app's token is left alone.
                 var token = await run.ControlPlane.MintAppTokenAsync(appId, cancellationToken, preview: true);
                 await dock.StartPreviewAsync(appId, new StartAppRequest(run.OrganisationId, image.Image, token, null, null), cancellationToken);
@@ -1278,7 +1324,14 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         return OutputText.Truncate(title.Length > 0 ? title : "A new version", 400);
     }
 
-    /// <summary>Placement: from research's verdict when it proposed one, otherwise from the idea's own words.</summary>
+    /// <summary>
+    /// Placement: from research's verdict when it proposed one, otherwise from the idea's own words. A build starts from a new
+    /// idea, so it is always a new product: a new project of its own, and a new app in it. The verdict's slugs are
+    /// suggestions, and one already taken is never joined — a second idea about the same dive club suggested the first one's
+    /// project, and "found" it, its published app with it (walk 2, R9). A taken slug gets the next free address
+    /// (<c>dive-club-tools-2</c>), and the owner is told whose project it sits beside. Changing an existing app is
+    /// <see cref="ChangeAsync"/>, from that app; the control plane refuses a build placed in an app that is not new (R9-1).
+    /// </summary>
     private static async Task<JsonObject> PlaceAsync(RunContext run, string idea, CancellationToken cancellationToken)
     {
         JsonObject? proposal = null;
@@ -1293,26 +1346,92 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         var levels = (run.Context["levels"] as JsonArray ?? []).OfType<JsonObject>().ToList();
         var organisation = Json.Str(levels.First(), "path")!;
         string division;
+        string divisionName;
         var divisionCreated = false;
         if (levels.FirstOrDefault(l => Json.Str(l, "level") == "division") is { } d)
         {
             division = Json.Str(d, "path")!;
+            divisionName = Json.Str(d, "name") is { Length: > 0 } named ? named : DivisionName(division.Split('/')[^1]);
         }
         else
         {
             var slug = WorkflowSupport.Slug(Json.Str(proposal, "division"), "labs");
             var made = await run.ControlPlane.EnsureNodeAsync(organisation, "division", DivisionName(slug), slug, cancellationToken);
             division = made.Path;
+            divisionName = made.Name;
             divisionCreated = made.Created;
         }
 
+        // The project is the run's own from the moment it is made: recorded at once, so a Runner that dies before the
+        // placement is recorded finds it again instead of taking the next address and leaving an empty project behind.
         var projectSlug = WorkflowSupport.Slug(Json.Str(proposal, "project") ?? name, "project");
-        var project = await run.ControlPlane.EnsureNodeAsync(division, "project", name, projectSlug, cancellationToken);
-        var app = await run.ControlPlane.EnsureNodeAsync(project.Path, "app", name, WorkflowSupport.Slug(Json.Str(proposal, "app") ?? "web", "web"), cancellationToken);
-        await Workforce.SayAsync(run, "builder", "Placed", divisionCreated
-            ? $"{name} will live in a new division, {DivisionName(division.Split('/')[^1])}, as the project {project.Name}."
-            : $"{name} will live in {DivisionName(division.Split('/')[^1])}, as the project {project.Name}.", cancellationToken, "placed");
-        return new JsonObject { ["name"] = name, ["division"] = division, ["divisionCreated"] = divisionCreated, ["projectPath"] = project.Path, ["appPath"] = app.Path, ["appId"] = app.Id.ToString() };
+        var placedProject = await run.Journal.OnceAsync("placement.project", async () =>
+        {
+            var (made, beside) = await NewNodeAsync(run, division, "project", name, projectSlug, cancellationToken);
+            return new JsonObject { ["path"] = made.Path, ["name"] = made.Name, ["beside"] = beside };
+        }, cancellationToken);
+        var projectPath = Json.Str(placedProject, "path")!;
+
+        // Inside a project this run made, the only app with that address is the one this run made before it died.
+        var app = await run.ControlPlane.EnsureNodeAsync(projectPath, "app", name, WorkflowSupport.Slug(Json.Str(proposal, "app") ?? "web", "web"), cancellationToken);
+        return new JsonObject
+        {
+            ["name"] = name,
+            ["division"] = division,
+            ["divisionName"] = divisionName,
+            ["divisionCreated"] = divisionCreated,
+            ["projectPath"] = projectPath,
+            ["projectName"] = Json.Str(placedProject, "name"),
+            ["beside"] = Json.Str(placedProject, "beside"),
+            ["appPath"] = app.Path,
+            ["appId"] = app.Id.ToString(),
+            ["newApp"] = true,
+        };
+    }
+
+    /// <summary>
+    /// A node under <paramref name="parent"/> that did not exist before: the suggested slug, or the next free one
+    /// (<c>slug-2</c>, <c>slug-3</c>, …) when it is taken. Returns it, with the name of the first one found in its way.
+    /// </summary>
+    private static async Task<(NodeInfo Node, string? Beside)> NewNodeAsync(RunContext run, string parent, string level, string name, string slug, CancellationToken cancellationToken)
+    {
+        string? beside = null;
+        for (var n = 1; n <= MaxPlacementTries; n++)
+        {
+            var suffix = n == 1 ? "" : $"-{n}";
+            var candidate = (slug.Length + suffix.Length > Endgame.Domain.Tree.SlugRules.MaxLength ? slug[..(Endgame.Domain.Tree.SlugRules.MaxLength - suffix.Length)].TrimEnd('-') : slug) + suffix;
+            var node = await run.ControlPlane.EnsureNodeAsync(parent, level, name, candidate, cancellationToken);
+            if (node.Created)
+            {
+                return (node, beside);
+            }
+
+            beside ??= node.Name;
+        }
+
+        throw new InvalidOperationException($"No free address for a new {level} under {parent} after {MaxPlacementTries} tries.");
+    }
+
+    /// <summary>How many addresses placement tries before giving up: a project slug taken this often is not a coincidence.</summary>
+    public const int MaxPlacementTries = 20;
+
+    /// <summary>
+    /// Where the work goes, in one plain sentence the owner reads before anything is built: the "Placed" line and the first
+    /// sentence of the plan's approval. A new app says it is new and where it lives; a change names the app it changes.
+    /// </summary>
+    public static string WhereItGoes(JsonObject placement, bool change = false)
+    {
+        ArgumentNullException.ThrowIfNull(placement);
+        var name = Json.Str(placement, "name") ?? "The app";
+        var division = Json.Str(placement, "divisionName") ?? (Json.Str(placement, "division") is { } path ? DivisionName(path.Split('/')[^1]) : null);
+        if (change || Json.Bool(placement, "existing") == true)
+        {
+            return $"This changes {name}, the app already built and running{(division is null ? "" : $" in {division}")}. Nothing else is touched.";
+        }
+
+        var home = Json.Bool(placement, "divisionCreated") == true ? $"a new division, {division}," : division ?? "its division";
+        var beside = Json.Str(placement, "beside") is { Length: > 0 } b ? $", beside {b}" : "";
+        return $"{name} is a new app. It will live in {home} as a new project of its own{beside}.";
     }
 
     /// <summary>The plan as the owner hears it: what will be built, and anything deliberately left out with the reason.</summary>

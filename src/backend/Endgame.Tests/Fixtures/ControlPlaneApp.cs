@@ -25,16 +25,16 @@ public sealed class ControlPlaneApp : IAsyncDisposable
 
     private readonly WebApplicationFactory<Program> factory;
 
-    private readonly PostgresServer server;
-
-    private ControlPlaneApp(WebApplicationFactory<Program> factory, string connectionString, PostgresServer server)
+    private ControlPlaneApp(WebApplicationFactory<Program> factory, string connectionString)
     {
         this.factory = factory;
         ConnectionString = connectionString;
-        this.server = server;
     }
 
     public string ConnectionString { get; }
+
+    /// <summary>The server the database lives on, which drops it when this app is disposed.</summary>
+    private PostgresServer? postgres;
 
     public IServiceProvider Services => factory.Services;
 
@@ -83,7 +83,7 @@ public sealed class ControlPlaneApp : IAsyncDisposable
                 builder.ConfigureServices(services);
             }
         });
-        var app = new ControlPlaneApp(factory, connection, postgres);
+        var app = new ControlPlaneApp(factory, connection) { postgres = postgres };
         _ = factory.Server; // start (and migrate) now
         await Task.CompletedTask;
         return app;
@@ -145,7 +145,7 @@ public sealed class ControlPlaneApp : IAsyncDisposable
     public AsyncServiceScope Scope() => factory.Services.CreateAsyncScope();
 
     /// <summary>
-    /// Stops the app, closes its database's pooled connections and drops the database: every app has a database of its own, and pools left to
+    /// Stops the app and closes its database's pooled connections: every app has a database of its own, and pools left to
     /// idle out held the test server's 300 connections until RunnerIntegrationTests were refused ("too many clients").
     /// </summary>
     public async ValueTask DisposeAsync()
@@ -153,7 +153,11 @@ public sealed class ControlPlaneApp : IAsyncDisposable
         await factory.DisposeAsync();
         using var pooled = new Npgsql.NpgsqlConnection(ConnectionString);
         Npgsql.NpgsqlConnection.ClearPool(pooled);
-        await server.DropDatabaseAsync(ConnectionString);
+        // The server's data directory is a tmpfs: databases kept to the end of the run filled it (53100, no space left).
+        if (postgres is not null)
+        {
+            await postgres.DropDatabaseAsync(ConnectionString);
+        }
     }
 
     public static async Task<JsonNode> Expect(HttpResponseMessage response, HttpStatusCode status)

@@ -10,7 +10,7 @@
       "kind": "demo",
       "highlight": {
         "text": "Technologies",
-        "note": "Each division is a column, with a letter badge in its own colour: blue, then violet, then teal."
+        "note": "Each division stacks under the shortest column, its letter in an ink badge."
       }
     },
     {
@@ -42,7 +42,7 @@
       "kind": "demo",
       "highlight": {
         "text": "Club Reading List",
-        "note": "A wire runs down to its projects; while work goes on beneath Learning, a dot travels down it."
+        "note": "A wire runs down to its projects: each hangs off it with the same node, and it ends at the last."
       }
     }
   ],
@@ -65,7 +65,7 @@
             {
               "type": {
                 "into": {
-                  "selector": "form[aria-label^='Add a'] input:not([aria-describedby])"
+                  "selector": "form[aria-label^='Add a'] input[name='name']"
                 },
                 "text": "Field Trips"
               }
@@ -108,7 +108,7 @@
           "kind": "demo",
           "highlight": {
             "selector": "[data-archived]",
-            "note": "Events is archived: a dashed header with the badge Archived. Its apps are not served."
+            "note": "Events is archived: folded under Archived after the chart, muted, with the badge Archived. Its apps are not served."
           }
         }
       ]

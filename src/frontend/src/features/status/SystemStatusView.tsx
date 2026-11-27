@@ -3,6 +3,7 @@ import { Failed } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page";
 import { cn } from "@/lib/utils";
 import { useGetSystemStatusQuery, type ServiceHealth, type SystemStatus } from "@/store/api";
 import { POLL_INTERVAL_MS, formatCheckedAt, formatLatency, toViewState } from "./statusModel";
@@ -13,18 +14,18 @@ export function SystemStatusView() {
 
   return (
     <section aria-labelledby="system-status-title" className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 id="system-status-title" className="text-2xl font-semibold sm:text-3xl">
-            System status
-          </h1>
-          <p className="text-sm text-ink-muted">Every service, asked directly whether it is healthy.</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching}>
-          <RefreshCw aria-hidden className={cn("size-4", query.isFetching && "animate-spin motion-reduce:animate-none")} />
-          Check again
-        </Button>
-      </div>
+      <PageHeader
+        titleId="system-status-title"
+        icon="health"
+        title="System status"
+        lead="Every service, asked directly whether it is healthy."
+        actions={
+          <Button variant="outline" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching}>
+            <RefreshCw aria-hidden className={cn("size-4", query.isFetching && "animate-spin motion-reduce:animate-none")} />
+            Check again
+          </Button>
+        }
+      />
 
       {view.kind === "loading" && <LoadingState />}
       {view.kind === "failed" && <Failed title="System status could not be loaded" reason={view.reason} status={view.status} unknown="Nothing below is known until a check succeeds." onRetry={() => void query.refetch()} />}
@@ -49,27 +50,18 @@ function LoadedState({ status, stale }: { status: SystemStatus; stale: { reason:
   const allHealthy = status.overall === "healthy" && status.services.length > 0;
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-      <Card
-        data-state={allHealthy ? "healthy" : "unhealthy"}
-        className={cn("lg:sticky lg:top-6 lg:w-aside lg:shrink-0", allHealthy ? "bg-success-tint" : "bg-attention-tint")}
-      >
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            {allHealthy ? (
-              <CheckCircle2 aria-hidden className="size-6 text-success" />
-            ) : (
-              <AlertTriangle aria-hidden className="size-6 text-attention-text" />
-            )}
-            <CardTitle className={cn("text-lg", allHealthy ? "text-success-text" : "text-attention-text")}>
-              {allHealthy ? "All services healthy" : summariseUnhealthy(unhealthy.length, status.services.length)}
-            </CardTitle>
-          </div>
-          <p className="text-sm text-ink-muted">Checked at {formatCheckedAt(status.checkedAt)}</p>
+    <div className="flex flex-col gap-4">
+      {/* The verdict on the whole system: white, its state said by the icon and one tag, never by the card's fill. */}
+      <Card data-state={allHealthy ? "healthy" : "unhealthy"}>
+        <CardHeader className="flex-row flex-wrap items-center gap-x-3 gap-y-1">
+          {allHealthy ? <CheckCircle2 aria-hidden className="size-6 text-success" /> : <AlertTriangle aria-hidden className="size-6 text-attention-text" />}
+          <CardTitle className="text-lg">{allHealthy ? "All services healthy" : summariseUnhealthy(unhealthy.length, status.services.length)}</CardTitle>
+          <Badge tone={allHealthy ? "good" : "bad"}>{allHealthy ? "Healthy" : "Needs attention"}</Badge>
+          <p className="text-sm text-ink-muted sm:ml-auto">Checked at {formatCheckedAt(status.checkedAt)}</p>
         </CardHeader>
         {stale && (
           <CardContent>
-            <p role="alert" data-state="stale" className="rounded-sm bg-surface p-3 text-sm text-attention-text">
+            <p role="alert" data-state="stale" className="rounded-sm border border-attention-line bg-attention-tint p-3 text-sm text-attention-text">
               The latest check failed: {stale.reason} These results are from the last one that succeeded.
             </p>
           </CardContent>
@@ -77,13 +69,13 @@ function LoadedState({ status, stale }: { status: SystemStatus; stale: { reason:
       </Card>
 
       {status.services.length === 0 ? (
-        <Card role="alert" className="flex-1">
+        <Card role="alert">
           <CardContent className="pt-5 text-sm text-attention-text">
             The control plane answered, but reported no services. That is a fault, not a quiet system.
           </CardContent>
         </Card>
       ) : (
-        <ul aria-label="Services" className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+        <ul aria-label="Services" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4">
           {status.services.map((service) => (
             <li key={service.key}>
               <ServiceCard service={service} />
@@ -109,7 +101,7 @@ function ServiceCard({ service }: { service: ServiceHealth }) {
           <CardTitle>{service.name}</CardTitle>
           <p className="font-mono text-xs text-ink-muted">{formatLatency(service.latencyMs)}</p>
         </div>
-        <Badge tone={healthy ? "success" : "attention"}>
+        <Badge tone={healthy ? "good" : "bad"}>
           <span aria-hidden className={cn("size-2 rounded-full", healthy ? "bg-success" : "bg-attention-text")} />
           {healthy ? "Healthy" : "Unhealthy"}
         </Badge>

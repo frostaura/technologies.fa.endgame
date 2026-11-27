@@ -1,9 +1,8 @@
-import { useId, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Icon } from "@/components/Icon";
 import { OneTime } from "@/components/OneTime";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { formatDate } from "@/lib/format";
@@ -18,6 +17,7 @@ import { useChangeRoleMutation, useGetMeQuery, useGetMembersQuery, useRemoveMemb
 import { inviteMember, reissueInvitation } from "@/store/sensitive";
 import type { Member, MemberInvitation, MemberRole, Tree } from "@/store/types";
 import { Fold } from "@/components/Fold";
+import { PageHeader, SECTION } from "@/components/ui/page";
 import { AppShell } from "../shell/AppShell";
 import { placements, scopeName } from "../workforce/workforceModel";
 
@@ -55,22 +55,20 @@ export function PeopleView() {
         </Fold>
       }
     >
-      <header className={cn("flex flex-wrap items-end justify-between gap-4", RISE)}>
-        <div className="flex flex-col gap-1.5">
-          <h1 className="flex items-center gap-3 text-3xl font-semibold">
-            <Icon name="employee" tinted className="size-7" />
-            People in {here}
-          </h1>
-          <p className="max-w-prose text-ink-body">Everyone with a role here, and where each grant was set. A grant holds for everything beneath where it is set.</p>
-        </div>
-        <ScopePicker tree={tree.data} scope={scope} />
-      </header>
+      <PageHeader
+        className={RISE}
+        icon="employee"
+        title={`People in ${here}`}
+        lead="Everyone with a role here, and where each grant was set. A grant holds for everything beneath where it is set."
+        actions={<ScopePicker tree={tree.data} scope={scope} />}
+      />
 
       {!active.isLoading && !scope ? (
         <Empty icon="organisation" title="There is no one to show until your organisation is named" />
       ) : (
-        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
-          <div className="flex min-w-0 flex-col gap-4 xl:col-span-2">
+        // The people across the page; from 1600 the invitation form sits beside them.
+        <div className="grid grid-cols-1 items-start gap-6 3xl:grid-cols-[minmax(0,1fr)_26rem]">
+          <div className="flex min-w-0 flex-col gap-6">
             {view.kind === "loading" && (
               <Loading label="Loading the people" className="flex flex-col gap-2">
                 <Skeleton className="h-16 rounded-sm" />
@@ -96,11 +94,18 @@ export function PeopleView() {
                     Invite someone and they appear here once they accept.
                   </Empty>
                 ) : (
-                  <ul aria-label="People" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
-                    {view.data.map((m) => (
-                      <MemberRow key={m.membershipId} member={m} scope={scope} tree={tree.data} canChange={admin} self={m.userId === me.data?.user.id} viewerIsOwner={role === "owner"} here={here} onOutcome={setOutcome} />
-                    ))}
-                  </ul>
+                  <>
+                    <Rows label="People" variant="member" members={view.data.filter((m) => m.hasPasskey)} row={(m) => <MemberRow key={m.membershipId} variant="member" member={m} scope={scope} tree={tree.data} canChange={admin} self={m.userId === me.data?.user.id} viewerIsOwner={role === "owner"} here={here} onOutcome={setOutcome} />} />
+                    {view.data.some((m) => !m.hasPasskey) && (
+                      <section aria-labelledby="invitations-title" className="flex flex-col gap-3">
+                        <h2 id="invitations-title" className={SECTION}>
+                          Invitations waiting
+                          <span className="ml-2 font-sans text-base font-normal tabular-nums text-ink-muted">{view.data.filter((m) => !m.hasPasskey).length}</span>
+                        </h2>
+                        <Rows label="Invitations" variant="invitation" members={view.data.filter((m) => !m.hasPasskey)} row={(m) => <MemberRow key={m.membershipId} variant="invitation" member={m} scope={scope} tree={tree.data} canChange={admin} self={m.userId === me.data?.user.id} viewerIsOwner={role === "owner"} here={here} onOutcome={setOutcome} />} />
+                      </section>
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -113,6 +118,35 @@ export function PeopleView() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+/** The columns of a row, the same for the header row and every row under it, so the table reads down. */
+const COLUMNS = {
+  member: "md:grid-cols-[minmax(0,1.5fr)_9.5rem_minmax(0,1fr)_12rem_9.5rem]",
+  invitation: "md:grid-cols-[minmax(0,1.5fr)_9.5rem_minmax(0,1fr)_12rem_9.5rem]",
+} as const;
+const HEADINGS = {
+  member: ["Person", "Role", "Where it was set", "Since", ""],
+  invitation: ["Person", "Role", "Where it was set", "Their invitation", ""],
+} as const;
+
+/**
+ * A table of grants at a desktop's width — a header row, then one row per person, every column in the
+ * same place — and a list of cards on a phone. One list (not a copy per layout).
+ */
+function Rows({ label, variant, members, row }: { label: string; variant: keyof typeof COLUMNS; members: Member[]; row: (m: Member) => ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-md border bg-surface shadow-card">
+      <div aria-hidden className={cn("hidden gap-x-5 border-b bg-ground px-5 py-2.5 text-sm font-medium text-ink-muted md:grid", COLUMNS[variant])}>
+        {HEADINGS[variant].map((h, i) => (
+          <span key={i}>{h}</span>
+        ))}
+      </div>
+      <ul aria-label={label} className="flex flex-col divide-y">
+        {members.map(row)}
+      </ul>
+    </div>
   );
 }
 
@@ -138,6 +172,7 @@ function ScopePicker({ tree, scope }: { tree: Tree | undefined; scope: string })
 }
 
 function MemberRow({
+  variant,
   member,
   scope,
   tree,
@@ -147,6 +182,7 @@ function MemberRow({
   here,
   onOutcome,
 }: {
+  variant: keyof typeof COLUMNS;
   member: Member;
   scope: string;
   tree: Tree | undefined;
@@ -199,39 +235,64 @@ function MemberRow({
     }
   };
 
+  const roleCell =
+    editable && !inherited ? (
+      <>
+        <label htmlFor={selectId} className="sr-only">
+          Role for {member.displayName}
+        </label>
+        <Select id={selectId} value={member.role} disabled={changing.isLoading} onChange={(e) => void change(e.target.value as MemberRole)}>
+          {GRANTABLE.filter((r) => viewerIsOwner || r !== "admin").map((r) => (
+            <option key={r} value={r}>
+              {ROLE_NAME[r]}
+            </option>
+          ))}
+        </Select>
+      </>
+    ) : (
+      // A role that is not changed here reads as the same field's words, in the same place, without the box.
+      <span className="flex min-h-touch items-center px-3 text-ink max-md:px-0 max-md:font-medium">
+        {ROLE_NAME[member.role]}
+      </span>
+    );
+
   return (
-    <li data-member={member.email} className="flex flex-col gap-2 border-b px-5 py-4 last:border-b-0">
-      <div className="grid grid-cols-1 items-center gap-3 md:grid-cols-name-figures">
-        <div className="flex min-w-0 flex-col md:col-span-2">
-          <span className="break-words font-semibold">
+    <li data-member={member.email} className="flex flex-col gap-3 px-5 py-3.5 max-sm:px-4">
+      <div className={cn("grid grid-cols-1 items-center gap-x-5 gap-y-1.5", COLUMNS[variant])}>
+        <div className="flex min-w-0 flex-col md:order-1">
+          <span className="truncate font-semibold" title={member.displayName}>
             {member.displayName}
             {self && <span className="font-normal text-ink-muted"> (you)</span>}
           </span>
-          <span className="break-all text-sm text-ink-body">{member.email}</span>
+          <span className="truncate text-sm text-ink-body" title={member.email}>
+            {member.email}
+          </span>
           {technical && <code className="break-all font-mono text-xs text-ink-muted">{member.membershipId}</code>}
+          {editable && inherited && <span className="pt-0.5 text-sm text-ink-muted">{fromAbove ? `This grant holds here from ${scopeName(tree, member.scope)}; change it there.` : `Change this grant at ${scopeName(tree, member.scope)}.`}</span>}
         </div>
-        <div className="flex flex-col">
-          {editable && !inherited ? (
-            <>
-              <label htmlFor={selectId} className="sr-only">
-                Role for {member.displayName}
-              </label>
-              <Select id={selectId} value={member.role} disabled={changing.isLoading} onChange={(e) => void change(e.target.value as MemberRole)}>
-                {GRANTABLE.filter((r) => viewerIsOwner || r !== "admin").map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_NAME[r]}
-                  </option>
-                ))}
-              </Select>
-            </>
-          ) : (
-            <Badge tone={member.role === "owner" ? "solid" : member.role === "admin" ? "primary" : member.role === "builder" ? "teal" : "quiet"} className="self-start">
-              {ROLE_NAME[member.role]}
-            </Badge>
-          )}
+        {/* On a phone: where it was set and since when, on one line; then the role and the row's action side by side. */}
+        <div className="flex min-w-0 flex-wrap gap-x-2 text-sm md:contents">
+          <span className="text-ink-body md:order-3">{inherited ? `Set at ${scopeName(tree, member.scope)}` : "Set here"}</span>
+          <span aria-hidden className="text-ink-muted md:hidden">
+            ·
+          </span>
+          <span className={cn("text-ink-muted md:order-4", variant === "member" && "whitespace-nowrap")}>{member.hasPasskey ? `Since ${formatDate(member.grantedAt)}` : pendingLine(member.invitationExpiresAt)}</span>
         </div>
-        <span className="text-sm text-ink-body">{inherited ? `Set at ${scopeName(tree, member.scope)}` : "Set here"}</span>
-        <span className="text-sm text-ink-muted">{member.hasPasskey ? `Since ${formatDate(member.grantedAt)}` : pendingLine(member.invitationExpiresAt)}</span>
+        <div className="flex min-w-0 items-center justify-between gap-3 md:contents">
+          <div className="min-w-0 max-md:w-48 md:order-2">{roleCell}</div>
+          <div className="flex md:order-5 md:justify-end">
+            {variant === "member" && editable && !inherited && !confirm && (
+              <Button size="sm" variant="ghost" aria-label={`Remove ${member.displayName}`} title={`Remove ${member.displayName}`} disabled={removing.isLoading} onClick={() => setConfirm(true)}>
+                Remove
+              </Button>
+            )}
+            {variant === "invitation" && editable && !inherited && !renewed && (
+              <Button size="sm" variant="soft" disabled={renewing} onClick={() => void renew()}>
+                {renewing ? "Sending a new code…" : "Send a new code"}
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
       {renewed?.invitationCode && (
         <OneTime label={`New invitation code for ${member.displayName}`} value={renewed.invitationCode} onDone={() => setRenewed(null)}>
@@ -239,28 +300,23 @@ function MemberRow({
           {renewed.expiresAt ? ` until ${formatDate(renewed.expiresAt)}` : ` for ${INVITATION_DAYS} days`}; the code they had before no longer does.
         </OneTime>
       )}
-      {editable && !inherited && !member.hasPasskey && !renewed && (
-        <Button size="sm" variant="soft" className="self-start" disabled={renewing} onClick={() => void renew()}>
-          {renewing ? "Sending a new code…" : "Send a new code"}
-        </Button>
-      )}
-      {editable && !inherited && !confirm && (
-        <Button size="sm" variant="ghost" className="self-start" disabled={removing.isLoading} onClick={() => setConfirm(true)}>
+      {variant === "invitation" && editable && !inherited && !confirm && (
+        <Button size="sm" variant="ghost" className="-ml-3 self-start" disabled={removing.isLoading} onClick={() => setConfirm(true)}>
           Remove {member.displayName}
         </Button>
       )}
       {confirm && (
-        <div role="group" aria-label={`Confirm removing ${member.displayName}`} className="flex flex-wrap items-center gap-2 rounded-xs bg-attention-tint px-3 py-2">
-          <span className="text-attention-deep">{member.displayName} loses this role at once. Grants set elsewhere stay.</span>
-          <Button size="sm" onClick={() => void drop()}>
-            Remove
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>
-            Keep them
-          </Button>
-        </div>
+        <ConfirmCard
+          label={`Confirm removing ${member.displayName}`}
+          question={`Remove ${member.displayName}?`}
+          detail={`${member.displayName} loses this role at once. Grants set elsewhere stay.`}
+          confirm="Remove"
+          cancel="Keep them"
+          busy={removing.isLoading}
+          onConfirm={() => void drop()}
+          onCancel={() => setConfirm(false)}
+        />
       )}
-      {editable && inherited && <span className="text-sm text-ink-muted">{fromAbove ? `This grant holds here from ${scopeName(tree, member.scope)}; change it there.` : `Change this grant at ${scopeName(tree, member.scope)}.`}</span>}
       {problem && (
         <p role="alert" className="rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
           {problem}
@@ -282,6 +338,9 @@ function pendingLine(expiresAt: string | null): string {
     ? `No passkey yet, and their code expired on ${formatDate(expiresAt)}: send a new one`
     : `No passkey yet: their code works until ${formatDate(expiresAt)}`;
 }
+
+/** A part of the invitation form that takes the form's whole width while the form is two across. */
+const WIDE = "md:col-span-2 3xl:col-span-1";
 
 function Invite({ scope, tree, viewerIsOwner }: { scope: string; tree: Tree | undefined; viewerIsOwner: boolean }) {
   const dispatch = useAppDispatch();
@@ -313,8 +372,8 @@ function Invite({ scope, tree, viewerIsOwner }: { scope: string; tree: Tree | un
   };
 
   return (
-    <section aria-labelledby={`${ids.email}-title`} className="flex flex-col gap-4 rounded-md border bg-surface p-5 shadow-card">
-      <h2 id={`${ids.email}-title`} className="text-lg font-semibold">
+    <section aria-labelledby={`${ids.email}-title`} className="flex flex-col gap-4 rounded-md border bg-surface p-5 shadow-card max-sm:p-4">
+      <h2 id={`${ids.email}-title`} className={SECTION}>
         Invite someone
       </h2>
       {invited &&
@@ -334,14 +393,14 @@ function Invite({ scope, tree, viewerIsOwner }: { scope: string; tree: Tree | un
           {problem}
         </p>
       )}
-      <form onSubmit={(e) => void submit(e)} noValidate className="flex flex-col gap-3">
+      <form onSubmit={(e) => void submit(e)} noValidate className="grid grid-cols-1 gap-3 md:grid-cols-2 3xl:grid-cols-1">
         <Field id={ids.email} label="E-mail address" problem={invalid ? "That does not look like an e-mail address." : null}>
           <Input id={ids.email} type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} aria-invalid={invalid} aria-describedby={invalid ? `${ids.email}-problem` : undefined} />
         </Field>
         <Field id={ids.name} label="Their name" hint="Optional. Shown to everyone in the organisation.">
           <Input id={ids.name} value={name} onChange={(e) => setName(e.target.value)} aria-describedby={`${ids.name}-hint`} />
         </Field>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
+        <div className={cn(WIDE, "grid grid-cols-1 gap-3 sm:grid-cols-2 3xl:grid-cols-1")}>
           <Field id={ids.role} label="Role">
             <Select id={ids.role} value={role} onChange={(e) => setRole(e.target.value as MemberRole)}>
               {GRANTABLE.filter((r) => viewerIsOwner || r !== "admin").map((r) => (
@@ -362,9 +421,9 @@ function Invite({ scope, tree, viewerIsOwner }: { scope: string; tree: Tree | un
             </Select>
           </Field>
         </div>
-        <p className="text-sm text-ink-body">{ROLE_MAY[role]}</p>
-        <p className="text-sm text-ink-muted">Someone new gets a one-time code to make their passkey with. It works for {INVITATION_DAYS} days; a new one can be sent from their row.</p>
-        <Button type="submit" className="self-start" disabled={!typed || invalid || sending}>
+        <p className={cn(WIDE, "text-sm text-ink-body")}>{ROLE_MAY[role]}</p>
+        <p className={cn(WIDE, "text-sm text-ink-muted")}>Someone new gets a one-time code to make their passkey with. It works for {INVITATION_DAYS} days; a new one can be sent from their row.</p>
+        <Button type="submit" className={cn(WIDE, "justify-self-start")} disabled={!typed || invalid || sending}>
           {sending ? "Inviting…" : "Invite"}
         </Button>
       </form>
@@ -375,12 +434,12 @@ function Invite({ scope, tree, viewerIsOwner }: { scope: string; tree: Tree | un
 function RolesAside() {
   return (
     <section aria-labelledby="roles-title" className="flex flex-col gap-3">
-      <h2 id="roles-title" className="text-lg font-semibold">
+      <h2 id="roles-title" className="text-base font-semibold">
         What each role may do
       </h2>
-      <dl className="flex flex-col gap-3">
+      <dl className="flex flex-col divide-y">
         {[...ROLES].reverse().map((r) => (
-          <div key={r} className="flex flex-col gap-0.5 rounded-xs border border-border-strong px-4 py-3">
+          <div key={r} className="flex flex-col gap-0.5 py-3 first:pt-0">
             <dt className="font-semibold">{ROLE_NAME[r]}</dt>
             <dd className="m-0 text-ink-body">{ROLE_MAY[r]}</dd>
           </div>

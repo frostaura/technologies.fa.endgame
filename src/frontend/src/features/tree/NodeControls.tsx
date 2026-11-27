@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { useCardNote } from "@/components/cardNote";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { isValidSlug, slugify } from "@/lib/format";
 import { describeError, errorStatus } from "@/lib/queryState";
-import { cn } from "@/lib/utils";
 import { useCreateNodeMutation, useDeleteNodeMutation, useUpdateNodeMutation, type TreeArg } from "@/store/api";
 import type { ManagedLevel, ScopeLevel, TreeNode } from "@/store/types";
 import { LEVEL_NAME, reactivatedStatus } from "./treeManage";
@@ -51,7 +51,7 @@ export function RenameNode({ level, id, name, slug, tree, onDone }: { level: Man
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label={`Rename the ${word(level)}`} className="flex flex-col gap-2" noValidate>
+    <form onSubmit={(e) => void submit(e)} aria-label={`Rename the ${word(level)}`} className="flex max-w-form flex-col gap-2" noValidate>
       <Field id={fieldId} label="Name" hint={`Its address stays ${slug}: an address never changes once it is made.`} problem={value.length > 0 ? problem : null}>
         <Input id={fieldId} value={value} maxLength={NAME_LIMIT + 1} onChange={(e) => setValue(e.target.value)} aria-describedby={`${fieldId}-hint`} aria-invalid={!!problem} />
       </Field>
@@ -147,7 +147,7 @@ export function DeleteNode({ level, id, name, tree, onDeleted }: { level: Manage
           onNo={() => setConfirming(false)}
         />
       ) : (
-        <Button size="sm" variant="ghost" className="self-start text-attention-text" disabled={state.isLoading} onClick={() => setConfirming(true)}>
+        <Button size="sm" variant="outline" className="self-start border-attention-text text-attention-text" disabled={state.isLoading} onClick={() => setConfirming(true)}>
           Delete {name}
         </Button>
       )}
@@ -196,17 +196,18 @@ export function CreateChild({ level, parent, parentName, onCreated, onCancel }: 
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label={`Add a ${word(level)} to ${parentName}`} className="flex flex-col gap-3 rounded-md border border-primary-line bg-primary-tint p-4" noValidate>
+    <form onSubmit={(e) => void submit(e)} aria-label={`Add a ${word(level)} to ${parentName}`} className="flex flex-col gap-4 rounded-md border bg-ground p-5 max-sm:p-4" noValidate>
       <h3 className="font-display text-base font-semibold">
         A new {word(level)} in {parentName}
       </h3>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field id={ids.name} label="Name" problem={typed.length > NAME_LIMIT ? `A name is at most ${NAME_LIMIT} characters.` : null}>
-          <Input ref={first} id={ids.name} value={name} onChange={(e) => setName(e.target.value)} />
+      <div className="flex max-w-form flex-col gap-4">
+        <Field id={ids.name} label="Name" hint="What everyone reads. It can be renamed at any time." problem={typed.length > NAME_LIMIT ? `A name is at most ${NAME_LIMIT} characters.` : null}>
+          <Input ref={first} id={ids.name} name="name" value={name} onChange={(e) => setName(e.target.value)} aria-describedby={`${ids.name}-hint`} />
         </Field>
         <Field id={ids.slug} label="Its address" hint={`${parent}/${shown || "…"}. It cannot be changed once it is made.`} problem={slugProblem}>
           <Input
             id={ids.slug}
+            name="slug"
             value={shown}
             onChange={(e) => {
               setEdited(true);
@@ -233,32 +234,7 @@ export function CreateChild({ level, parent, parentName, onCreated, onCancel }: 
   );
 }
 
-/** A confirmation in place, focused when it opens and closed with Escape. */
+/** A confirmation in place, focused when it opens and closed with Escape: the shared `ConfirmCard`. */
 export function Confirm({ title, text, yes, no, onYes, onNo, className }: { title: string; text: string; yes: string; no: string; onYes: () => void; onNo: () => void; className?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const titleId = useId();
-  useEffect(() => ref.current?.focus(), []);
-  return (
-    <div
-      ref={ref}
-      role="alertdialog"
-      aria-labelledby={titleId}
-      tabIndex={-1}
-      onKeyDown={(e) => e.key === "Escape" && onNo()}
-      className={cn("flex flex-col gap-2 rounded-sm border border-attention-line bg-attention-tint px-4 py-3 outline-none", className)}
-    >
-      <p id={titleId} className="font-semibold text-attention-text">
-        {title}
-      </p>
-      <p className="text-sm text-attention-deep">{text}</p>
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={onYes}>
-          {yes}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onNo}>
-          {no}
-        </Button>
-      </div>
-    </div>
-  );
+  return <ConfirmCard role="alertdialog" focus label={title} question={title} detail={text} confirm={yes} cancel={no} onConfirm={onYes} onCancel={onNo} className={className} />;
 }

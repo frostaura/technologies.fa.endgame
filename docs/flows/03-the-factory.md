@@ -34,7 +34,8 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
   - The idea may be 1 to 20,000 characters, constraints the same; otherwise 400.
   - A reserved FrostAura name is refused (TreeEndpoints, another reader).
   - A new organisation starts with no credits, so beside the estimate the page says "A new organisation starts with no credits, and this needs about {credits}. Research starts, then waits for a top-up before it spends anything."
-  - The side panel shows **"What happens next"**: Research → Verdict → A home for it → Hiring → Build, check, review → Running, privately.
+  - The side panel shows **"What happens next"** as a numbered stepper: Research → Verdict → A home for it → Hiring → Build, check, review → Running, privately. Beside an existing organisation it also shows **"What research costs here"** ("This idea", the estimate once shown; "To spend here", the room under every cap; and "Estimates here", how estimates have landed, when any were scored) and **"Start from what you run"**: up to three ideas — the organisation's own open suggestions first, then one around each app it runs — that fill "The idea" when pressed, with a link to **"Ideas from your portfolio"**.
+  - From 1600 px the form is two columns: the idea and what it must respect on the left; where it goes, the estimate and **"Research this idea"** on the right. On a phone **"Research this idea"** stays above the bottom bar, with the estimate beside it, however long the idea is.
 - **Where:** `features/start/StartView.tsx`. `POST /api/ideas/estimate`, `POST /api/organisations`, `POST /api/ideas` (WorkEndpoints), `IdeaService.CreateAsync`.
 - **Reachable from:** UI (also API/MCP, see IDEA-06).
 - **Covered by tests:** `StartView.test.tsx` ("names the organisation on first run…"); `tests-e2e/console.spec.ts` ("first run: name the organisation, see the estimate, research…"); `IdeasAndConversationsTests.The_estimate_is_free_and_works_before_an_organisation_exists`.
@@ -143,12 +144,12 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **What you learn:** Endgame can propose products from what you already hold, and shows the cost first.
 - **Steps:**
   1. The heading reads "Ideas from your portfolio".
-  2. Optionally pick the scope under **"Suggest for"**: "{Org} (the whole organisation)" or a division. The picker only appears when there is more than one choice.
+  2. Optionally pick the scope under **"Suggest for"**: "The whole of {Org}" or a division. The picker only appears when there is more than one choice.
   3. In the side panel **"Ask for ideas"** ("…suggests up to five products that fill a gap"), press **"See what it costs"** ("Working it out…" while it works).
   4. Read "About {credits}." (what it usually costs) and the basis, which says the most it can ever cost. Press **"Suggest ideas"** ("Starting…") or **"Not now"**.
   5. The panel reads the suggest run itself and says what it is doing: while it works, "The suggestions are being worked out." / "They appear here as soon as they are ready; you can watch the work meanwhile." with **"Watch it work"**, which links to the suggest run. The page checks the run and for new suggestions every 10 seconds.
   6. Cards appear, each with: the title, "Suggested {time ago}", the idea, **"The gap it fills"**, **"Why you are placed to build it"**, and **"What it would reuse"** as badges. A platform service is named as the app page names it ("Sign-in", "E-mail"); technical mode shows what the model wrote.
-- **You know it worked when:** suggestion cards appear under the list "Suggested ideas". In the run, the message "Research · New ideas for you" appears ("A new idea for you" for one).
+- **You know it worked when:** suggestion cards appear under the list "Suggested ideas" — one column, two from 1280 px, three from 1600 px; each card names the idea, "The gap it fills", "Why you are placed to build it" and "What it would reuse" (each thing once), with its actions at its foot. In the run, the message "Research · New ideas for you" appears ("A new idea for you" for one).
 - **Variations and refusals:**
   - Below Builder: "Asking for ideas spends credits, so it needs the Builder role here."
   - Estimate refused: "No estimate could be made: … Nothing was started."
@@ -256,9 +257,9 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **What you learn:** the verdict is a page of its own and stays there.
 - **Steps:**
   1. The page loads (skeleton, "Loading the verdict").
-  2. Above the verdict sits "Research by {Iris} · {spent} credits, estimated {estimate}". In technical mode the idea id, run id, status, scope and red line are added.
+  2. Beside the verdict's tag sits "Research by {Iris} · {spent} credits, estimated {estimate}". In technical mode the idea id, run id, status, scope and red line are added under the summary.
   3. While research runs, the page checks every 5 seconds and shows **"Research in progress"**, "The verdict is being worked out.", "The case against the idea is argued first. You can watch every step as it happens." and **"Watch the research"**.
-- **You know it worked when:** the dark verdict banner shows "Verdict · build", "Verdict · change" or "Verdict · do not build".
+- **You know it worked when:** the verdict's white hero shows one tag, "Verdict · build", "Verdict · change" or "Verdict · do not build".
 - **Variations and refusals:** a missing idea shows "This idea could not be found" — with "This was not found, or you cannot see it." and "Back to the org chart" in place of "Try again" (a not-found is an answer, so it does not say "Nothing here is known until it loads."). A failed read shows "The verdict could not be loaded" with a retry. An answer in the wrong shape becomes a failed read naming the field.
 - **Where:** `features/verdict/VerdictView.tsx`; `GET /api/ideas/{id}`.
 - **Reachable from:** UI; MCP `idea_get`.
@@ -271,18 +272,15 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Foundation. **Learn first:** VERD-02.
 - **What you learn:** the verdict names the products it found and counts missing demand against building.
 - **Steps (top to bottom):**
-  1. The banner: stamp "Verdict · {outcome}", the headline, and a two-sentence summary. **"Read the full reasoning"** / **"Hide the full reasoning"** opens "The full reasoning" when the summary is long.
-  2. A red-line alert, when one is breached (VERD-10).
-  3. **"The case against, argued first"**, as numbered points.
-  4. Three cards:
-     - **"Who already does this"**: up to 6 products, each with what it does and source links (site name only in normal mode), plus **"Show all {n}"** / **"Show fewer"**. Empty: "Research found nothing already sold that does this."
-     - **"What gap is left"**. Empty: "Research named no gap."
-     - **"Who would want it"**: paragraphs and "Signals of demand" with sources. If none were found: "No evidence of demand was found. That counts against building."
+  1. The hero, on white: the tag "Verdict · {outcome}", the headline, and two sentences of the summary. **"Read the full reasoning"** / **"Hide the full reasoning"** opens the whole of it in place of those sentences when the summary is long. Beside it (under it below 1600 px), three figures — "Already sold", "Demand" and "Confidence".
+  2. A red-line alert, in the hero in place of those figures, when one is breached (VERD-10).
+  3. **"The case against, argued first"**. Left out when it is the summary the hero already shows whole. From here the evidence runs as sections each as tall as what it holds, two across from 1600 px.
+  4. **"Who already does this"**: the first 5 products, each with what it does and its source (site name only in normal mode, cut to its card), plus **"Show all {n} products"** / **"Show fewer"**; empty: "Research found nothing already sold that does this." **"What gap is left"**; empty: "Research named no gap." **"Who would want it"**: paragraphs and the first 5 "Signals of demand" with sources, plus **"Show all {n} signals"**; if none were found, "No evidence of demand was found. That counts against building." (only "That counts against building." when research's own words already say none was found). Over a red line, where research looked at no market, these three are one section: **"The market was not researched"**.
   5. **"What to change"**, on a change verdict.
   6. **"What would change the verdict"**.
-  7. **"No red line is crossed"**, with the reasoning.
-  8. The decision controls (VERD-05 to VERD-09), or the decision already taken (VERD-13).
-- **You know it worked when:** the three cards and the decision buttons are visible.
+  7. **"No red line is crossed"**, with the reasoning. Then research's record (VERD-04).
+  8. The decision (VERD-05 to VERD-09), or the decision already taken (VERD-13): on a desktop in the side card **"Your decision"**, which stays in view as the page scrolls; on a tablet or a phone straight under the hero.
+- **You know it worked when:** the evidence sections and the decision buttons are visible.
 - **Variations and refusals:** normal mode strips repository names in brackets from product names. Technical mode shows full URLs. On a phone the order changes so the call comes first: the banner, a red line's alert, then the decision controls full width (a confirmation opens in place), then every other section as a folded row — "The case against, argued first" open, "Who already does this" ("{n} products"), "What gap is left", "Who would want it", "What to change", "What would change the verdict", "No red line is crossed", and VERD-04's three sections, each one tap to open.
 - **Where:** `VerdictView.tsx`, `verdictModel.ts`.
 - **Reachable from:** UI; MCP `idea_get` (raw document).
@@ -290,17 +288,17 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 
 ### VERD-04 Read how often research says no, and how it was researched
 - **Who:** Viewer or above.
-- **Starts at:** the side panel of `/ideas/{id}` (on a phone, the last three folded rows of the page).
+- **Starts at:** `/ideas/{id}`: "How this was researched" is the side panel's second card on a desktop; "How often research says no" and "When you overruled" sit under the evidence (on a phone, the last three folded rows of the page).
 - **Needs:** an idea.
 - **Level:** Core. **Learn first:** VERD-03.
 - **What you learn:** a verdict that never says no is treated as a fault, so its record is shown.
 - **Steps:**
   1. **"How often research says no"**, with the line "Research that never refuses is worthless, so Endgame shows you its record." Then bars for Build, Change and Do not build ("{n} of {total}"). For a first verdict: "This is the first verdict for your organisation." After 5 or more verdicts with no "no": "Research has not said no once in {n} verdicts. Treat that as a fault."
-  2. **"When you overruled"**: each overruled idea links to its page, with "Research said {x}." and how it turned out. Empty: "You have not overruled research yet."
-  3. **"How this was researched"**: rows "Strands", "Searches", "Sources" ("None recorded" if empty) and "Confidence" ("Not stated" if missing); a per-strand list; "Suggested home: {name}"; the searches themselves in technical mode; **"Every source ({n})"** as a fold-out; any rules applied (for example "No evidence of demand was found…"); and **"See every step"**.
-- **You know it worked when:** the bars and the method rows show.
+  2. **"When you overruled"**: each overruled idea links to its page, with "Research said {x}." and how it turned out; the first 3, then **"Show all {n} overrules"**. Empty: "You have not overruled research yet."
+  3. **"How this was researched"**: one line "{n} searches · {n} sources · {confidence} confidence" ("no sources recorded" if none); the strands, each with its own searches, sources and confidence when there is more than one; "Suggested home: {name}"; the searches themselves in technical mode; **"Every source ({n})"** as a fold; any rules applied (for example "No evidence of demand was found…"); and **"See every step"**.
+- **You know it worked when:** the bars and the method line show.
 - **Variations and refusals:** the rows "Argued" and "Briefed" and the method summary never appear with today's Runner. `VerdictBuilder.Method` does not write `argued`, `contractors` or `summary`.
-- **Where:** `VerdictView.tsx` `RecordAside`; `ReadModels.VerdictRecordAsync`.
+- **Where:** `VerdictView.tsx` `Method`, `TrackRecord`; `ReadModels.VerdictRecordAsync`.
 - **Reachable from:** UI.
 - **Covered by tests:** `VerdictView.test.tsx` ("shows the agreed document… each strand and the method's searches and confidence").
 
@@ -466,19 +464,20 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **What you learn:** every step of the work is visible as it happens, and a dropped connection loses nothing.
 - **Steps:**
   1. The page loads (skeleton, "Loading the work").
-  2. The header shows the status badge ("Waiting to start", "Working", "Waiting for you", "Paused", "Finished", "Did not succeed", "Cancelled", or "You declined to start this" for work declined at its start checkpoint), the stream state ("Connecting…", "Live" with a pulsing dot, "Reconnecting…"), the title and "Started {time}".
-  3. Steps arrive under "Step by step". Before the first one: "Waiting for the first step". Events are taken in together, a batch at a time, so a long build's thousands of events draw at once rather than one by one.
-  4. A run with more than 200 steps shows the latest 200, under "{n} earlier steps folded away; the latest 200 are below." with **"Show 200 earlier steps"** (or as many as are left), which unfolds them 200 at a time.
-  5. The stream closes when the run finishes.
+  2. The header shows the status badge ("Waiting to start", "Working", "Waiting for you", "Paused", "Finished", "Did not succeed", "Cancelled", "You declined to start this" for work declined at its start checkpoint, or "Declined by you" for a plan you declined), what kind of work it is ("Research", "Build", "Work on an app", "Conversation"), the stream state ("Connecting…", "Live" with a pulsing dot, "Reconnecting…" — only while the work is under way: never on paused or ended work), a short name for the work as the heading ("Build: A reading list for the supper club" — the kind and the first clause of the request, never cut mid-word), the whole request under it, two lines with **"Show all of it"**, and "Started {date}, {time}" (with "· ended {time}" once it has ended).
+  3. Steps arrive under "Step by step". Before the first one: "Waiting for the first step". An ended run's steps are read in before any is shown ("Reading what the work did"), so its first events never make it look as if it were still working. Events are taken in together, a batch at a time, so a long build's thousands of events draw at once rather than one by one.
+  4. Every step is one row: its mark, who did what, what it cost and when, the cost and the time in the same two right-hand columns on every row. A build's steps are gathered under the part of the plan they are for — "Getting ready", "Part {n} of {m} {the part's words}", "Review and finish" — each a line with its state ("Done", "Working", "Sent back", "Did not succeed", "Stopped"), how many lines it holds, what it cost and when; the part the work is on is open and the others are folded, one click to open. Under a part its lines say "this part" for the part's own words, which its heading says once. The same line said again in a row is one line with "×{n}"; the tasks a plan makes at once are one line, "{n} new tasks". A part with more than 200 lines shows the latest 200, under "{n} earlier steps folded away; the latest 200 are below." with **"Show 200 earlier steps"** (or as many as are left); in technical mode a folded part draws none of its lines until it is opened.
+  5. The stream closes when the run finishes. An ended run says how it ended in one card: "Outcome", and, when it stopped, why and **"Try again"** (RUN-10, RUN-11); a cancel or a decline is said once, by that offer.
+  6. From 1280 wide, "Tasks" and "Where the credits go" stand beside the page; narrower (a 1024 laptop, a tablet, a phone on its side) they come in the page, after the plan. From 1600, "The plan" stands beside "Step by step".
 - **You know it worked when:** "Live" shows and new steps appear without reloading.
 - **Variations and refusals:**
   - Six failed reconnects: "The live connection to this work could not be kept open. What is shown is everything received so far." with **"Reconnect"**.
   - A missing run: "This work could not be found" — with "This was not found, or you cannot see it." and "Back to the org chart" in place of "Try again" (a not-found is an answer, so it does not say "Nothing here is known until it loads."). A failed read: "This work could not be loaded" with a retry.
   - A finished run with no steps: "This work recorded no steps."
-  - On a phone the title is cut to two lines with **"Show all of it"**; an approval waiting comes straight under it, and once scrolled out of sight leaves the bar "Waiting for your approval" pinned at the top, whose **"Answer"** scrolls back to it. The cost tiles are two by two; "The plan" and "Tasks" are folded rows saying how far they got; "Step by step" shows the latest step first, twelve at a time, with **"Show 12 earlier steps"** at the foot.
+  - On a phone an approval waiting comes straight under the heading, before **"Pause"** and **"Cancel"**, its note field before **"Approve"** and **"Decline"**, which stay pinned above the bottom bar while the card is on screen; once scrolled out of sight it leaves the bar "Waiting for your approval" pinned at the top, whose **"Answer"** scrolls back to it. The cost tiles are two by two; "The plan" and "Tasks" are folded rows saying how far they got; a part's lines show twelve at a time, with **"Show 12 earlier steps"** above them.
 - **Where:** `RunView.tsx`, `useRunStream.ts`; `GET /api/runs/{id}`, `GET /api/runs/{id}/events?after=`.
 - **Reachable from:** UI; MCP `run_get`, `run_events`.
-- **Covered by tests:** `RunView.test.tsx` (including "draws a long build promptly, folding its earlier steps…"); `useRunStream.test.ts`; `RunsAndTasksTests.The_event_stream_is_server_sent_events_resumable…`.
+- **Covered by tests:** `RunView.test.tsx` (including "draws a long build promptly, folding its earlier steps…"); `RunLong.test.tsx` (about 2,000 events: never "Working" or "Live" while the log arrives, gathered by part, drawn promptly); `tests-demo/runs.spec.ts` (one grid at every width, by part, never "Live" on a failed run, the side panel from 1280, the plan beside the steps from 1600, a phone's decision first); `useRunStream.test.ts`; `RunsAndTasksTests.The_event_stream_is_server_sent_events_resumable…`.
 
 ### RUN-02 Read a run in normal mode
 - **Who:** Viewer or above.
@@ -489,7 +488,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Steps:**
   1. The count line reads "{n} actions taken" (", {n} refused by your rules" when a rule refused any without asking, ", {n} declined by you" when you declined any at an approval). A run that took no action, such as a conversation that only answered, shows no count. Technical mode adds " · {n} declined by you" after the denials.
   2. Messages appear as "{speaker} · {title}".
-  3. Contractor and agent groups fold away once done, for example "Built: {part}", "Checked: {part}", "Drew up the plan"; "Show its {n} steps" unfolds one. A group still under way is titled in the present tense ("Looking for existing products", "Building: {part}") with "Working"; once the run has ended, a group that never reported back reads "Stopped".
+  3. Contractor and agent groups fold away once done, for example "Built: {part}", "Checked: {part}", "Checked again, by a second checker: {part}", "Drew up the plan" (under a part, "Built: this part"); "Show its {n} steps" unfolds one. Each says what it came back with beside its state ("Found it works", "Found it does not work yet" with "Sent back"). A group still under way is titled in the present tense ("Looking for existing products", "Building: {part}") with "Working"; once the run has ended, a group that never reported back reads "Stopped". A factory agent's id is never read out as words: one with no plain name reads "Checked the work", "Built part of the work" or "A contractor's piece of the work".
   4. The mechanics are summarised, for example "Read 4 files · Changed 2 files · Ran the tests — 12 passed".
   5. An action a rule refused without asking reads "An action was refused by your rules" / "It was not carried out. The work continues without it." One you declined at an approval reads as yours, in the words of the question: "You declined: search the web for what they leave undone", "You declined: change part of the app" / "It was not done. The work continues without it." (technical mode: "Declined by you: {tool}"). An older run's decline, which carried only its rule, reads "You declined: search the web" or "You declined: a step the work asked you about".
   6. **"Outcome"** shows the closing plain message. A conversation's outcome is its reply, drawn from its markdown (bold, lists, inline code).
@@ -696,13 +695,13 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 
 ### RUN-14 Follow the tasks of a run
 - **Who:** Viewer or above.
-- **Starts at:** the run aside **"Tasks"**.
+- **Starts at:** **"Tasks"**, beside the run's page from 1280 wide, in the page after the plan below that.
 - **Needs:** a run that creates tasks (a build).
 - **Level:** Core. **Learn first:** RUN-01.
 - **What you learn:** each part of the work is a task claimed by a named employee.
 - **Steps:**
-  1. Tasks appear with the badges "To do", "In progress", "Done", "Did not succeed".
-  2. Each shows the holder and a note.
+  1. Tasks are gathered under the part of the plan they are for ("{n}. {the part's words}"), one line each: the badge ("To do", "In progress", "Done", "Did not succeed"), what the task is for that part ("Build", "Check", "Check {n}" for each check after a repair, "Check again"), and who holds it. A long plan shows its first four parts and **"Show all {n} parts"**. Tasks that are not one part's show their own words.
+  2. Pressing a task with a note shows it ("Built and handed over: …", "The check of … is finished: it works.").
 - **You know it worked when:** tasks show "Done" with their summaries.
 - **Variations and refusals:** none yet: "No tasks yet. They appear here as the work is broken down." Finished without tasks: "This work was not broken into tasks."
 - **Where:** `RunView.tsx` `RunAside`.
@@ -718,19 +717,20 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Starts at:** a build run.
 - **Needs:** a build decision.
 - **Level:** Core. **Learn first:** VERD-05.
-- **What you learn:** Endgame finds the app a home (a division, a project and the app itself) without asking.
+- **What you learn:** Endgame finds the app a home (a division, a project and the app itself) without asking, and a new idea is always a new app: nothing that already exists is built over.
 - **Steps:**
-  1. The division is the idea's own one if it was proposed to a division. Otherwise it is the verdict's proposed division, defaulting to "labs"; it is created if it is new.
-  2. The project and the app are created, or reused when their slugs already exist.
-  3. "The builder · Placed" reads "{name} will live in a new division, {Division}, as the project {Project}." (or "…will live in {Division}…").
-  4. From that moment the build is the app's work: the run moves to the app's scope, so the project's card shows it under way (stage "building", its progress and spend) and every later model call is charged — and capped — at the app, the project and the division, even though the Runner still names the scope it started at.
-- **You know it worked when:** the message appears, and the org chart shows the new project with the build under way.
+  1. The division is the idea's own one if it was proposed to a division (from the console, or from a division's, a project's or an app's conversation, which proposes it to the division it is in; a portfolio suggestion likewise). Otherwise it is the verdict's proposed division, defaulting to "labs"; it is created if it is new.
+  2. A **new project of its own** is made, and a new app in it. The verdict's project slug is a suggestion: when another project already has it, the next free address is taken (`dive-club-tools-2`, then `-3`, …) and the existing project is not touched (R9-1). An existing project is never joined by a build from an idea; growing an existing product is a change asked for on its app (CHG-01).
+  3. "The builder · Placed" reads "{name} is a new app. It will live in a new division, {Division}, as a new project of its own." (or "…It will live in {Division} as a new project of its own."; when the suggested address was taken, it ends "…, beside {that project}.").
+  4. **Enforced below the model.** The control plane refuses to record a build's placement in an app that is not new — one that work making or changing an app was ever on (a change, a task, another idea's build; a conversation about it does not count), or one that was published, has a version or holds end users while no earlier attempt of the same idea made it — with `409 placement_taken`, in the same transaction; the run does not move and the app is untouched. The build then stops before any hire, workspace or plan: "This build was about to be placed in an app that already exists, so it stopped before anything was planned or built. That app is untouched. “Try again” places it as a new app."
+  5. From that moment the build is the app's work: the run moves to the app's scope, so the project's card shows it under way (stage "building", its progress and spend) and every later model call is charged — and capped — at the app, the project and the division, even though the Runner still names the scope it started at.
+- **You know it worked when:** the message appears, and the org chart shows the new project with the build under way; the workspace is the new app's own, started from the kit's template.
 - **Variations and refusals:**
-  - **No person confirms or edits the placement.** There is no checkpoint for it.
+  - **No person confirms or edits the placement.** There is no checkpoint for it; with the plan checkpoint on, the plan's approval says where it goes first (BLD-04).
   - The start screen's "A home for it — Endgame suggests a division and a name." is closer to "decides".
 - **Where:** `BuildWorkflow.PlaceAsync`; `POST /internal/tree/nodes`.
 - **Reachable from:** internal.
-- **Covered by tests:** `WorkflowTests.Build_places_plans_builds…`; `factory.spec.ts` step 3; `WalkTwoServerTests.A_placed_build_is_the_work_of_its_project_and_its_spend_lands_there`.
+- **Covered by tests:** `WorkflowTests.Build_places_plans_builds…`, `…A_new_idea_whose_suggested_project_and_app_already_exist_is_placed_as_a_new_app…`, `…Every_taken_address_is_passed_over…`, `…A_placement_the_control_plane_refuses_stops_the_build…`, `…A_runner_that_dies_after_making_the_project…`; `PlacementGuardTests` (another idea's live app refused, a published or changed app refused, every way an idea starts, a stranded run); `placement.r9.test.ts` (the demo); `factory.spec.ts` step 3; `WalkTwoServerTests.A_placed_build_is_the_work_of_its_project_and_its_spend_lands_there`.
 
 ### BLD-02 See hires the factory proposes or makes
 - **Who:** nobody acts in auto-mode; an Admin decides a proposal.
@@ -787,14 +787,14 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Level:** Advanced. **Learn first:** BLD-03, RUN-07.
 - **What you learn:** with the plan checkpoint on, nothing is built until you agree the plan.
 - **Steps:**
-  1. Read the plan (the card's detail in technical mode, and the plan panel).
+  1. Read where it goes, first on the card: "{name} is a new app. It will live in {Division} as a new project of its own." (a change: "This changes {app}, the app already built and running in {Division}. Nothing else is touched."). Then the plan (the card's detail, folded to four lines on a phone with "Read all of it", and the plan panel).
   2. Press **"Approve"**: the plan becomes "Agreed" and building begins.
   3. Press **"Decline"** (optionally with a note): the card says "Declined. It was not done, so the work has stopped." and the run fails with "You declined the plan, so nothing was built. Your note: “…” “Try again” plans it afresh."
 - **You know it worked when:** after approving, the badge reads "Agreed".
 - **Variations and refusals:** after a decline, **"Try again"** on the run or the idea page plans afresh (CHG-03). A change's plan asks "Accept this plan for the change?".
 - **Where:** `BuildWorkflow` (`Checkpoint(run,"plan")`).
 - **Reachable from:** UI; MCP.
-- **Covered by tests:** `WorkflowTests.A_declined_plan_says_so_and_a_try_again_plans_afresh`.
+- **Covered by tests:** `WorkflowTests.A_declined_plan_says_so_and_a_try_again_plans_afresh`, `…A_new_idea_whose_suggested_project…` (where it goes, first on the card), `…A_change_names_the_app_it_changes_on_the_plan_approval`; `placement.r9.test.ts`.
 
 ### BLD-05 See the build re-estimated from the plan
 - **Who:** nobody acts.
@@ -940,7 +940,8 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   1. The heading reads "How much {name} does on its own", with "Set once for the organisation, narrowed for a division, project or app. The credit budget is the limit that is always on."
   2. Pick a level under **"Level"** (indented with "— ").
   3. Each value says "Set here", "Inherited from {name}", "Not set anywhere: auto-mode by default" or "Not set anywhere: off".
-  4. The side panel: "One rule, used everywhere", and "What never changes": "The credit budget is always on.", "No one may make an app public but a person.", "Nothing is built over a red line.", "Repairing its own mistake is never billed."
+  4. "Rules for each stage" is one table: a row per stage ("Every stage", "Research", "Planning", "Building", "Checking the work", "Security review", "The conversation") and a column each for "May not", "Asks you first" and "May do", with where the stage's rules were set under its name. A tool with several rules in a list is one line ("Run commands and tests, limited"); technical mode lists each rule beneath it as the harness reads it. A list with nothing in it shows "—"; a stage with no rules at all reads "No rules set for this stage".
+  5. The side panel: "One rule, used everywhere", and "What never changes": "The credit budget is always on.", "No one may make an app public but a person.", "Nothing is built over a red line.", "Repairing its own mistake is never billed."
 - **You know it worked when:** the origin labels show.
 - **Variations and refusals:** non-admins see "You can read these. An Admin or the Owner sets them." and disabled controls. Loading and failure: "The autonomy settings could not be loaded".
 - **Where:** `features/autonomy/AutonomyView.tsx`; `GET /api/autonomy`.
@@ -972,7 +973,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Level:** Core. **Learn first:** AUTO-02.
 - **What you learn:** checkpoints only stop work in checkpoints mode.
 - **Steps:**
-  1. Toggle one of:
+  1. Toggle one of (each switch sits before its title, and where the value was set at the row's end):
      - **"Before work starts"** ("Wait for your word once the estimate is known."), see RUN-08;
      - **"Before the plan is carried out"** ("Show you the plan and wait for you to agree it."), see BLD-04;
      - **"Before anyone is hired"** ("Every hire waits for you, even inside the budget."), see BLD-02.
@@ -1000,36 +1001,36 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 
 ### AUTO-05 Set rules for a stage
 - **Who:** Admin.
-- **Starts at:** `/autonomy`, **"Rules for each stage"**. The cards are: "Every stage", "Research", "Planning", "Building", "Checking the work", "Security review", "The conversation".
+- **Starts at:** `/autonomy`, **"Rules for each stage"**: a row per stage, "Every stage", "Research", "Planning", "Building", "Checking the work", "Security review", "The conversation".
 - **Needs:** Admin.
 - **Level:** Advanced. **Learn first:** AUTO-01.
 - **What you learn:** a stage's own rules add to those for every stage, and the nearest level's rules win.
 - **Steps:**
-  1. Press **"Set rules here"**, or **"Change"** if rules are already set here.
+  1. Press **"Set rules here"**, or **"Change"** if rules are already set here, at the end of the stage's row. Its editor opens across the row.
   2. In each of the lists **"May not"**, **"Asks you first"** and **"May do"**:
      - in normal mode, pick a tool from **"Choose…"** and press **"Add"**;
-     - in technical mode, type `tool` or `tool(pattern)` (placeholder "tool or tool(pattern)") and press **"Add"** or Enter;
+     - in technical mode, type `tool` or `tool(pattern)` (each list's placeholder is an example: "run(rm -rf *)", "run(npm install*)", "edit_file") and press **"Add"** or Enter;
      - remove a rule with the × chip.
   3. Press **"Save for {level}"**, or **"Cancel"**.
-- **You know it worked when:** the card shows your rules and "Set here". Overriding a higher level shows "Replaces the rules set at …".
+- **You know it worked when:** the stage's row shows your rules and "Set here". Overriding a higher level shows "Replaces the rules set at …".
 - **What it changes:** every agent's permission check at that stage. "May not" is refused whatever else applies. "May do" is allowed.
 - **Variations and refusals:**
   - Refused: "The rules were not saved: {reason} They are as they were." (400 for a malformed rule or stage).
   - **"Asks you first" asks.** A matching call raises an approval (RUN-07) and the work waits for your answer, even though nobody watches the run; declined, the step is not taken and the work goes on without it. **"Search the web"** (`web_search`) is the AI model's own ability, and the same rules hold for it: under "May not" it is not offered at all, and under "Asks you first" each step asks once before its first search and works without searching if declined. On the run page a step a rule refused reads "An action was refused by your rules"; one you declined reads "You declined: search the web for …" (RUN-02). The rule set's separate `checkpoints` list is kept as it was ("Also stops for you at: …") and is API/MCP only.
-  - Empty list labels: "Nothing extra is refused", "Nothing waits for you", "Only what the job allows".
+  - An empty list shows "—" under its column; a tool named by two rules in one list is said once.
 - **Where:** `AutonomyView.tsx` `StageRules`; `PUT /api/autonomy/rule-sets`; `PermissionPolicy.Decide`.
 - **Reachable from:** UI (deny, ask, allow); API/MCP `rule_set_set` (adds `checkpoints`).
 - **Covered by tests:** `AutonomyView.test.tsx` ("sets a stage's rules here and removes them again", "technical mode shows the rules as the harness reads them"); `PermissionTests` (all, including `An_asks_you_first_rule_raises_an_approval_even_unattended_and_a_decline_carries_the_note`).
 
 ### AUTO-06 Remove the rules set here
 - **Who:** Admin.
-- **Starts at:** **"Remove here"** on a stage card.
+- **Starts at:** **"Remove here"** at the end of a stage's row.
 - **Needs:** rules set at this level.
 - **Level:** Advanced. **Learn first:** AUTO-05.
 - **What you learn:** removing rules lets the inherited ones apply again.
 - **Steps:**
   1. Press **"Remove here"**. There is no confirmation.
-  2. The card shows the inherited rules or "No rules set for this stage".
+  2. The row shows the inherited rules or "No rules set for this stage".
 - **You know it worked when:** "Set here" disappears.
 - **Variations and refusals:** refused: "Not removed: …"; 404 if nothing is set.
 - **Where:** `DELETE /api/autonomy/rule-sets`.
@@ -1109,10 +1110,10 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   3. Press **"Start it again"** ("Starting…") or **"Not now"**. You are taken to the new run.
   4. The new run says "Endgame · Carrying on": "This picks up where the earlier attempt stopped: {n} of {m} parts were already built and checked, so they are kept, not rebuilt or charged again." (with one part: "1 of {m} parts was already built and checked, so it is kept, …") The plan shows those parts as "Built and checked in the earlier attempt; kept, not built or charged again."
 - **You know it worked when:** the new run finishes; the idea's "Watch the work that followed" now opens it.
-- **Variations and refusals:** a build that stopped before anything was published raises its hires again (its earlier proposals were withdrawn, RUN-06); a start the owner declined says so ("start-declined"); a declined plan is planned afresh; a part that failed is built again with fresh repair rounds; only the latest attempt can be tried, once (409); work that has not stopped is "409 not_retryable". While an employee on the project is paused, a build or change is not started again: "It was not started again: {Name}, who works on this app, is paused…".
+- **Variations and refusals:** a build that stopped before anything was published raises its hires again (its earlier proposals were withdrawn, RUN-06); a start the owner declined says so ("start-declined"); a declined plan is planned afresh; a part that failed is built again with fresh repair rounds; a try again finds the earlier attempt's own app again — never another app: an attempt that was placed in an app that already existed (a build from before R9-1) is placed afresh as a new app, planned from the start, its workspace from the kit's template, and says "Endgame · Placed afresh": "The earlier attempt was placed in an app that already existed and is not this idea's, so it is left as it is. This attempt builds a new app, planned from the start."; that earlier attempt's hires for the other app are withdrawn when it stops, and the app keeps its status, its version and its data; only the latest attempt can be tried, once (409); work that has not stopped is "409 not_retryable". While an employee on the project is paused, a build or change is not started again: "It was not started again: {Name}, who works on this app, is paused…".
 - **Where:** `runs/TryAgain.tsx`, `RunView.tsx` `StoppedPanel`, `VerdictView.tsx`; `POST /api/runs/{id}/retry/estimate`, `POST /api/runs/{id}/retry`; `RetryService`, `IdeaService.RetryBuildAsync`, `FactoryEstimates`; `BuildWorkflow.CarryOverAsync`.
 - **Reachable from:** UI; MCP `run_retry_estimate`, `run_retry`; the conversation (`try_again`, TALK-18).
-- **Covered by tests:** `WorkflowTests.A_build_tried_again_keeps_its_placement_plan_and_finished_parts_and_builds_only_the_rest`, `…A_declined_plan_says_so_and_a_try_again_plans_afresh`; `TryAgainAndChangesTests.A_stopped_build_is_built_again_priced_for_what_is_left_and_carrying_on_from_the_earlier_attempt`; `RetryEstimateWordingTests` (nothing, one or every part left); `TryAgainAndChanges.test.tsx`; `RoundThree.test.tsx` ("what a try again keeps").
+- **Covered by tests:** `WorkflowTests.A_build_tried_again_keeps_its_placement_plan_and_finished_parts_and_builds_only_the_rest`, `…A_declined_plan_says_so_and_a_try_again_plans_afresh`, `…Try_again_on_a_build_of_a_new_app_keeps_that_same_app`, `…Try_again_on_a_build_placed_in_another_apps_project_before_the_fix_is_placed_afresh…`; `PlacementGuardTests.Try_again_finds_the_same_ideas_own_app…`, `…A_build_wrongly_placed_in_a_live_app_before_the_rule_leaves_it_untouched_when_it_stops`; `TryAgainAndChangesTests.A_stopped_build_is_built_again_priced_for_what_is_left_and_carrying_on_from_the_earlier_attempt`; `RetryEstimateWordingTests` (nothing, one or every part left); `TryAgainAndChanges.test.tsx`; `RoundThree.test.tsx` ("what a try again keeps").
 
 ### CHG-04 Restore an earlier version
 - **Who:** Builder (another reader covers the details).

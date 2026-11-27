@@ -306,7 +306,9 @@ test.describe("the console on a phone", () => {
       expect(box?.width ?? 0, "the decision is not full width").toBeGreaterThanOrEqual(320);
       await thumbSized(decision);
       await expect(page.getByRole("button", { name: /^The case against/ })).toHaveAttribute("aria-expanded", "true");
-      for (const name of [/^Who already does this/, /^What gap is left/, /^Who would want it/, /^How often research says no/]) await expect(page.getByRole("button", { name })).toHaveAttribute("aria-expanded", "false");
+      // Over a red line research looks at no market, and the page says so once rather than three times.
+      const market = scenario === "verdict-red-line" ? [/^The market was not researched/] : [/^Who already does this/, /^What gap is left/, /^Who would want it/];
+      for (const name of [...market, /^How often research says no/]) await expect(page.getByRole("button", { name })).toHaveAttribute("aria-expanded", "false");
       if (scenario === "verdict-red-line") {
         const card = page.getByRole("alert").filter({ hasText: "crosses a red line" });
         await expect(card).toBeVisible();
@@ -390,3 +392,65 @@ async function shortTargets(page: Page): Promise<string[]> {
 async function inFirstScreenWithoutBar(target: Locator) {
   await expect(target).toBeInViewport();
 }
+
+/**
+ * A tablet worked by touch (768 × 1024, portrait): the full header on one row, and every control a
+ * thumb's height — the same rule as a phone, since a finger is the same size on both.
+ */
+test.describe("the console on a tablet worked by touch", () => {
+  test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true, isMobile: false, deviceScaleFactor: 2 });
+
+  test("the header's controls sit on one row, Sign out included, also in Technical mode", async ({ page }) => {
+    await open(page, "default", "/");
+    for (const mode of ["Normal", "Technical"]) {
+      await page.getByRole("group", { name: "Mode" }).getByRole("button", { name: mode }).click();
+      const tops = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>("header a, header button")]
+          .filter((el) => el.offsetParent !== null && !el.closest("nav[aria-label='Where you are']"))
+          .map((el) => Math.round(el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2)),
+      );
+      expect(Math.max(...tops) - Math.min(...tops), `the ${mode} header wraps`).toBeLessThanOrEqual(4);
+    }
+    await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  });
+
+  test("every control on every main screen is a thumb's height", async ({ page }) => {
+    const found: string[] = [];
+    for (const s of SCREENS) {
+      await open(page, s.scenario, s.route, s.persona);
+      await noSideways(page);
+      for (const t of await shortTargets(page)) found.push(`${s.name}: ${t}`);
+    }
+    expect(found).toEqual([]);
+  });
+});
+
+/**
+ * A phone on its side (812 × 375) is not the upright layout stretched: the bar becomes a slim rail at
+ * the left, so the page keeps its height, and the header is one line.
+ */
+test.describe("a phone on its side", () => {
+  test.use({ viewport: { width: 812, height: 375 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+
+  test("the bar is a rail at the left edge, the page beside it, nothing sideways", async ({ page }) => {
+    await open(page, "app-busy");
+    const rail = await page.locator("[data-bottom-nav]").boundingBox();
+    expect(rail?.x ?? -1).toBe(0);
+    expect(rail?.width ?? 999, "the rail is slim").toBeLessThanOrEqual(96);
+    expect(rail?.height ?? 0, "the rail runs the screen's height").toBeGreaterThanOrEqual(370);
+    const main = await page.locator("main").boundingBox();
+    expect(main?.x ?? 0, "the page starts beside the rail").toBeGreaterThanOrEqual((rail?.width ?? 0) - 1);
+    const header = await page.locator("header").first().boundingBox();
+    expect(header?.height ?? 999, "the header is one line").toBeLessThanOrEqual(56);
+    await noSideways(page);
+    await thumbSized(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Home" }));
+  });
+
+  test("a sheet comes in from the side", async ({ page }) => {
+    await open(page, "default", "/");
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /^More/ }).click();
+    const sheet = await page.getByRole("dialog", { name: "More" }).boundingBox();
+    expect(sheet?.x ?? 0, "the sheet sits at the right").toBeGreaterThan(300);
+    expect(sheet?.height ?? 0).toBeGreaterThanOrEqual(370);
+  });
+});

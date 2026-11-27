@@ -1,4 +1,5 @@
 import { formatNumber } from "@/lib/format";
+import { NO_VALUE, Stat } from "@/components/ui/stat";
 import { cn } from "@/lib/utils";
 import type { AskChart } from "@/store/types";
 
@@ -35,10 +36,11 @@ export function AskChartView({ chart, columns, rows, className }: { chart: AskCh
   if (!chart || chart.kind === "table" || chart.series.length === 0) return <AnswerTable columns={columns} rows={rows} className={className} />;
   if (chart.kind === "number") {
     const y = chart.series[0]?.points[0]?.y ?? null;
+    // One figure: the figure tile, its series named over it.
     return (
-      <p className={cn("font-display text-4xl font-semibold", className)} aria-label={`${chart.series[0]?.name ?? "Value"}: ${y === null ? "no value" : formatNumber(y)}`}>
-        {y === null ? "No value" : formatNumber(y)}
-      </p>
+      <div role="group" aria-label={`${chart.series[0]?.name ?? "Value"}: ${y === null ? "no value" : formatNumber(y)}`} className={className}>
+        <Stat plain size="lg" label={label(chart.series[0]?.name ?? "Value")} value={y === null ? NO_VALUE : formatNumber(y)} tone={y === null ? "muted" : "ink"} caption={y === null ? "No value" : undefined} />
+      </div>
     );
   }
   if (chart.kind === "bar") return <Bars chart={chart} className={className} />;

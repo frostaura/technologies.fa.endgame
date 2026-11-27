@@ -1,8 +1,8 @@
-import { cleanup, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Tree } from "@/store/types";
 import { ME, json, renderWithStore, stubApi } from "@/test/harness";
-import { OrgChart } from "./OrgChart";
+import { AddDivision, OrgChart } from "./OrgChart";
 import { tidyFigures } from "./needsYouModel";
 import { nodeName } from "./ontologyModel";
 import { activityLine, appChips, appNote, progressLine, stageChip, workerActivity, workerLabel } from "./treeModel";
@@ -27,10 +27,18 @@ afterEach(() => {
 describe("OrgChart", () => {
   it("draws archived nodes as archived, links each to managing it, and offers an Admin a new division", async () => {
     stubApi({ "GET /api/me": json(ME) });
-    renderWithStore(<OrgChart tree={TREE} selection={null} onSelect={() => undefined} />);
+    renderWithStore(
+      <>
+        <AddDivision tree={TREE} />
+        <OrgChart tree={TREE} selection={null} onSelect={() => undefined} />
+      </>,
+    );
     expect(screen.getByRole("link", { name: "Manage Tools" }).getAttribute("href")).toBe("/tree?scope=acme%2Ftools");
     expect(screen.getByRole("link", { name: "Manage Ledger" }).getAttribute("href")).toBe("/tree?scope=acme%2Ftools%2Fledger");
-    const old = screen.getByRole("button", { name: /Old things/ }).closest("[data-archived]");
+    // An archived division is folded away at the end, under "Archived (1)", never left in the chart's columns.
+    expect(within(screen.getByRole("region", { name: "Organisation chart" })).queryByText("Old things")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Archived \(1\)/ }));
+    const old = within(screen.getByRole("region", { name: "Archived divisions" })).getByRole("button", { name: /Old things/ }).closest("[data-archived]");
     expect(old && within(old as HTMLElement).getByText("Archived")).toBeTruthy();
     const apps = screen.getByRole("list", { name: "Apps in Ledger" });
     expect(within(apps).getByText("Archived")).toBeTruthy();
@@ -40,7 +48,7 @@ describe("OrgChart", () => {
 
   it("offers a Builder no new division", () => {
     stubApi({ "GET /api/me": json(ME) });
-    renderWithStore(<OrgChart tree={{ ...TREE, viewerRole: "builder" }} selection={null} onSelect={() => undefined} />);
+    renderWithStore(<AddDivision tree={{ ...TREE, viewerRole: "builder" }} />);
     expect(screen.queryByRole("link", { name: "Add a division" })).toBeNull();
   });
 
@@ -89,7 +97,7 @@ describe("a project card's work under way (R2-9)", () => {
     const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
     expect(container.textContent).not.toMatch(/step 0 of|0 of an estimated 0|less than 0\.01/);
     expect(container.textContent).toContain("0 credits this month");
-    expect(screen.getByText("credits this month").previousSibling?.textContent).toBe("0");
+    expect(screen.getByText("Credits this month").nextSibling?.textContent).toBe("0");
   });
 
   it("fills the bar with the finished steps and names the one under way", () => {
@@ -156,5 +164,59 @@ describe("the chart after the real-stack walk", () => {
     expect(tidyFigures("277.323824 credits are left in the budget.")).toBe("277 credits are left in the budget.");
     expect(tidyFigures("Start this work? Estimated 2.4567 credits.")).toBe("Start this work? Estimated 2.5 credits.");
     expect(tidyFigures("Version 1.2.3 stays")).toBe("Version 1.2.3 stays");
+  });
+});
+
+describe("the chart's shape", () => {
+  const project = (id: string, name: string, apps: unknown[] = []) => ({ id, slug: id, name, stage: "live", ideaId: null, note: null, progress: null, spend: { monthCredits: 5 }, workers: [], apps });
+  const division = (id: string, name: string, projects: unknown[]) => ({ id, slug: id, name, spend: { monthCredits: 5 }, workers: [], projects });
+
+  it("hangs every project off its division's wire with one node, and ends the wire at the last project", () => {
+    stubApi({ "GET /api/me": json(ME) });
+    const tree = { ...TREE, divisions: [division("d1", "Tools", [project("p1", "One"), project("p2", "Two"), project("p3", "Three")]), division("d2", "Kit", [project("p4", "Four")])] } as unknown as Tree;
+    const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    const tools = screen.getByRole("list", { name: "In Tools" });
+    const branches = tools.querySelectorAll(":scope > li[data-branch]");
+    expect(branches).toHaveLength(3);
+    for (const b of branches) expect(b.querySelectorAll("[data-node]")).toHaveLength(1);
+    // Every wire but the last runs on to the next branch; the last stops at its card's title row.
+    const wires = [...branches].map((b) => b.querySelector("[data-wire]")?.className ?? "");
+    expect(wires.slice(0, 2).every((w) => w.includes("bottom-0"))).toBe(true);
+    expect(wires[2]).toContain("h-12");
+    expect(wires[2]).not.toContain("bottom-0");
+    expect(container.querySelectorAll("[data-node]")).toHaveLength(4);
+  });
+
+  it("says a project's name and spend once when it is one app of the same name", () => {
+    stubApi({ "GET /api/me": json(ME) });
+    const same = { ...app, name: "Ledger", status: "live", spend: { monthCredits: 5 } };
+    const tree = { ...TREE, divisions: [division("d1", "Tools", [project("p1", "Ledger", [same])]), division("d2", "Kit", [])] } as unknown as Tree;
+    renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    const card = screen.getByRole("article", { name: "Ledger" });
+    expect(within(card).queryByText(/credits this month$/)).toBeNull();
+    expect(within(card).getByRole("link", { name: "Open the app" }).getAttribute("href")).toBe("/apps/a1");
+    expect(within(card).getAllByText("Ledger")).toHaveLength(1);
+  });
+
+  it("draws every division's letter in ink, never in a hue of its own", () => {
+    stubApi({ "GET /api/me": json(ME) });
+    const tree = { ...TREE, divisions: [division("d1", "Tools", []), division("d2", "Kit", []), division("d3", "Lab", [])] } as unknown as Tree;
+    const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    const badges = [...container.querySelectorAll("[data-division-header] span[aria-hidden].size-10")];
+    expect(badges).toHaveLength(3);
+    for (const b of badges) expect(b.className).toContain("bg-ink");
+  });
+
+  it("shows a long division's first six projects and Show all, the wire ending at Show all", () => {
+    stubApi({ "GET /api/me": json(ME) });
+    const many = Array.from({ length: 12 }, (_, i) => project(`p${i}`, `Project ${i}`));
+    const tree = { ...TREE, divisions: [division("d1", "Tools", many), division("d2", "Kit", [])] } as unknown as Tree;
+    renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    const tools = screen.getByRole("list", { name: "In Tools" });
+    expect(within(tools).getAllByRole("article")).toHaveLength(6);
+    const more = within(tools).getByRole("button", { name: "Show all 12 projects" });
+    expect(more.closest("li")?.querySelector("[data-wire]")?.className).toContain("h-8");
+    fireEvent.click(more);
+    expect(within(tools).getAllByRole("article")).toHaveLength(12);
   });
 });

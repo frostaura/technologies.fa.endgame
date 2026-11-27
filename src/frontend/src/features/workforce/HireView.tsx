@@ -1,8 +1,12 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Failed, Loading, Skeleton, Stale } from "@/components/states";
+import { SECTION, SideCard, TITLE } from "@/components/ui/page";
+import { Field, Input, Textarea } from "@/components/ui/field";
+import { GROWING } from "./layout";
+import { ConfirmCard } from "@/components/ui/confirm";
+import { Stat } from "@/components/ui/stat";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCredits, formatDate, formatNumber } from "@/lib/format";
@@ -64,26 +68,23 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
   const admin = roleRank(effectiveRole(tree, me.data, hire.scope)) >= roleRank("admin");
   return (
     <>
-      <section className={cn("relative flex flex-col gap-3 overflow-hidden rounded-lg bg-violet px-6 py-7 text-primary-ink sm:px-8", RISE)}>
-        <div aria-hidden className="absolute -right-16 -top-28 size-aura animate-drift rounded-full bg-primary opacity-60 blur-aura motion-reduce:animate-none" />
-        <Badge tone={hireBadge(hire).tone} className="relative self-start bg-surface">
+      <section aria-label="The proposed hire" className={cn("flex flex-col gap-3 rounded-lg border bg-surface px-6 py-7 shadow-card sm:px-8", RISE)}>
+        <Badge tone={hireBadge(hire).tone} className="self-start">
           {hireBadge(hire).label}
         </Badge>
-        <h1 className="relative text-3xl font-semibold sm:text-4xl">
-          {nameWithRole(hire.name, hire.role)}
-        </h1>
-        <p className="relative text-primary-tint">
+        <h1 className={cn(TITLE, "max-w-prose")}>{nameWithRole(hire.name, hire.role)}</h1>
+        <p className="text-ink-body">
           For {scopeName(tree, hire.scope)} · {TRIGGER[hire.trigger]} · Raised by {hire.raisedBy === "person" ? "a person" : "Endgame"} {formatDate(hire.createdAt)}
         </p>
-        {hire.reason && <p className="relative max-w-prose text-base">{hire.reason}</p>}
+        {hire.reason && <p className="max-w-prose text-base">{hire.reason}</p>}
       </section>
 
       {editing ? (
-        <EditHire hire={hire} onDone={() => setEditing(false)} onError={setEditError} />
+        <EditHire hire={hire} tree={tree} onDone={() => setEditing(false)} onError={setEditError} />
       ) : (
         <Fold title="The drafted job description" summary={`${job.monthlyCreditLimit !== null ? `${formatCredits(job.monthlyCreditLimit)} a month` : "No cap of its own"} · reports to ${hire.reportsTo?.name ?? "you"}`}>
         <section aria-labelledby="jd-title" className={cn("flex flex-col gap-3.5", RISE, stagger(1))}>
-          <h2 id="jd-title" className="text-lg font-semibold">
+          <h2 id="jd-title" className={SECTION}>
             The drafted job description
           </h2>
           {editError && (
@@ -91,7 +92,7 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
               {editError} The proposal is as it was.
             </p>
           )}
-          <dl className="grid grid-cols-1 gap-x-6 gap-y-3 rounded-md border bg-surface px-6 py-5 shadow-card sm:grid-cols-4">
+          <dl className="grid grid-cols-1 gap-x-8 gap-y-1 rounded-md border bg-surface px-6 py-5 shadow-card max-sm:px-4 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-y-3.5">
             <Row label="Mandate">{job.mandate || "Not written yet"}</Row>
             <Row label="Works at">{scopeName(tree, job.scope || hire.scope)} and everything beneath it</Row>
             <Row label="May use">{job.tools.length > 0 ? job.tools.map((t) => toolLabel(t, mode)).join(", ") : "Nothing beyond reading what it is given"}</Row>
@@ -126,8 +127,8 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <>
-      <dt className="text-ink-muted">{label}</dt>
-      <dd className="m-0 sm:col-span-3">{children}</dd>
+      <dt className="text-ink-muted max-sm:mt-2.5 max-sm:text-sm max-sm:first:mt-0">{label}</dt>
+      <dd className="m-0 max-w-prose">{children}</dd>
     </>
   );
 }
@@ -151,39 +152,35 @@ function Decide({ hire, onEdit, onError }: { hire: Hire; onEdit: () => void; onE
 
   return (
     <section aria-label="Your decision" className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-3 max-sm:flex-col">
-        <Button size="lg" onClick={() => setConfirming("accept")} disabled={state.isLoading} aria-expanded={confirming === "accept"}>
+      <div className="flex flex-wrap gap-2 max-sm:flex-col">
+        <Button onClick={() => setConfirming("accept")} disabled={state.isLoading} aria-expanded={confirming === "accept"}>
           Hire {hire.name}
         </Button>
-        <Button size="lg" variant="outline" onClick={onEdit} disabled={state.isLoading}>
+        <Button variant="outline" onClick={onEdit} disabled={state.isLoading}>
           Edit the proposal
         </Button>
-        <Button size="lg" variant="ghost" onClick={() => setConfirming("decline")} disabled={state.isLoading} aria-expanded={confirming === "decline"}>
+        <Button variant="ghost" onClick={() => setConfirming("decline")} disabled={state.isLoading} aria-expanded={confirming === "decline"}>
           Decline
         </Button>
       </div>
       {confirming && (
-        <form onSubmit={(e) => void submit(e)} aria-label={confirming === "accept" ? "Confirm the hire" : "Confirm declining"} className={cn("flex max-w-prose flex-col gap-2 rounded-md border p-4", confirming === "accept" ? "border-primary bg-primary-tint" : "border-attention-line bg-attention-tint")}>
-          <p className="font-medium">
-            {confirming === "accept"
-              ? `Hire ${hire.name} at about ${formatCredits(expectedMonthly(hire))} a month?`
-              : "Decline this hire? The same need can be raised again later."}
-          </p>
+        <ConfirmCard
+          label={confirming === "accept" ? "Confirm the hire" : "Confirm declining"}
+          question={confirming === "accept" ? `Hire ${hire.name} at about ${formatCredits(expectedMonthly(hire))} a month?` : "Decline this hire? The same need can be raised again later."}
+          confirm={confirming === "accept" ? "Yes, hire" : "Yes, decline"}
+          cancel="Not now"
+          destructive={confirming === "decline"}
+          busy={state.isLoading}
+          onSubmit={(e) => void submit(e)}
+          onCancel={() => setConfirming(null)}
+        >
           {confirming === "decline" && hire.holdDays ? <p className="text-sm text-ink-body">{holdLine(hire.holdDays)}</p> : null}
           {confirming === "accept" && !hire.withinBudget && <p className="text-sm text-attention-text">This is more than the budget has room for this month ({formatCredits(hire.headroomCredits)} left).</p>}
           <label htmlFor="hire-note" className="text-sm text-ink-muted">
             A note for the record (optional)
           </label>
-          <input id="hire-note" value={note} onChange={(e) => setNote(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3" />
-          <span className="flex flex-wrap gap-2">
-            <Button type="submit" size="sm" variant={confirming === "accept" ? "primary" : "outline"} disabled={state.isLoading}>
-              {confirming === "accept" ? "Yes, hire" : "Yes, decline"}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
-              Not now
-            </Button>
-          </span>
-        </form>
+          <Input id="hire-note" value={note} onChange={(e) => setNote(e.target.value)} />
+        </ConfirmCard>
       )}
     </section>
   );
@@ -217,7 +214,7 @@ function Decided({ hire }: { hire: Hire }) {
   );
 }
 
-function EditHire({ hire, onDone, onError }: { hire: Hire; onDone: () => void; onError: (reason: string | null) => void }) {
+function EditHire({ hire, tree, onDone, onError }: { hire: Hire; tree: Tree | undefined; onDone: () => void; onError: (reason: string | null) => void }) {
   const [edit, state] = useEditHireMutation();
   const dispatch = useAppDispatch();
   const org = hire.scope.split("/")[0] ?? "";
@@ -265,18 +262,21 @@ function EditHire({ hire, onDone, onError }: { hire: Hire; onDone: () => void; o
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label="Edit the proposal" className="flex flex-col gap-4 rounded-md border bg-surface p-5 shadow-card" noValidate>
-      <h2 className="text-lg font-semibold">Edit the proposal</h2>
-      <JobFields draft={draft} onChange={setDraft} managers={managers} allowStandard={!hire.jobDescription.modelTier} />
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Field id="hire-cost" label="Expected credits a month" value={cost} onChange={setCost} numeric />
+    <form onSubmit={(e) => void submit(e)} aria-label="Edit the proposal" className="flex flex-col gap-5 rounded-md border bg-surface p-6 shadow-card max-sm:p-4" noValidate>
+      <h2 className={SECTION}>Edit the proposal</h2>
+      <JobFields draft={draft} onChange={setDraft} managers={managers} tree={tree} allowStandard={!hire.jobDescription.modelTier} />
+      <div className="grid grid-cols-1 items-end gap-x-5 gap-y-1.5 md:grid-cols-2">
+        <Field id="hire-cost" label="Expected credits a month">
+          <Input id="hire-cost" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} aria-describedby="hire-cost-hint" />
+        </Field>
+        <span id="hire-cost-hint" className="text-sm text-ink-muted md:flex md:min-h-touch md:items-center">
+          Its own budget caps what it can cost: an expected cost above the budget is saved as the budget.
+        </span>
       </div>
-      <p className="text-sm text-ink-muted">Its own budget caps what it can cost: an expected cost above the budget is saved as the budget.</p>
-      <label htmlFor="hire-reason" className="text-sm font-medium">
-        Why this hire
-      </label>
-      <textarea id="hire-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className="rounded-xs border border-border-strong bg-surface px-3 py-2" />
-      <span className="flex flex-wrap gap-2">
+      <Field id="hire-reason" label="Why this hire">
+        <Textarea id="hire-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className={GROWING} />
+      </Field>
+      <span className="flex flex-wrap gap-2 border-t pt-4">
         <Button type="submit" disabled={state.isLoading}>
           Save the proposal
         </Button>
@@ -293,33 +293,21 @@ function EditHire({ hire, onDone, onError }: { hire: Hire; onDone: () => void; o
   );
 }
 
-function Field({ id, label, value, onChange, numeric = false }: { id: string; label: string; value: string; onChange: (v: string) => void; numeric?: boolean }) {
-  return (
-    <span className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
-        {label}
-      </label>
-      <input id={id} value={value} inputMode={numeric ? "numeric" : undefined} onChange={(e) => onChange(e.target.value)} className="min-h-touch rounded-xs border border-border-strong bg-surface px-3" />
-    </span>
-  );
-}
-
 function CostAside({ hire }: { hire: Hire }) {
   return (
     <>
-      <section className={cn("flex flex-col gap-2", RISE)}>
-        <h2 className="text-lg font-semibold">What it costs</h2>
-        <span className="font-display text-4xl font-semibold">{formatNumber(expectedMonthly(hire))}</span>
-        <span className="text-ink-body">{expectedMonthly(hire) < hire.expectedMonthlyCredits ? "credits a month at most: its own budget caps it" : "credits a month, expected"}</span>
-      </section>
-      <section className={cn("flex flex-col gap-2 rounded-sm px-4 py-4", hire.withinBudget ? "bg-success-tint" : "bg-attention-tint")}>
-        <span className={cn("flex items-center gap-2 font-semibold", hire.withinBudget ? "text-success-text" : "text-attention-text")}>
-          <Icon name="credits" />
-          {hire.withinBudget ? "Fits the budget" : "More than the budget has room for"}
-        </span>
-        <span className="text-ink">{formatCredits(hire.headroomCredits)} of room left this month where it would work.</span>
-      </section>
-      <p className="text-ink-body">An employee with nothing to do is flagged and let go, so an idle hire is never paid for. Its memory is kept, so a rehire is not a cold start.</p>
+      <SideCard label="What it costs" className={RISE}>
+        <Stat plain size="lg" label="What it costs" value={formatNumber(expectedMonthly(hire))} caption={expectedMonthly(hire) < hire.expectedMonthlyCredits ? "credits a month at most: its own budget caps it" : "credits a month, expected"} />
+        <div className="flex flex-col gap-1 border-t pt-3">
+          <Badge tone={hire.withinBudget ? "good" : "bad"} className="self-start">
+            {hire.withinBudget ? "Fits the budget" : "More than the budget has room for"}
+          </Badge>
+          <span className="text-ink-body">{formatCredits(hire.headroomCredits)} of room left this month where it would work.</span>
+        </div>
+      </SideCard>
+      <SideCard>
+        <p className="text-ink-body">An employee with nothing to do is flagged and let go, so an idle hire is never paid for. Its memory is kept, so a rehire is not a cold start.</p>
+      </SideCard>
     </>
   );
 }

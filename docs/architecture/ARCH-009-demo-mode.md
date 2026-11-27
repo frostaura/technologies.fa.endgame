@@ -106,6 +106,7 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `low-credits`, `at-overdraft-limit`, `budget-spent` | Credits nearly gone; the overdraft limit reached; a division's budget spent | |
 | `god-mode` | Every organisation, as an operator | |
 | `manage-tree` | Manage: the archived division Events (with history, so it cannot be deleted) and the empty project Gift Cards (which can) | `archived-division` |
+| `messy-tree` | Real data's mess on the chart and Manage: a division with a long name and twelve projects, some named in whole sentences | |
 | `account` | Your account: passkeys and roles | |
 | `employee-released` | An employee who was let go, memory archived | `employee-let-go` |
 | `two-organisations` | A person in two organisations | |
@@ -124,6 +125,7 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `s4-hiring`, `s4-hires-all-decided`, `s4-hire-manager-gone` | Technologies' hiring with Lark waiting, Sol hired by auto-mode and Bea declined; every proposal decided; Lark drafted to report to Tomas, since let go | |
 | `s4-contractor-working`, `s4-contractor-finishes` | Odile's data contractor at work; and finishing inside a playing run (`s4:contractor-finished`): its lesson to Odile, its role raised and hired | |
 | `s4-employee-record`, `s4-employee-working`, `s4-employee-team`, `s4-employee-at-cap` | Kasper with his tasks; at work on a live run; with Mina reporting to him; at his monthly cap, told so | |
+| `s4-employee-long-record` | Kasper after a long season: sixty things remembered and forty pieces of work in every state, with long titles (the real stack's busiest record) | |
 | `s4-idle-sweep`, `s4-released-with-memory`, `s4-memory-to-tidy` | Ruth idle under checkpoints and Ivo let go by the sweep; Tomas let go with his memory; Kasper's memory with a note learned twice and one removed | |
 | `s4-credits-at-zero`, `s4-below-zero`, `s4-top-ups-waiting` | The balance at 0, at −120, and five top-up requests already waiting | |
 | `s4-operator-log`, `s4-operator-log-empty` | Northwind's operator log with every kind of entry, and with none | |
@@ -138,8 +140,11 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `s3-checkpoints`, `s3-start-checkpoint` | Northwind in checkpoints mode, so a verdict waits for you; Learning asking "Start this work?" before research begins | |
 | `s3-waiting-for-budget`, `s3-checkpoints-waiting-for-budget`, `s3-budget-runs-out` | Learning with 5 credits left, so research waits for budget; the same in checkpoints mode, which waits too; 1.4 left with the reading list's build estimated within it, so it starts and stops part-way for budget | |
 | `s3-change-running`, `s3-change-failed` | A change to Court booking playing from its estimate; one whose check of what worked before still fails after its repairs | |
+| `verdict-dropped`, `verdict-overruled`, `verdict-decided`, `verdict-researching` | A verdict you dropped; one you overruled; one you chose to build; an idea still being researched — on its own page (`scenarios.verdicts.ts`) | |
+| `verdict-long`, `verdict-long-red-line`, `suggestions-long` | Real-sized research: a 200-character idea, a two-line headline, a summary in paragraphs, 21 products, 41 sources with very long addresses, 14 signals and four earlier overrules; the same over a red line, its reasoning written three times; five long suggestions, one reusing a thing twice, three taken or set aside | |
 | `s3-stage-rules` | Learning's build stage asks before `docs/app.md` changes and refuses `docs/decisions.md` | |
 | `s3-suggestions`, `s3-employee-paused` | Two open ideas from the portfolio, one taken, one set aside; Kasper paused, so Court booking takes no new work | |
+| `run-long` | A long build that did not succeed, shaped like the longest real run: about 2,000 events and 430 actions, a request cut at 120 characters, a part sent back three times (`world/longRun.ts`; the run page is designed and measured against it) | |
 
 Scenarios are kept one file per flow file, `world/scenarios.s<n>.ts`, each registered by one
 side-effect import in `host.ts`. Not in `scenarios.ts`: a scenario file calls its `defineScenario`,
@@ -213,6 +218,15 @@ place that holds it to show itself (an `endgame:reveal` event, which the fold an
 opening) and find it once shown, so a lesson written at desktop size needs no phone variant. The
 ring, the cursor and the note are fixed to the frame's viewport above every sheet and the bottom
 bar (`z-50`), so they stay on screen and legible when the target is inside a sheet or the bar.
+
+**How the marks look** (`overlay.ts`, `placement.ts`). The note is set where it covers neither the
+ring nor the page's words (covering a pixel of words or a control costs eight pixels of distance),
+with a small pointer on the side facing the ring, aimed at its middle. While something modal — a
+dialog, a sheet, the device's prompt — covers the ringed control, the ring and note are hidden, and
+return when it closes. The cursor is a small arrow, not a dot: its tip rests just inside the lower
+edge of the control it presses (`approach` in `bridge.ts`), so it never sits over the label, and it
+fades out after the press. It carries `data-demo-cursor`, the note `data-demo-note`, so a capture can
+leave both out (`make academy-shots` does, for the print copies).
 
 A target is a CSS `selector`, a `testId`, or visible `text` / accessible `label`, matched in that
 order of preference: buttons, links and other controls by accessible name (exact, then prefix,

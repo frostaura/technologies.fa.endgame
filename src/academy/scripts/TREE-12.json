@@ -57,6 +57,11 @@
           "click": {
             "text": "Remove it; Northwind's applies again"
           }
+        },
+        {
+          "click": {
+            "text": "Yes, remove it"
+          }
         }
       ],
       "highlight": {

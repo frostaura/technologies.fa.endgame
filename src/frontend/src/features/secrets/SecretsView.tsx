@@ -1,10 +1,12 @@
 import { useId, useState, type FormEvent } from "react";
+import { ConfirmCard } from "@/components/ui/confirm";
 import { TAP } from "@/lib/touch";
-import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { inputClass } from "@/components/ui/field";
+import { PageHeader, SECTION } from "@/components/ui/page";
 import { timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, errorStatus, viewOf, type ViewState } from "@/lib/queryState";
@@ -47,16 +49,13 @@ export function SecretsView() {
 
   return (
     <AppShell crumbs={crumbs} aside={view !== "no-organisation" && view.kind === "loaded" ? <AddSecret scope={scope} where={here} existing={view.data.effective} notice={notice} onNotice={setNotice} /> : undefined}>
-      <header className={cn("flex flex-col gap-1.5", RISE)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold">
-          <Icon name="secrets" tinted className="size-7" />
-          {/* Before an organisation is named there is nothing to name the secrets for. */}
-          {here ? `Secrets for ${here}` : "Secrets"}
-        </h1>
-        <p className="max-w-prose text-ink-body">
-          What applies here, and where each was set. A secret set higher up applies beneath unless a lower level sets its own. A value is never shown, not even to you: to change one, replace it.
-        </p>
-      </header>
+      {/* Before an organisation is named there is nothing to name the secrets for. */}
+      <PageHeader
+        className={RISE}
+        icon="secrets"
+        title={here ? `Secrets for ${here}` : "Secrets"}
+        lead="What applies here, and where each was set. A secret set higher up applies beneath unless a lower level sets its own. A value is never shown, not even to you: to change one, replace it."
+      />
 
       {view === "no-organisation" ? (
         <Empty icon="organisation" title="There are no secrets until your organisation is named">
@@ -99,7 +98,7 @@ interface NoticeProps {
 function NoticeLine({ notice, at }: { notice: Notice; at: string }) {
   if (notice?.at !== at) return null;
   return (
-    <p role={notice.ok ? "status" : "alert"} data-state={notice.ok ? undefined : "failed"} className={cn("rounded-xs px-4 py-3", notice.ok ? "bg-success-tint text-success-text" : "border border-attention-line bg-attention-tint text-attention-text")}>
+    <p role={notice.ok ? "status" : "alert"} data-state={notice.ok ? undefined : "failed"} className={cn("rounded-xs px-4 py-3 sm:col-span-2", notice.ok ? "bg-success-tint text-success-text" : "border border-attention-line bg-attention-tint text-attention-text")}>
       {notice.text}
     </p>
   );
@@ -110,13 +109,13 @@ function SecretsBody({ list, tree, where, notice, onNotice }: { list: SecretList
   return (
     <div className="grid grid-cols-1 items-start gap-6 2xl:grid-cols-3">
       <section aria-label="Secrets that apply here" className={cn("flex flex-col gap-3 2xl:col-span-2", RISE, stagger(1))}>
-        <h2 className="font-display text-lg font-semibold">Applies here</h2>
+        <h2 className={SECTION}>Applies here</h2>
         {list.effective.length === 0 ? (
           <Empty icon="secrets" title={`No secrets apply to ${where}`}>
             Add one, and everything here and beneath it can read it by name.
           </Empty>
         ) : (
-          <ul aria-label="Secrets" className="flex flex-col gap-3">
+          <ul aria-label="Secrets" className="flex flex-col divide-y overflow-hidden rounded-md border bg-surface shadow-card">
             {list.effective.map((secret) => (
               <SecretRow key={secret.name} secret={secret} scope={list.scope} nameOf={nameOf} notice={notice} onNotice={onNotice} />
             ))}
@@ -125,15 +124,15 @@ function SecretsBody({ list, tree, where, notice, onNotice }: { list: SecretList
       </section>
 
       <section aria-label="Secrets set beneath" className={cn("flex flex-col gap-3", RISE, stagger(2))}>
-        <h2 className="font-display text-lg font-semibold">Set beneath</h2>
+        <h2 className={SECTION}>Set beneath</h2>
         {list.setBelow.length === 0 ? (
-          <p data-state="empty" className="rounded-md border border-dashed border-border-strong bg-surface px-5 py-4 text-ink-muted">
+          <p data-state="empty" className="py-1 text-ink-muted">
             Nothing beneath {where} sets a secret of its own.
           </p>
         ) : (
-          <ul aria-label="Set beneath" className="flex flex-col gap-2 rounded-md border bg-surface px-5 py-4 shadow-card">
+          <ul aria-label="Set beneath" className="flex flex-col divide-y overflow-hidden rounded-md border bg-surface shadow-card">
             {list.setBelow.map((b) => (
-              <li key={`${b.setAtPath}#${b.name}`} className="flex flex-wrap items-center justify-between gap-2">
+              <li key={`${b.setAtPath}#${b.name}`} className="grid grid-cols-grow-end items-center gap-x-4 px-5 py-2.5">
                 <code className="break-all font-mono text-sm">{b.name}</code>
                 <Link href={paths.secrets(b.setAtPath)} className={cn("rounded-xs text-sm text-primary-link hover:text-primary-hover", TAP)}>
                   {nameOf(b.setAtPath)}
@@ -168,61 +167,58 @@ function SecretRow({ secret, scope, nameOf, notice, onNotice }: { secret: Secret
   };
 
   return (
-    <li className="flex flex-col gap-3 rounded-md border bg-surface px-5 py-4 shadow-card">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <code className="break-all font-mono text-base font-semibold">{secret.name}</code>
-          <div className="flex flex-wrap items-center gap-2 text-sm text-ink-muted">
-            {setHere ? (
-              <Badge tone="primary">Set here</Badge>
-            ) : (
-              <Badge tone="quiet">
-                Inherited from{" "}
-                <Link href={paths.secrets(secret.setAtPath)} className="underline">
-                  {nameOf(secret.setAtPath)}
-                </Link>
-              </Badge>
-            )}
+    <li className="grid grid-cols-1 items-center gap-x-4 gap-y-3 px-5 py-4 sm:grid-cols-grow-end">
+      <div className="flex min-w-0 flex-col gap-1">
+        <code className="break-all font-mono font-semibold">{secret.name}</code>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-muted">
+          {setHere ? (
+            <Badge tone="info">Set here</Badge>
+          ) : (
             <span>
-              {secret.setAtLevel.charAt(0).toUpperCase() + secret.setAtLevel.slice(1)} level · set {timeAgo(secret.setAt)}
+              Inherited from{" "}
+              <Link href={paths.secrets(secret.setAtPath)} className={cn("rounded-xs font-medium text-primary-link hover:text-primary-hover", TAP)}>
+                {nameOf(secret.setAtPath)}
+              </Link>
             </span>
-          </div>
-          {secret.overrides.length > 0 && <span className="text-sm text-ink-body">Replaces the one set at {secret.overrides.map(nameOf).join(", ")}.</span>}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="soft" onClick={() => setMode(mode === "replace" ? "idle" : "replace")} aria-expanded={mode === "replace"}>
-            {setHere ? "Replace" : "Set its own here"}
-          </Button>
-          {setHere && (
-            <Button size="sm" variant="ghost" disabled={removing.isLoading} onClick={() => setMode("remove")}>
-              Remove
-            </Button>
           )}
+          <span>
+            {secret.setAtLevel.charAt(0).toUpperCase() + secret.setAtLevel.slice(1)} level · set {timeAgo(secret.setAt)}
+          </span>
         </div>
+        {secret.overrides.length > 0 && <span className="text-sm text-ink-body">Replaces the one set at {secret.overrides.map(nameOf).join(", ")}.</span>}
+      </div>
+      <div className="flex flex-wrap gap-2 sm:justify-end">
+        <Button size="sm" variant="soft" onClick={() => setMode(mode === "replace" ? "idle" : "replace")} aria-expanded={mode === "replace"}>
+          {setHere ? "Replace" : "Set its own here"}
+        </Button>
+        {setHere && (
+          <Button size="sm" variant="ghost" disabled={removing.isLoading} onClick={() => setMode("remove")}>
+            Remove
+          </Button>
+        )}
       </div>
 
       <NoticeLine notice={notice} at={at} />
 
       {mode === "remove" && (
-        <div role="group" aria-label={`Confirm removing ${secret.name}`} className="flex flex-col gap-2 rounded-sm bg-attention-tint px-4 py-3">
-          <p className="text-attention-deep">
-            {secret.overrides.length > 0
-              ? `Remove ${secret.name} here? The one set at ${nameOf(secret.overrides[0] ?? "")} applies again.`
-              : `Remove ${secret.name}? Nothing here or beneath will have it, unless it sets its own.`}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => void confirmRemove()}>
-              Remove it
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode("idle")}>
-              Keep it
-            </Button>
-          </div>
-        </div>
+        <ConfirmCard
+          className="sm:col-span-2"
+          label={`Confirm removing ${secret.name}`}
+          question={secret.overrides.length > 0 ? `Remove ${secret.name} here?` : `Remove ${secret.name}?`}
+          detail={secret.overrides.length > 0 ? `The one set at ${nameOf(secret.overrides[0] ?? "")} applies again.` : "Nothing here or beneath will have it, unless it sets its own."}
+          confirm="Remove it"
+          cancel="Keep it"
+          onConfirm={() => void confirmRemove()}
+          onCancel={() => setMode("idle")}
+        />
       )}
 
       {/* A replaced secret closes its form; the saved message stays on the row. */}
-      {mode === "replace" && <SecretForm scope={scope} fixedName={secret.name} at={at} onNotice={onNotice} onSaved={() => setModeState("idle")} />}
+      {mode === "replace" && (
+        <div className="sm:col-span-2">
+          <SecretForm scope={scope} fixedName={secret.name} at={at} onNotice={onNotice} onSaved={() => setModeState("idle")} />
+        </div>
+      )}
     </li>
   );
 }
@@ -230,10 +226,7 @@ function SecretRow({ secret, scope, nameOf, notice, onNotice }: { secret: Secret
 function AddSecret({ scope, where, existing, notice, onNotice }: { scope: string; where: string; existing: SecretName[] } & NoticeProps) {
   return (
     <section aria-label="Add a secret" className={cn("flex flex-col gap-3", RISE)}>
-      <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-        <Icon name="secrets" tinted />
-        Add a secret
-      </h2>
+      <h2 className="text-base font-semibold">Add a secret</h2>
       <p className="text-ink-body">It applies to {where} and everything beneath it. Saving a name that already applies here replaces it.</p>
       <SecretForm scope={scope} existing={existing} at="add" onNotice={onNotice} />
       <NoticeLine notice={notice} at="add" />
@@ -288,7 +281,7 @@ function SecretForm({ scope, fixedName, existing = [], at, onNotice, onSaved }: 
             placeholder="STRIPE_API_KEY"
             aria-invalid={touched && !!nameProblem}
             aria-describedby={touched && nameProblem ? `${nameId}-problem` : undefined}
-            className="min-h-12 rounded-sm border border-border-strong bg-surface px-4 font-mono"
+            className={cn(inputClass, "font-mono")}
           />
           {touched && nameProblem && (
             <span id={`${nameId}-problem`} className="text-sm text-attention-text">
@@ -308,7 +301,7 @@ function SecretForm({ scope, fixedName, existing = [], at, onNotice, onSaved }: 
           onChange={(e) => setValue(e.target.value)}
           autoComplete="new-password"
           spellCheck={false}
-          className="min-h-12 rounded-sm border border-border-strong bg-surface px-4 font-mono"
+          className={cn(inputClass, "font-mono")}
         />
         {touched && value.length === 0 && !saving && <span className="text-sm text-attention-text">Type the value to store.</span>}
       </div>

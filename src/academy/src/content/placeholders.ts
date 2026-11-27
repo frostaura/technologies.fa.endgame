@@ -55,7 +55,7 @@ const WORDS: Record<string, string> = {
 
 /** `{Org}` → "your organisation's name" (the brace's own word, de-camel-cased, when there is no entry). */
 export function placeholderWords(token: string): string {
-  const inner = token.replace(/^\{|\}$/g, "").trim();
+  const inner = token.replace(/^[{<]|[}>]$/g, "").trim();
   if (/^org$/i.test(inner)) return "your organisation’s name";
   const known = WORDS[inner.toLowerCase()];
   if (known) return known;

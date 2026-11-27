@@ -80,11 +80,7 @@ public sealed class PostgresServer : IAsyncLifetime
         return new NpgsqlConnectionStringBuilder(AdminConnectionString) { Database = name, Pooling = true, MaxPoolSize = 100 }.ConnectionString;
     }
 
-    /// <summary>
-    /// Drops a database made by <see cref="CreateDatabaseAsync"/> once its test class is done with it. The server's data
-    /// directory is a tmpfs, so a suite that kept every class's database filled it ("No space left on device") once the
-    /// conversation's attachment tests stored their files.
-    /// </summary>
+    /// <summary>Drops a database <see cref="CreateDatabaseAsync"/> made, once its test is done with it.</summary>
     public async Task DropDatabaseAsync(string connectionString)
     {
         var name = new NpgsqlConnectionStringBuilder(connectionString).Database;

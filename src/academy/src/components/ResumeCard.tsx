@@ -1,5 +1,5 @@
 import { CLIENT_LEVELS } from "../content/types.ts";
-import { clientFlows, flow } from "../lib/data.ts";
+import { pathFlows, flow } from "../lib/data.ts";
 import { catalogue, streakNow, useProgressSnapshot } from "../lib/progress.ts";
 import { overallNext } from "../progress/derive.ts";
 import { href } from "../lib/router.ts";
@@ -19,7 +19,7 @@ export function ResumeCard({ className = "" }: { className?: string }) {
   const mine = progress.flows[f.id];
   const finished = !!mine?.done;
   const next = finished ? overallNext(progress, catalogue, CLIENT_LEVELS) : undefined;
-  const done = clientFlows.filter((c) => progress.flows[c.id]?.done).length;
+  const done = pathFlows.filter((c) => progress.flows[c.id]?.done).length;
   const days = streakNow(progress.days);
   const target = finished && next ? next.flow : f;
   const to = finished && next ? `/flow/${next.flow.id}` : `/flow/${f.id}/step/${last.step}`;

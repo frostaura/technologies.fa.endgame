@@ -84,9 +84,9 @@ describe("CreditsView", () => {
     expect(screen.getByText("On hosting").nextSibling?.textContent).toBe("100");
     const budgets = screen.getByRole("list", { name: "Budgets" });
     expect(within(budgets).getAllByRole("listitem")).toHaveLength(3);
-    expect(within(budgets).getByText("No cap here; the cap on Acme, 1,000 credits, holds")).toBeTruthy();
+    expect(within(budgets).getByLabelText("No cap here; the cap on Acme, 1,000 credits, holds")).toBeTruthy();
     expect(within(budgets).getByRole("link", { name: "Ledger web" }).getAttribute("href")).toBe("/apps/a1");
-    expect(screen.getByText("Usually 13% under the estimate")).toBeTruthy();
+    expect(screen.getByText(/Usually 13% under the estimate/)).toBeTruthy();
     expect(screen.getByText("42 credits")).toBeTruthy();
     expect(screen.getByText(/3 repairs where an employee got it wrong/)).toBeTruthy();
     expect(screen.getByText("Not set")).toBeTruthy();
@@ -97,7 +97,7 @@ describe("CreditsView", () => {
     const estimates = { pieces: 4, withinPercent: 0, under: 4, over: 0, largestMissPercent: 85, typicalGapPercent: -83.8, typically: "under" };
     stubApi({ "GET /api/me": json(ME), "GET /api/credits": json({ ...CREDITS, estimates }) });
     renderWithStore(<CreditsView />);
-    expect(await screen.findByText("Usually 84% under the estimate")).toBeTruthy();
+    expect(await screen.findByText(/Usually 84% under the estimate/)).toBeTruthy();
     expect(screen.queryByText(/Within 0%/)).toBeNull();
     expect(screen.getByText(/Across 4 pieces of work this month\. None came within 10% of its estimate; 4 cost less, 0 more\. The largest miss was 85%\./)).toBeTruthy();
   });
@@ -105,11 +105,11 @@ describe("CreditsView", () => {
   it("says when the estimates usually land close, or usually run over", async () => {
     stubApi({ "GET /api/me": json(ME), "GET /api/credits": json({ ...CREDITS, estimates: { pieces: 3, withinPercent: 67, under: 1, over: 0, largestMissPercent: 14, typicalGapPercent: 3.2, typically: "within" } }) });
     renderWithStore(<CreditsView />);
-    expect(await screen.findByText("Usually within 3%")).toBeTruthy();
+    expect(await screen.findByText(/Usually within 3%/)).toBeTruthy();
     cleanup();
     stubApi({ "GET /api/me": json(ME), "GET /api/credits": json({ ...CREDITS, estimates: { pieces: 2, withinPercent: 0, under: 0, over: 2, largestMissPercent: 40, typicalGapPercent: 21, typically: "over" } }) });
     renderWithStore(<CreditsView />);
-    expect(await screen.findByText("Usually 21% over the estimate")).toBeTruthy();
+    expect(await screen.findByText(/Usually 21% over the estimate/)).toBeTruthy();
   });
 
   it("says when nothing has been scored or topped up yet", async () => {

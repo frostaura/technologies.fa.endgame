@@ -1,15 +1,16 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { Sheet } from "@/components/Sheet";
-import { SCROLL_ROW } from "@/components/ui/layout";
 import { capitalise } from "@/lib/format";
 import { useViewport } from "@/lib/useViewport";
-import { Avatar } from "@/components/Avatar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { PersonChip } from "@/components/ui/chip";
+import { TITLE } from "@/components/ui/page";
+import { Stat } from "@/components/ui/stat";
 import { buttonVariants } from "@/components/ui/button";
 import { RISE, stagger } from "@/lib/motion";
 import { viewOf } from "@/lib/queryState";
@@ -21,10 +22,12 @@ import { useAppDispatch, useAppSelector } from "@/store";
 import { useGetIdeaQuery, useGetMeQuery } from "@/store/api";
 import type { NeedsYou, Tree } from "@/store/types";
 import { selected, type Selection } from "@/store/uiSlice";
+import { OperatorHome } from "../operator/OperatorHome";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { ConversationDock } from "./ConversationDock";
-import { OrgChart } from "./OrgChart";
+import { AddDivision, OrgChart } from "./OrgChart";
 import { OntologyView } from "./OntologyView";
+import { QuickLinks, type QuickLink } from "./QuickLinks";
 import { needLines } from "./needsYouModel";
 import { countTree, orgFigures, organisationSelection, workerActivity, workerLabel } from "./treeModel";
 
@@ -153,56 +156,48 @@ function Organisation({
   const isRootSelected = selection?.scope === home.scope && selection.kind === home.kind;
   return (
     <>
-      <section
-        aria-label="Organisation"
-        className={cn("relative flex flex-wrap items-end justify-between gap-6 overflow-hidden rounded-lg bg-primary px-6 py-7 text-primary-ink max-sm:gap-4 max-sm:px-5 max-sm:py-5 sm:px-8", RISE)}
-      >
-        <div aria-hidden className="absolute -top-20 right-32 size-aura animate-drift rounded-full bg-violet opacity-75 blur-aura motion-reduce:animate-none" />
-        <div aria-hidden className="absolute -bottom-36 -right-16 size-aura animate-drift rounded-full bg-teal opacity-75 blur-aura animate-delay-5 motion-reduce:animate-none" />
-        <div className="relative flex min-w-0 flex-col gap-2 max-sm:w-full">
-          <span className="text-eyebrow font-semibold uppercase text-primary-ink-soft">Organisation</span>
-          <h1 className="font-display text-4xl font-bold max-sm:text-3xl sm:text-hero">
-            <button type="button" aria-pressed={isRootSelected} onClick={() => onSelect(root)} className="rounded-xs text-left phone:min-h-touch">
-              {org.name}
-            </button>
-          </h1>
-          {org.summary && <span className="text-primary-tint max-sm:text-sm">{org.summary}</span>}
-          {org.workers.length > 0 && (
-            // A phone keeps the organisation's own people on one line that scrolls sideways.
-            <span className="no-scrollbar flex flex-wrap gap-2 pt-1 max-sm:-mx-5 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-5">
-              {org.workers.map((w) => (
-                <button
-                  key={w.id}
-                  type="button"
-                  aria-pressed={selection?.employeeId === w.id && selection.scope === org.slug}
-                  onClick={() => onSelect({ scope: org.slug, kind: "employee", trail: [org.name, w.name], employeeId: w.id })}
-                  className="inline-flex min-h-touch shrink-0 items-center gap-2 rounded-full bg-surface/15 py-1 pl-1 pr-3 text-sm text-primary-ink hover:bg-surface/25 max-sm:whitespace-nowrap"
-                >
-                  <Avatar name={w.name} seed={w.id} size="xs" />
-                  {workerLabel(w)}
-                  {workerActivity(w) && <span className="text-primary-tint">— {workerActivity(w)}</span>}
-                </button>
-              ))}
-            </span>
-          )}
-        </div>
-        {/* A phone sets the four figures small, in one row where they fit, and "New idea" across the band beneath them. */}
-        <div className="relative flex flex-wrap items-end gap-x-7 gap-y-4 max-sm:w-full max-sm:items-start max-sm:gap-x-5 max-sm:gap-y-3">
-          {orgFigures(counts, org.spend.monthCredits).map((f) => (
-            <div key={f.label} className="flex min-w-0 flex-col">
-              <span className="font-display text-3xl font-bold max-sm:text-2xl">{f.value}</span>
-              <span className="text-primary-tint max-sm:whitespace-nowrap max-sm:text-xs max-sm:leading-tight">{f.label}</span>
-            </div>
-          ))}
-          <Link href={paths.start()} className={cn(buttonVariants({ variant: "white", size: "lg" }), "max-sm:w-full")}>
+      {/* The hero: white, the organisation's name as the title, its four figures under the name, its people as chips. */}
+      <section aria-label="Organisation" className={cn("flex flex-col gap-5 rounded-lg border bg-surface px-6 py-6 shadow-card max-sm:gap-4 max-sm:px-5 max-sm:py-5 sm:px-8", RISE)}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 max-w-prose flex-col gap-1.5">
+            <span className="text-eyebrow font-semibold uppercase text-ink-muted">Organisation</span>
+            <h1 className={TITLE}>
+              <button type="button" aria-pressed={isRootSelected} onClick={() => onSelect(root)} className="rounded-xs text-left touch:min-h-touch">
+                {org.name}
+              </button>
+            </h1>
+            {/* A phone has the four figures just below: the summary line would say them twice. */}
+            {org.summary && <span className="text-ink-body max-sm:hidden">{org.summary}</span>}
+          </div>
+          <Link href={paths.start()} className={cn(buttonVariants({ size: "lg" }), "max-sm:min-h-touch max-sm:px-4 max-sm:text-sm")}>
             New idea
           </Link>
         </div>
+        <div className="grid grid-cols-4 gap-x-8 gap-y-3 self-start max-sm:w-full max-sm:grid-cols-2 max-sm:gap-x-4">
+          {orgFigures(counts, org.spend.monthCredits).map((f) => (
+            <Stat key={f.label} plain label={f.label} value={f.value} className="flex-col-reverse" />
+          ))}
+        </div>
+        {org.workers.length > 0 && (
+          // The organisation's own people: a few chips that wrap, each cut short with its whole label as a tooltip.
+          <div className="flex flex-wrap gap-2">
+            {org.workers.map((w) => (
+              <PersonChip
+                key={w.id}
+                name={w.name}
+                id={w.id}
+                label={workerActivity(w) ? `${workerLabel(w)} — ${workerActivity(w)}` : workerLabel(w)}
+                selected={selection?.employeeId === w.id && selection.scope === org.slug}
+                onSelect={() => onSelect({ scope: org.slug, kind: "employee", trail: [org.name, w.name], employeeId: w.id })}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       <NeedsYouStrip items={tree.needsYou} />
 
-      <ManageLinks tree={tree} selection={selection ?? root} />
+      <ManageLinks tree={tree} selection={selection ?? root} home={root} />
 
       {tree.divisions.length === 0 ? (
         <Empty icon="division" title={`${org.name} has nothing in it yet`} action={<Link href={paths.start()} className={buttonVariants({ size: "lg" })}>Describe your first idea</Link>}>
@@ -217,9 +212,10 @@ function Organisation({
 
 /**
  * What an Admin or the Owner manages at the selected level: its secrets, and — for the Owner — the
- * log of every time FrostAura entered. Both follow the selection, as the conversation does.
+ * log of every time FrostAura entered. Both follow the selection, as the conversation does. The most
+ * used come first, since what does not fit goes into "More".
  */
-function ManageLinks({ tree, selection }: { tree: Tree; selection: Selection }) {
+function ManageLinks({ tree, selection, home }: { tree: Tree; selection: Selection; home: Selection }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const node = selection.kind === "employee" ? { scope: selection.scope, name: selection.trail[selection.trail.length - 2] ?? "" } : { scope: selection.scope, name: selection.trail[selection.trail.length - 1] ?? "" };
   // The role at the level selected, exactly as the server resolves it (PPL-01); an older control plane gives one role for the tree.
@@ -227,67 +223,35 @@ function ManageLinks({ tree, selection }: { tree: Tree; selection: Selection }) 
   const role = at === undefined ? tree.viewerRole : at;
   const admin = role === "admin" || role === "owner";
   const ownerOfOrganisation = (tree.organisation ? roleInTree(tree, tree.organisation.slug) : undefined) ?? tree.viewerRole;
-  return (
-    <nav aria-label="Manage" className={cn(SCROLL_ROW, RISE, stagger(1))}>
-      {selection.kind === "employee" && selection.employeeId && (
-        <Link href={paths.employee(selection.employeeId)} className={buttonVariants({ variant: "soft" })}>
-          <Icon name="employee" tinted className="size-4" />
-          {selection.trail[selection.trail.length - 1]}’s record and memory
-        </Link>
-      )}
-      <Link href={paths.manage(node.scope)} className={buttonVariants({ variant: "soft" })}>
-        <Icon name="organisation" tinted className="size-4" />
-        Manage
-      </Link>
-      <Link href={paths.autonomy(node.scope)} className={buttonVariants({ variant: "soft" })}>
-        <Icon name="plan" tinted className="size-4" />
-        Autonomy for {node.name}
-      </Link>
-      <Link href={paths.hires(node.scope)} className={buttonVariants({ variant: "soft" })}>
-        <Icon name="contractors" tinted className="size-4" />
-        Hiring
-      </Link>
-      {selection.kind !== "employee" && selection.kind !== "project" && selection.kind !== "app" && (
-        <Link href={paths.suggestions(node.scope)} className={buttonVariants({ variant: "soft" })}>
-          <Icon name="research" tinted className="size-4" />
-          Ideas from your portfolio
-        </Link>
-      )}
-      {admin && (
-        <Link href={paths.people(node.scope)} className={buttonVariants({ variant: "soft" })}>
-          <Icon name="employee" tinted className="size-4" />
-          People
-        </Link>
-      )}
-      <Link href={paths.assistants()} className={buttonVariants({ variant: "soft" })}>
-        <Icon name="assistants" tinted className="size-4" />
-        {technical ? "MCP access" : "AI assistants"}
-      </Link>
-      {admin && (
-        <Link href={paths.secrets(node.scope)} className={buttonVariants({ variant: "soft" })}>
-          <Icon name="secrets" tinted className="size-4" />
-          Secrets for {node.name}
-        </Link>
-      )}
-      {ownerOfOrganisation === "owner" && (
-        <Link href={paths.operatorAccess()} className={buttonVariants({ variant: "soft" })}>
-          <Icon name="god-mode" tinted className="size-4" />
-          Operator access
-        </Link>
-      )}
-    </nav>
-  );
+  const links: QuickLink[] = [
+    ...(selection.kind === "employee" && selection.employeeId
+      ? [{ key: "employee", href: paths.employee(selection.employeeId), icon: "employee" as const, label: `${selection.trail[selection.trail.length - 1]}’s record and memory` }]
+      : []),
+    { key: "manage", href: paths.manage(node.scope), icon: "organisation", label: "Manage" },
+    { key: "hiring", href: paths.hires(node.scope), icon: "contractors", label: "Hiring" },
+    { key: "autonomy", href: paths.autonomy(node.scope), icon: "plan", label: `Autonomy for ${node.name}` },
+    ...(admin ? [{ key: "people", href: paths.people(node.scope), icon: "employee" as const, label: "People" }] : []),
+    ...(admin ? [{ key: "secrets", href: paths.secrets(node.scope), icon: "secrets" as const, label: `Secrets for ${node.name}` }] : []),
+    ...(selection.kind !== "employee" && selection.kind !== "project" && selection.kind !== "app"
+      ? [{ key: "ideas", href: paths.suggestions(node.scope), icon: "research" as const, label: "Ideas from your portfolio" }]
+      : []),
+    { key: "assistants", href: paths.assistants(), icon: "assistants", label: technical ? "MCP access" : "AI assistants" },
+    ...(ownerOfOrganisation === "owner" ? [{ key: "operator-access", href: paths.operatorAccess(), icon: "god-mode" as const, label: "Operator access" }] : []),
+  ];
+  const atTop = selection.scope === home.scope && selection.kind === home.kind;
+  return <QuickLinks links={links} name={selection.trail[selection.trail.length - 1] ?? node.name} atTop={atTop} className={cn(RISE, stagger(1))} />;
 }
 
-const NEED_STYLE: Record<NeedsYou["kind"], { badge: string; tone: "white" | "violet" | "quiet"; card: string; detail: string }> = {
-  verdict: { badge: "Verdict waiting", tone: "white", card: "border-attention-line bg-attention-tint", detail: "text-attention-deep" },
-  approval: { badge: "Approval needed", tone: "violet", card: "border-violet-line bg-violet-tint", detail: "text-violet-deep" },
-  hire: { badge: "Hire proposed", tone: "violet", card: "border-violet-line bg-violet-tint", detail: "text-violet-deep" },
-  idle: { badge: "Nothing to do", tone: "quiet", card: "border-border-strong bg-surface", detail: "text-ink-body" },
+/** One card style for everything that waits on you; what kind it is, its tag says (ARCH-011). */
+const NEED_STYLE: Record<NeedsYou["kind"], { badge: string; tone: BadgeTone }> = {
+  verdict: { badge: "Verdict waiting", tone: "warn" },
+  approval: { badge: "Approval needed", tone: "warn" },
+  hire: { badge: "Hire proposed", tone: "info" },
+  idle: { badge: "Nothing to do", tone: "neutral" },
 };
 
 /** A verdict research refused over a red line: not waiting for a call, so not marked as one. */
-const RED_LINE_STYLE = { badge: "Refused", tone: "white" as const, card: "border-attention-line bg-attention-tint", detail: "text-attention-deep" };
+const RED_LINE_STYLE = { badge: "Refused", tone: "bad" as const };
 
 function needHref(item: NeedsYou): string {
   switch (item.kind) {
@@ -318,17 +282,44 @@ function NeedsYouStrip({ items }: { items: NeedsYou[] }) {
   );
   // A phone says how many wait and what the first is, in one row; the list opens from it.
   if (phone) return <NeedsYouSummary items={items}>{cards}</NeedsYouSummary>;
+  return <NeedsYouGrid cards={cards} />;
+}
+
+/** At most two full rows of three (three of two on a tablet), then "Show all": a long queue never pushes the chart off the page. */
+const NEEDS_SHOWN = 6;
+
+function NeedsYouGrid({ cards }: { cards: ReactNode[] }) {
+  const [all, setAll] = useState(false);
+  const more = cards.length > NEEDS_SHOWN;
   return (
-    <section aria-label="Needs you" className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3", RISE, stagger(1))}>
-      {cards}
+    <section aria-label="Needs you" className={cn("flex flex-col gap-3", RISE, stagger(1))}>
+      {/* Cards in a row are one height (the grid stretches them), so a headline that wraps leaves no neighbour short. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">{all || !more ? cards : cards.slice(0, NEEDS_SHOWN)}</div>
+      {more && (
+        <button type="button" aria-expanded={all} onClick={() => setAll((x) => !x)} className="min-h-touch self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+          {all ? "Show fewer" : `Show all ${cards.length}`}
+        </button>
+      )}
     </section>
   );
+}
+
+/** "2 verdicts, 1 approval, 1 hire": what waits, counted by kind. */
+function waitingKinds(items: NeedsYou[]): string {
+  const words: Record<NeedsYou["kind"], [string, string]> = {
+    verdict: ["verdict", "verdicts"],
+    approval: ["approval", "approvals"],
+    hire: ["hire", "hires"],
+    idle: ["idle employee", "idle employees"],
+  };
+  const counts = new Map<NeedsYou["kind"], number>();
+  for (const i of items) counts.set(i.kind, (counts.get(i.kind) ?? 0) + 1);
+  return [...counts].map(([kind, n]) => `${n} ${words[kind][n === 1 ? 0 : 1]}`).join(", ");
 }
 
 function NeedsYouSummary({ items, children }: { items: NeedsYou[]; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const first = items[0];
-  const kinds = [...new Set(items.map((i) => NEED_STYLE[i.kind].badge.toLowerCase()))];
   return (
     <section aria-label="Needs you" className={cn(RISE, stagger(1))}>
       <button
@@ -341,7 +332,7 @@ function NeedsYouSummary({ items, children }: { items: NeedsYou[]; children: Rea
         <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-attention-text font-display text-base font-bold text-primary-ink">{items.length}</span>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="font-semibold">{items.length === 1 ? "1 thing needs you" : `${items.length} things need you`}</span>
-          <span className="line-clamp-2 text-sm text-attention-deep">{first && items.length === 1 ? needLines(first).headline : capitalise(kinds.join(", "))}</span>
+          <span className="line-clamp-2 text-sm text-attention-deep">{first && items.length === 1 ? needLines(first).headline : capitalise(waitingKinds(items))}</span>
         </span>
         <ChevronRight aria-hidden className="size-5 shrink-0 text-attention-text" />
       </button>
@@ -368,13 +359,13 @@ function NeedCard({ item, technical, redLine }: { item: NeedsYou; technical: boo
     <Link
       href={needHref(item)}
       data-need={item.kind}
-      className={cn("flex flex-col gap-1.5 rounded-md border px-5 py-4 text-ink transition duration-200 hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0", style.card)}
+      className="flex flex-col gap-1.5 rounded-md border bg-surface px-5 py-4 text-ink shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-raised motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
-      <Badge tone={style.tone} className="self-start bg-surface">
+      <Badge tone={style.tone} className="self-start">
         {style.badge}
       </Badge>
       <span className="line-clamp-2 break-words text-base font-semibold">{lines.headline}</span>
-      <span className={cn("line-clamp-1 break-words", style.detail)}>{lines.line}</span>
+      <span className="line-clamp-1 break-words text-ink-body">{lines.line}</span>
       {technical && lines.technical && <code className="break-all font-mono text-xs text-ink-muted">{lines.technical}</code>}
     </Link>
   );
@@ -395,9 +386,11 @@ function ChartViews({ tree, selection, onSelect }: { tree: Tree; selection: Sele
   // The graphs ask at the level selected, which is always one the person holds a role at (ORG-19).
   const scope = selection.scope;
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       {/* One line on every screen: a phone says each view in a word or two, and keeps the whole name for screen readers. */}
-      <div role="tablist" aria-label="View" className="flex flex-wrap gap-1 self-start rounded-xs bg-quiet p-1 max-sm:grid max-sm:w-full max-sm:grid-cols-3 max-sm:self-stretch">
+      {/* The chart's header row: the three views, and adding a division as a quiet action at its end. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <div role="tablist" aria-label="View" className="flex gap-1 rounded-xs bg-quiet p-1 max-sm:grid max-sm:w-full max-sm:grid-cols-3">
         {VIEWS.map((v) => (
           <button
             key={v.value}
@@ -414,7 +407,9 @@ function ChartViews({ tree, selection, onSelect }: { tree: Tree; selection: Sele
           </button>
         ))}
       </div>
-      <div id="chart-panel" role="tabpanel" aria-labelledby={`view-${view}`}>
+      <AddDivision tree={tree} />
+      </div>
+      <div id="chart-panel" role="tabpanel" aria-labelledby={`view-${view}`} className="min-w-0">
         <ErrorBoundary name={VIEWS.find((v) => v.value === view)?.label ?? "The chart"} resetKey={view}>
           {view === "chart" ? <OrgChart tree={tree} selection={selection} onSelect={onSelect} /> : <OntologyView scope={scope} view={view} />}
         </ErrorBoundary>
@@ -423,29 +418,12 @@ function ChartViews({ tree, selection, onSelect }: { tree: Tree; selection: Sele
   );
 }
 
-/** An operator with no organisation of their own starts in God mode. */
-function OperatorHome() {
-  return (
-    <section aria-label="God mode" className={cn("flex flex-col items-start gap-4 rounded-lg border-2 border-attention-text bg-surface px-6 py-8 sm:px-10", RISE)}>
-      <span className="flex items-center gap-2 font-semibold uppercase tracking-wide text-attention-text">
-        <Icon name="god-mode" />
-        God mode
-      </span>
-      <h1 className="max-w-prose font-display text-3xl font-bold sm:text-4xl">You run Endgame for FrostAura. Every organisation is one step away.</h1>
-      <p className="max-w-prose text-ink-body">List them, set one up for an invited Owner, top one up or enter it. Each entry is written where that organisation&rsquo;s Owner can read it.</p>
-      <Link href={paths.operator()} className={buttonVariants({ size: "lg" })}>
-        Every organisation
-      </Link>
-    </section>
-  );
-}
-
 /** Signed in, with no role anywhere, after the first organisation exists: organisations are FrostAura's to set up (ORG-03). */
 function NotInvited({ email }: { email: string | null }) {
   return (
     <section aria-label="No organisation yet" className={cn("flex flex-col items-start gap-4 rounded-lg border bg-surface px-6 py-8 shadow-card sm:px-10", RISE)}>
       <Icon name="organisation" tinted className="size-8" />
-      <h1 className="max-w-prose font-display text-3xl font-bold sm:text-4xl">Organisations are set up by FrostAura</h1>
+      <h1 className={cn(TITLE, "max-w-prose")}>Organisations are set up by FrostAura</h1>
       <p className="max-w-prose text-ink-body">
         {email ? `You are signed in as ${email}, ` : "You are signed in, "}but you hold no role in any organisation yet, and an organisation cannot be started here. FrostAura sets one up for each
         person it invites. If you were invited, sign in with the invitation code you were sent; if someone already works here, ask them to give you a role.
@@ -456,14 +434,13 @@ function NotInvited({ email }: { email: string | null }) {
 
 function FirstRun() {
   return (
-    <section aria-label="Get started" className={cn("relative flex flex-col items-start gap-5 overflow-hidden rounded-lg bg-primary px-6 py-10 text-primary-ink sm:px-10", RISE)}>
-      <div aria-hidden className="absolute -top-20 right-24 size-aura animate-drift rounded-full bg-violet opacity-75 blur-aura motion-reduce:animate-none" />
-      <img src="/brand/endgame-mark.svg" alt="" width={56} height={56} className="relative size-14 rounded-sm ring-4 ring-surface/30" />
-      <h1 className="relative max-w-prose font-display text-4xl font-bold sm:text-hero">Name your organisation, then describe your first idea.</h1>
-      <p className="relative max-w-prose text-base text-primary-tint">
+    <section aria-label="Get started" className={cn("flex flex-col items-start gap-5 rounded-lg border bg-surface px-6 py-10 shadow-card sm:px-10", RISE)}>
+      <img src="/brand/endgame-mark.svg" alt="" width={56} height={56} className="size-14 rounded-sm" />
+      <h1 className={cn(TITLE, "max-w-prose")}>Name your organisation, then describe your first idea.</h1>
+      <p className="max-w-prose text-base text-ink-body">
         Everything you make lives under it. Endgame researches the idea first, tells you plainly whether it is worth building, then builds and runs it.
       </p>
-      <Link href={paths.start()} className={cn("relative", buttonVariants({ variant: "white", size: "lg" }))}>
+      <Link href={paths.start()} className={buttonVariants({ size: "lg" })}>
         Start
       </Link>
     </section>

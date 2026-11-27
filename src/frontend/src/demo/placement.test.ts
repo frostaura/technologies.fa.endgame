@@ -67,3 +67,19 @@ describe("the note", () => {
     expect(overlap(at(p), words[0] as Box)).toBe(0);
   });
 });
+
+describe("the note, against the page's words", () => {
+  it("moves a little further off rather than cover a line of words beside the ring", () => {
+    const view = { width: 1000, height: 800 };
+    const ring: Box = { left: 100, top: 300, right: 220, bottom: 340 };
+    const note = { width: 240, height: 60 };
+    // Words under the ring and above it, the width of the note: every spot touching the ring is taken.
+    const words: Box[] = [
+      { left: 60, top: 350, right: 600, bottom: 420 },
+      { left: 60, top: 220, right: 600, bottom: 290 },
+    ];
+    const p = placeNote(ring, note, view, words);
+    const box = { left: p.left, top: p.top, right: p.left + note.width, bottom: p.top + note.height };
+    expect(words.reduce((n, w) => n + overlap(box, w), 0)).toBe(0);
+  });
+});

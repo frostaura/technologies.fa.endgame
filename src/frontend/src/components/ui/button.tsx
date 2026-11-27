@@ -13,6 +13,10 @@ const buttonVariants = cva(
         soft: "rounded-xs border border-border-strong bg-surface font-normal text-ink-body hover:bg-ground",
         ghost: "rounded-xs bg-transparent font-normal text-ink-body hover:bg-ground hover:translate-y-0",
         white: "rounded-sm bg-surface text-primary-hover hover:shadow-press",
+        /** The confirm of a confirmation that drops, cancels, declines, deletes or lets go. */
+        danger: "rounded-sm bg-attention-text text-primary-ink hover:bg-attention-strong",
+        /** A control that asks to drop, let go or stop, before its confirmation: plainly destructive, never looking disabled. */
+        "danger-outline": "rounded-xs border border-attention-text bg-surface font-medium text-attention-text hover:bg-attention-tint",
       },
       size: { sm: "min-h-touch px-3", md: "min-h-touch px-4", lg: "min-h-12 px-5 text-base" },
     },

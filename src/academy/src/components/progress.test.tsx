@@ -94,3 +94,14 @@ describe("swiping", () => {
     expect(onRight).toHaveBeenCalledOnce();
   });
 });
+
+describe("a ring's figure", () => {
+  it("says <1% for a start too small to round, never a misleading 0%", () => {
+    render(<ProgressRing done={1} total={288} label="1 of 288" />);
+    expect(screen.getByRole("img", { name: "1 of 288" }).textContent).toBe("<1%");
+  });
+  it("draws a locked badge as a badge to come, not a dot", () => {
+    render(<Medal earned={false} label="Ten flows: not yet" />);
+    expect(screen.getByRole("img", { name: "Ten flows: not yet" }).querySelector("svg")).not.toBeNull();
+  });
+});

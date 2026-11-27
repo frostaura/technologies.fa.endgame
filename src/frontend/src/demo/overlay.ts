@@ -8,7 +8,9 @@ import { noteCost, placeNote, ringBox, ringInsets, type Box } from "./placement"
 
 let ring: HTMLDivElement | null = null;
 let note: HTMLDivElement | null = null;
+let arrow: HTMLSpanElement | null = null;
 let cursor: HTMLDivElement | null = null;
+let cursorFade = 0;
 let tracked: HTMLElement | null = null;
 let frame = 0;
 
@@ -96,6 +98,46 @@ function onPage(el: Element): boolean {
 
 let placed: { key: string; at: number; left: number; top: number; score: number; ring: Box } | null = null;
 
+/** What stands over a page as a whole: a dialog, a sheet, the device's own prompt. */
+const MODAL = "[role=dialog], [role=alertdialog], dialog[open], [aria-modal=true], [data-demo-device]";
+
+/**
+ * Whether something modal now covers the control — a dialog opened over it after it was ringed. The
+ * ring and note then step aside, so they never draw over the dialog's own words.
+ */
+function covered(el: HTMLElement): boolean {
+  const r = el.getBoundingClientRect();
+  const doc = el.ownerDocument;
+  const x = Math.min(Math.max(r.left + r.width / 2, 0), (doc.defaultView?.innerWidth ?? 1) - 1);
+  const y = Math.min(Math.max(r.top + r.height / 2, 0), (doc.defaultView?.innerHeight ?? 1) - 1);
+  const hit = doc.elementFromPoint(x, y);
+  if (!hit || hit === el || el.contains(hit) || hit.contains(el)) return false;
+  const over = hit.closest(MODAL);
+  return !!over && !over.contains(el);
+}
+
+/**
+ * The note's pointer: a small notch on the side that faces the ring, aimed at the ring's middle, so
+ * the note reads as being about that control. None when the note had to sit over the ring.
+ */
+function aim(box: Box, left: number, top: number) {
+  if (!note || !arrow) return;
+  const w = note.offsetWidth;
+  const h = note.offsetHeight;
+  const cx = (box.left + box.right) / 2;
+  const cy = (box.top + box.bottom) / 2;
+  const clamp = (v: number, max: number) => Math.max(12, Math.min(v, max - 12));
+  let side: "top" | "bottom" | "left" | "right" | null = null;
+  if (top >= box.bottom - 1) side = "top";
+  else if (top + h <= box.top + 1) side = "bottom";
+  else if (left >= box.right - 1) side = "left";
+  else if (left + w <= box.left + 1) side = "right";
+  arrow.hidden = side === null;
+  if (!side) return;
+  const at = side === "top" || side === "bottom" ? { left: `${clamp(cx - left, w) - 5}px`, top: side === "top" ? "-5px" : `${h - 5}px` } : { top: `${clamp(cy - top, h) - 5}px`, left: side === "left" ? "-5px" : `${w - 5}px` };
+  Object.assign(arrow.style, at);
+}
+
 function place() {
   frame = 0;
   if (!tracked || !ring) return;
@@ -119,8 +161,14 @@ function place() {
     }
   }
   lostSince = 0;
-  ring.hidden = false;
-  if (note) note.hidden = false;
+  // A dialog opened over the control: the ring and note wait, hidden, until it closes.
+  const hidden = covered(tracked);
+  ring.hidden = hidden;
+  if (note) note.hidden = hidden;
+  if (hidden) {
+    frame = requestAnimationFrame(place);
+    return;
+  }
   const r = pageRect(tracked);
   const target: Box = { left: r.left, top: r.top, right: r.left + r.width, bottom: r.bottom };
   const view = { width: window.innerWidth, height: window.innerHeight };
@@ -145,7 +193,10 @@ function place() {
   const box = placed.ring;
   // The light outline is drawn outside the element's own box: the box is set one pixel inside the ring's.
   Object.assign(ring.style, { left: `${box.left + 1}px`, top: `${box.top + 1}px`, width: `${box.right - box.left - 2}px`, height: `${box.bottom - box.top - 2}px` });
-  if (note) Object.assign(note.style, { left: `${placed.left}px`, top: `${placed.top}px` });
+  if (note) {
+    Object.assign(note.style, { left: `${placed.left}px`, top: `${placed.top}px` });
+    aim(box, placed.left, placed.top);
+  }
   frame = requestAnimationFrame(place);
 }
 
@@ -163,7 +214,14 @@ export function showSpotlight(el: HTMLElement, text: string | null, again?: () =
     note.setAttribute("role", "status");
     note.setAttribute("data-demo-note", "");
     note.removeAttribute("aria-hidden");
-    note.textContent = text;
+    const words = document.createElement("span");
+    words.className = "relative";
+    words.textContent = text;
+    arrow = document.createElement("span");
+    arrow.setAttribute("aria-hidden", "true");
+    arrow.className = "absolute size-2.5 rotate-45 bg-ink";
+    arrow.hidden = true;
+    note.append(arrow, words);
   }
   place();
 }
@@ -176,26 +234,38 @@ export function clearSpotlight() {
   note?.remove();
   ring = null;
   note = null;
+  arrow = null;
   tracked = null;
   refind = null;
   lostSince = 0;
   placed = null;
 }
 
-/** Glide the soft cursor to a point; resolves when it has arrived. */
+/** A small pointer, its tip on the point it names: an arrow outlined in white so it reads on any ground. */
+const POINTER = '<svg viewBox="0 0 16 20" width="16" height="20" aria-hidden="true"><path d="M1.5 1.5v15l4-3.6 2.6 5.6 2.6-1.2-2.6-5.5h5.4z" fill="currentColor" stroke="white" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+
+/**
+ * Glide the soft cursor to a point; resolves when it has arrived and pressed. It fades once the
+ * press is done, so it never stays behind over what the press opened.
+ */
 export function moveCursor(x: number, y: number): Promise<void> {
   if (!cursor) {
-    cursor = layer("pointer-events-none fixed z-50 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-primary/60 shadow-raised transition-all duration-500 ease-out motion-reduce:transition-none");
+    cursor = layer("pointer-events-none fixed z-50 text-ink opacity-0 drop-shadow transition-all duration-500 ease-out motion-reduce:transition-none");
+    cursor.innerHTML = POINTER;
+    cursor.setAttribute("data-demo-cursor", "");
     Object.assign(cursor.style, { left: `${window.innerWidth / 2}px`, top: `${window.innerHeight / 2}px` });
   }
   const c = cursor;
+  window.clearTimeout(cursorFade);
   return new Promise((resolve) => {
     requestAnimationFrame(() => {
+      c.classList.remove("opacity-0");
       Object.assign(c.style, { left: `${x}px`, top: `${y}px` });
       setTimeout(() => {
-        c.classList.add("scale-75");
+        c.classList.add("scale-90");
         setTimeout(() => {
-          c.classList.remove("scale-75");
+          c.classList.remove("scale-90");
+          cursorFade = window.setTimeout(() => c.classList.add("opacity-0"), 450);
           resolve();
         }, 140);
       }, 520);

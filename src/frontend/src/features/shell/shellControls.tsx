@@ -1,3 +1,4 @@
+import { LogOut } from "lucide-react";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { formatNumber } from "@/lib/format";
@@ -19,7 +20,8 @@ export function ModeToggle() {
       aria-pressed={mode === value}
       onClick={() => dispatch(modeSet(value))}
       className={cn(
-        "min-h-touch rounded-xs px-2.5 text-sm transition-colors lg:px-4",
+        // 36px drawn inside the 44px track; the track's padding is part of the target, and the focus ring stays inside it.
+        "relative h-9 rounded-xs px-2.5 text-sm transition-colors after:absolute after:-inset-y-1 after:inset-x-0 focus-visible:ring-inset focus-visible:ring-offset-0 xl:px-4",
         mode === value ? "bg-surface font-semibold text-ink shadow-toggle" : "bg-transparent text-ink-muted hover:text-ink",
       )}
     >
@@ -27,13 +29,17 @@ export function ModeToggle() {
     </button>
   );
   return (
-    <div role="group" aria-label="Mode" className="flex rounded-xs bg-quiet p-1">
+    <div role="group" aria-label="Mode" className="relative flex h-11 shrink-0 items-center rounded-xs bg-quiet p-1 ring-1 ring-inset ring-border-strong">
       {option("normal", "Normal")}
       {option("technical", "Technical")}
       {mode === "technical" && (
-        <Link href={paths.system()} className="ml-1 flex min-h-touch min-w-touch items-center justify-center gap-1.5 rounded-xs px-2 text-sm text-ink-muted hover:text-ink sm:px-3">
+        <Link
+          href={paths.system()}
+          title="System"
+          className="relative ml-1 flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-xs px-2 text-sm text-ink-muted after:absolute after:-inset-y-1 after:inset-x-0 hover:text-ink focus-visible:ring-inset focus-visible:ring-offset-0 2xl:px-3"
+        >
           <Icon name="health" className="size-4" />
-          <span className="sr-only sm:not-sr-only">System</span>
+          <span className="sr-only 2xl:not-sr-only">System</span>
         </Link>
       )}
     </div>
@@ -42,15 +48,15 @@ export function ModeToggle() {
 
 export function CreditsPill({ scope }: { scope: string }) {
   const query = useGetCreditsQuery(scope, { pollingInterval: 30_000, skipPollingIfUnfocused: true });
-  const base = "flex min-h-touch items-center gap-2 rounded-sm px-3 transition sm:gap-2.5 sm:px-4 duration-200 hover:-translate-y-0.5 hover:shadow-press motion-reduce:transition-none motion-reduce:hover:translate-y-0";
+  const base = "flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-xs px-3 transition sm:gap-2.5 sm:px-4 duration-200 hover:-translate-y-0.5 hover:shadow-press motion-reduce:transition-none motion-reduce:hover:translate-y-0";
   if (query.data) {
     const low = query.data.balance <= 0;
     return (
       <Link href={paths.credits()} className={cn(base, low ? "bg-attention-tint text-ink" : "bg-success-tint text-ink")}>
-        <span aria-hidden className={cn("size-2 rounded-full", low ? "bg-attention-text" : "animate-pulse bg-success motion-reduce:animate-none")} />
+        <span aria-hidden className={cn("size-2 shrink-0 rounded-full", low ? "bg-attention-text" : "bg-success")} />
         <span className="font-semibold">{formatNumber(query.data.balance)}</span>
         <span className={low ? "text-attention-text" : "text-success-text"}>
-          credits<span className="sr-only lg:not-sr-only"> left</span>
+          credits<span className="sr-only xl:not-sr-only"> left</span>
         </span>
       </Link>
     );
@@ -69,8 +75,11 @@ export function CreditsPill({ scope }: { scope: string }) {
   );
 }
 
-/** Signing out leaves nothing for the next person on this tab: no return address, no entered organisation. */
-export function SignOut({ className }: { className?: string }) {
+/**
+ * Signing out leaves nothing for the next person on this tab: no return address, no entered organisation.
+ * `compact`: the header's — an icon below `xl`, where the bar has no room for the words, and the words above.
+ */
+export function SignOut({ className, compact = false }: { className?: string; compact?: boolean }) {
   const [logout, state] = useLogoutMutation();
   const signOut = async () => {
     forgetReturnTo();
@@ -82,9 +91,22 @@ export function SignOut({ className }: { className?: string }) {
       type="button"
       disabled={state.isLoading}
       onClick={() => void signOut()}
-      className={cn("min-h-touch rounded-xs px-3 text-sm text-ink-muted hover:text-ink disabled:opacity-50", className)}
+      aria-label={compact ? "Sign out" : undefined}
+      title={compact ? "Sign out" : undefined}
+      className={cn(
+        "min-h-touch rounded-xs text-sm text-ink-muted hover:text-ink disabled:opacity-50",
+        compact ? "flex size-11 shrink-0 items-center justify-center hover:bg-ground xl:w-auto xl:px-3" : "px-3",
+        className,
+      )}
     >
-      Sign out
+      {compact ? (
+        <>
+          <LogOut aria-hidden className="size-5 xl:hidden" />
+          <span className="max-xl:hidden">Sign out</span>
+        </>
+      ) : (
+        "Sign out"
+      )}
     </button>
   );
 }

@@ -6,7 +6,7 @@ import type { Verdict } from "@/store/types";
 import { RESEARCH_VERDICT, ideaFixture } from "@/test/fixtures";
 import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { VerdictView } from "./VerdictView";
-import { decisionOptions, normaliseVerdict, plainProductName, shortSummary } from "./verdictModel";
+import { decisionOptions, normaliseVerdict, notResearched, plainProductName, sameText, shortSummary } from "./verdictModel";
 
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
 const TREE = { generatedAt: "2026-11-24T10:00:00Z", viewerRole: "owner", organisation: { id: "o1", slug: "acme", name: "Acme", summary: null, spend: { monthCredits: 0 }, workers: [] }, divisions: [{ id: "d", slug: "tools", name: "Tools", spend: { monthCredits: 0 }, workers: [], projects: [] }], needsYou: [] };
@@ -105,6 +105,22 @@ describe("normaliseVerdict", () => {
   });
 });
 
+describe("saying each thing once", () => {
+  it("knows the same words whatever their spacing, case or closing stop, and a long sentence inside a longer text", () => {
+    expect(sameText("It tracks people.", "  it tracks   people ")).toBe(true);
+    const long = "The app secretly monitors members' reading habits to report them to an outside body.";
+    expect(sameText(long, `Verdict: do not build. ${long} No one may overrule that.`)).toBe(true);
+    expect(sameText("Short.", "Short and more.")).toBe(false);
+    expect(sameText("", "")).toBe(false);
+  });
+
+  it("knows when research looked at no market at all", () => {
+    const red = read({ outcome: "do-not-build", existing: { products: [], evidence: "Not looked into further once the red line was found." }, gap: { evidence: "Not looked into." }, demand: { evidence: "No evidence was gathered for an idea that crosses a red line." } });
+    expect(notResearched(red)).toBe(true);
+    expect(notResearched(read(RESEARCH_VERDICT))).toBe(false);
+  });
+});
+
 describe("decisionOptions", () => {
   const no = read(RESEARCH_VERDICT);
   it("offers change, overrule and drop against a no; build, change and drop for a yes; never overrule for a change", () => {
@@ -151,7 +167,9 @@ describe("VerdictView", () => {
     const more = within(hero).getByRole("button", { name: "Read the full reasoning" });
     expect(more.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(more);
+    // In place of the short lines, never under them.
     expect(within(screen.getByRole("region", { name: "The full reasoning" })).getByText(/Nightscout has accepted posted readings/)).toBeTruthy();
+    expect(hero.textContent?.split("Missing evidence of demand is a reason not to spend money").length).toBe(2);
     expect(within(hero).getByRole("button", { name: "Hide the full reasoning" }).getAttribute("aria-expanded")).toBe("true");
   });
 
@@ -206,11 +224,11 @@ describe("VerdictView", () => {
     expect(products.textContent).not.toContain("beeper/beeper-server");
     expect(within(products).getByRole("link", { name: "beeper.example.test" }).getAttribute("href")).toBe("https://beeper.example.test/docs");
     expect(screen.getByText("No defensible gap survives the evidence.")).toBeTruthy();
-    expect(screen.getByText(/No evidence of demand was found. That counts/)).toBeTruthy();
+    expect(screen.getByText("That counts against building.")).toBeTruthy();
     expect(screen.getByText("A verified cohort paying a real price.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "No red line is crossed" })).toBeTruthy();
     expect(screen.getAllByText("1 of 3", { selector: "span" })).toHaveLength(3);
-    expect(screen.getByText("existing products, the gap, demand")).toBeTruthy();
+    expect(within(screen.getByRole("list", { name: "Strands" })).getByText("existing products")).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "Where you are" }).textContent).toBe("Acme/Tools/Pager");
   });
 
@@ -220,8 +238,8 @@ describe("VerdictView", () => {
     const signals = await screen.findByRole("list", { name: "Signals of demand" });
     expect(within(signals).getByText("Asked on the forum twice")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "What to change" })).toBeTruthy();
-    expect(screen.getByText("medium")).toBeTruthy();
-    expect(screen.getByText("7")).toBeTruthy();
+    // The method's figures, said once in a line.
+    expect(screen.getByText("7 searches · 2 sources · medium confidence")).toBeTruthy();
     expect(within(screen.getByRole("list", { name: "Strands" })).getByText("3 searches · 2 sources · low confidence")).toBeTruthy();
     // A change verdict is not overruled: it is built as described, or changed.
     expect(screen.queryByRole("button", { name: /Overrule/ })).toBeNull();
@@ -273,5 +291,64 @@ describe("VerdictView", () => {
     fireEvent.click(within(screen.getByRole("group", { name: "Confirm" })).getByRole("button", { name: "Yes" }));
     expect(await screen.findByText(/Your decision was not recorded: Someone else decided first/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Drop the idea" })).toBeTruthy();
+  });
+  it("puts the decision in a side card on a desktop, said once, with research's record under the evidence", async () => {
+    stub(json(ideaFixture()));
+    renderWithStore(<VerdictView ideaId="i1" />);
+    const side = await screen.findByRole("complementary", { name: "Beside this page" });
+    expect(within(side).getByRole("button", { name: "Overrule and build anyway" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Overrule and build anyway" })).toHaveLength(1);
+    expect(within(side).getByRole("heading", { name: "How this was researched" })).toBeTruthy();
+    expect(within(side).queryByRole("heading", { name: "How often research says no" })).toBeNull();
+    expect(screen.getByRole("group", { name: "Research's record" })).toBeTruthy();
+  });
+
+  it("over a red line says the red line once and the market once", async () => {
+    const reason = "Following employees' phones after hours to see who else they work for is surveillance of people without their consent.";
+    stub(
+      json(
+        ideaFixture({
+          redLine: "surveillance",
+          verdict: { outcome: "do-not-build", headline: "Not on Endgame.", summary: reason, against: reason, existing: { products: [], evidence: "Not researched: the idea crosses a red line." }, gap: { evidence: "Not researched: the idea crosses a red line." }, demand: { evidence: "Not researched: the idea crosses a red line.", evidenceFound: false }, redLines: { breached: true, line: "surveillance", reasoning: reason } },
+        }),
+      ),
+    );
+    renderWithStore(<VerdictView ideaId="i1" />);
+    const main = (await screen.findByRole("heading", { level: 1, name: "Not on Endgame." })).closest("main") as HTMLElement;
+    expect(main.textContent?.split("Following employees' phones").length).toBe(2);
+    expect(screen.getByRole("heading", { name: "The market was not researched" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Who already does this" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "The case against, argued first" })).toBeNull();
+  });
+
+  it("shows five of many products and signals, then how many there are", async () => {
+    const products = Array.from({ length: 21 }, (_, i) => ({ name: `Product ${i + 1}`, what: "Does it.", url: `https://p${i + 1}.example.test/a/very/long/path/that/goes/on/and/on` }));
+    const signals = Array.from({ length: 14 }, (_, i) => ({ text: `Signal ${i + 1}`, source: null }));
+    stub(json(ideaFixture({ verdict: { ...STRUCTURED, existing: { evidence: "Many.", products }, demand: { evidence: "Some.", signals } } })));
+    renderWithStore(<VerdictView ideaId="i1" />);
+    const list = await screen.findByRole("list", { name: "Existing products" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(5);
+    fireEvent.click(screen.getByRole("button", { name: "Show all 21 products" }));
+    expect(within(list).getAllByRole("listitem")).toHaveLength(21);
+    expect(within(screen.getByRole("list", { name: "Signals of demand" })).getAllByRole("listitem")).toHaveLength(5);
+    expect(screen.getByRole("button", { name: "Show all 14 signals" })).toBeTruthy();
+    // A source is cut to its card, never wrapped past it.
+    expect(within(list).getAllByRole("link")[0]?.className).toContain("truncate");
+  });
+
+  it("lists every source under the shared fold, never the browser's own disclosure", async () => {
+    stub(json(ideaFixture()));
+    const { container } = renderWithStore(<VerdictView ideaId="i1" />);
+    const fold = await screen.findByRole("button", { name: "Every source (2)" });
+    expect(fold.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector("details")).toBeNull();
+  });
+
+  it("says a dropped idea was dropped, with one tag and no decision left to take", async () => {
+    stub(json(ideaFixture({ status: "decided", decision: { choice: "drop", at: "2026-11-24T10:00:00Z", by: "Owner", overruled: false, runId: null, via: "person" } })));
+    renderWithStore(<VerdictView ideaId="i1" />);
+    expect(await screen.findByText("Dropped")).toBeTruthy();
+    expect(screen.getByText(/You dropped the idea on/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Drop the idea" })).toBeNull();
   });
 });

@@ -77,8 +77,12 @@ describe("AssistantsView", () => {
   it("gives the two kinds of address: the organisation's and each app's", async () => {
     stub(json(TOKENS));
     renderWithStore(<AssistantsView />);
-    expect(await screen.findByText(`${window.location.origin}/mcp`)).toBeTruthy();
-    expect(within(await screen.findByRole("list", { name: "App addresses" })).getByText(`${window.location.origin}/mcp/apps/a1`)).toBeTruthy();
+    // Shown whole, in one piece, and free to break only after a "/" — never inside a name or an id.
+    const address = (text: string) => (_: string, el: Element | null) => el?.tagName === "CODE" && el.textContent === text;
+    const org = await screen.findByText(address(`${window.location.origin}/mcp`));
+    expect(org.querySelectorAll("wbr")).toHaveLength(`${window.location.origin}/mcp`.split("/").length - 1);
+    expect(org.className).toContain("break-normal");
+    expect(within(await screen.findByRole("list", { name: "App addresses" })).getByText(address(`${window.location.origin}/mcp/apps/a1`))).toBeTruthy();
   });
 
   it("makes a key no higher than the person's role and shows it once, never in the store", async () => {

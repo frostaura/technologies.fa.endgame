@@ -17,7 +17,7 @@ export const primitives = {
   white: "#FFFFFF",
   ground: "#F5F6FB",
   ink: { 900: "#0B1020", 700: "#3B4350", 600: "#535B70", 500: "#434A5E" },
-  line: { DEFAULT: "#E4E7F2", strong: "#C9CEDF" },
+  line: { DEFAULT: "#E4E7F2", strong: "#C9CEDF", field: "#868DA3" },
   slate: { 100: "#EEF0F7" },
   navy: "#141B4D",
   blue: { 50: "#EEF2FF", 100: "#DCE4FF", 200: "#C6D2FF", 300: "#A9B8FF", 500: "#2F5BFF", 600: "#2447D6", 700: "#1E3FCC" },
@@ -28,6 +28,7 @@ export const primitives = {
   coral: { 50: "#FFF1EC", 100: "#FFE3DC", 200: "#FFC9BA", 300: "#FFB6A3", 25: "#FFF8F5", 500: "#D9432B", 900: "#5C2A1F" },
   red: { 50: "#FFF1EC", 700: "#B42318", 800: "#8A1C0F" },
   orange: { 700: "#C2410C" },
+  amber: { 50: "#FFF4E0", 500: "#D98A00", 800: "#8A4B00" },
   magenta: { 600: "#B4237A" },
 } as const;
 
@@ -38,7 +39,8 @@ export const roles = {
   ground: p.ground,
   surface: p.white,
   ink: { DEFAULT: p.ink[900], body: p.ink[700], muted: p.ink[600] },
-  border: { DEFAULT: p.line.DEFAULT, strong: p.line.strong },
+  /** `field`: the edge of a text box, a select or a check box — 3:1 against both surfaces (WCAG 1.4.11). */
+  border: { DEFAULT: p.line.DEFAULT, strong: p.line.strong, field: p.line.field },
   /** The quiet chip and track: sleeping, private, unknown. */
   quiet: { DEFAULT: p.slate[100], text: p.ink[500] },
   primary: {
@@ -52,13 +54,21 @@ export const roles = {
     /** Secondary text set on the primary band. */
     "ink-soft": p.blue[100],
   },
-  /** People: employees and contractors. */
+  /**
+   * People and the factory once had hues of their own. The house look is black on white with one accent,
+   * so these two are kept only for the organisation graph's node kinds and the avatar fills; a tag, a
+   * card, a band or an icon never uses them (`design.test.ts` holds their use from growing).
+   */
   violet: { DEFAULT: p.violet[500], text: p.violet[600], deep: p.violet[800], line: p.violet[200], dash: p.violet[400], tint: p.violet[50] },
-  /** The factory: research, plan, build, evaluate, publish. */
   teal: { DEFAULT: p.teal[600], text: p.teal[700], tint: p.teal[50] },
   /** Money and health. */
   success: { DEFAULT: p.green[500], text: p.green[800], tint: p.green[50] },
-  /** Anything that needs the owner. */
+  /**
+   * The status palette is closed: neutral (`quiet`), info (`primary`), good (`success`), warn and bad
+   * (`attention`). `warn` is something that waits on a person or is held; it is never a failure.
+   */
+  warn: { DEFAULT: p.amber[500], text: p.amber[800], tint: p.amber[50] },
+  /** Anything that failed or is refused: the "bad" status. */
   attention: {
     DEFAULT: p.coral[500],
     text: p.red[700],
@@ -177,8 +187,12 @@ export const typography = {
  * - tablet: `sm` to `lg` — the full header, two columns where a screen has them, the conversation
  *   in a side sheet.
  * - desktop: `lg` and up — the conversation and side panels beside the page.
+ *
+ * The desktop has three tiers of its own (ARCH-011): `xl` (1280) the page beside its side panel;
+ * `3xl` (1600) the page may set independent sections two across and the side panel widens; `4xl`
+ * (2000) the same, with the whole console capped at `layout.width.frame` and centred.
  */
-export const breakpoints = { sm: 640, md: 768, lg: 1024, xl: 1280, "2xl": 1536, short: 500 } as const;
+export const breakpoints = { sm: 640, md: 768, lg: 1024, xl: 1280, "2xl": 1536, "3xl": 1600, "4xl": 2000, short: 500 } as const;
 
 /** Tailwind's `screens`, from {@link breakpoints}. Plain widths only, so `max-sm:` and friends exist. */
 export const screens = {
@@ -187,10 +201,22 @@ export const screens = {
   lg: `${breakpoints.lg}px`,
   xl: `${breakpoints.xl}px`,
   "2xl": `${breakpoints["2xl"]}px`,
+  "3xl": `${breakpoints["3xl"]}px`,
+  "4xl": `${breakpoints["4xl"]}px`,
 } as const;
 
 /** The `short:` variant: a phone on its side. */
 export const shortQuery = `(max-height: ${breakpoints.short - 0.02}px)`;
+
+/**
+ * A phone on its side: short and not wide enough for the desktop. It gets a layout of its own (the
+ * `rail:` variant) — a slim side rail in place of the bottom bar, a one-line header, the page and its
+ * side panel side by side, and sheets that come in from the side.
+ */
+export const railQuery = `${shortQuery} and (max-width: ${breakpoints.lg - 0.02}px)`;
+
+/** A screen worked by touch (any phone or tablet), or drawn as a phone: every control there is a thumb's size (`touch:`). */
+export const coarseQuery = `(pointer: coarse), (max-width: ${breakpoints.sm - 0.02}px), ${shortQuery} and (max-width: ${breakpoints.lg - 0.02}px)`;
 
 /** The media queries the shell's script reads, from the same numbers. */
 export const viewportQueries = {
@@ -198,15 +224,18 @@ export const viewportQueries = {
   desktop: `(min-width: ${breakpoints.lg}px)`,
 } as const;
 
-/** Named widths. `page` bounds the console so lines stay readable on an ultrawide. */
+/** Named widths. `frame` caps the whole console (header, page and side panel) so nothing spans an ultrawide. */
 export const layout = {
   width: {
+    /** The whole console's cap from the 4xl tier. */
+    frame: "137.5rem",
     page: "96rem",
     aside: "22rem",
-    /** The conversation pane docked at the right: narrow, wide, and collapsed to a rail (ARCH-011). */
+    "aside-wide": "26rem",
+    /** The conversation pane docked at the right: narrow, wide, and collapsed to a rail (ARCH-012). */
     dock: "26rem",
     "dock-wide": "34rem",
-    rail: "3.5rem",
+    "dock-rail": "3.5rem",
     form: "40rem",
     prose: "45rem",
     aura: "20rem",
@@ -243,6 +272,8 @@ export const layout = {
   nav: "4rem",
   /** The phone's header row. */
   bar: "3.5rem",
+  /** The side rail that stands in for the bottom bar on a phone on its side. */
+  rail: "4.5rem",
   /** A bottom sheet stops this far short of the top, so the page behind still shows it is a sheet. */
   sheetGap: "2.5rem",
   /** The device's safe area: the notch, the rounded corners, the home indicator (`viewport-fit=cover`). */
@@ -257,7 +288,44 @@ export const layout = {
   /** The narrowest a labelled field may be squeezed to in a row beside its button; below it the row wraps. */
   field: "12rem",
   /** Grid tracks: a chart's label column beside its bars; a table of figures with a name column. */
-  columns: { "chart-row": "minmax(3rem, 9rem) minmax(0, 1fr)", "name-figures": "minmax(0, 2fr) repeat(4, minmax(0, 1fr))" },
+  columns: {
+    "chart-row": "minmax(3rem, 9rem) minmax(0, 1fr)",
+    "name-figures": "minmax(0, 2fr) repeat(4, minmax(0, 1fr))",
+    /** A line that grows and the thing that ends it (a figure, an action): the money pages' rows. */
+    "grow-end": "minmax(0, 1fr) auto",
+    /** A control before its words (a switch, a dot), and the words; then, optionally, what ends the row. */
+    "lead-grow": "auto minmax(0, 1fr)",
+    "lead-grow-end": "auto minmax(0, 1fr) auto",
+    "dot-grow": "0.5rem minmax(0, 1fr)",
+    "dot-grow-end": "0.5rem minmax(0, 1fr) auto",
+    /** Figures that each take only their own width, spread across their row. */
+    "fit-3": "auto auto auto",
+    /** The credits budget tree: level, spent this month, cap, and an Admin's one action. */
+    "budget-tree": "minmax(0, 1.5fr) minmax(7rem, 1fr) 5.5rem 9rem",
+    "budget-tree-read": "minmax(0, 1.5fr) minmax(7rem, 1fr) 5.5rem",
+    /** A wide credits page: the budget tree, and the month's figures and top-ups beside it. */
+    "main-side": "minmax(0, 1fr) 24rem",
+    /** Autonomy's stage matrix: the stage, its three lists, and its actions. */
+    "stage-matrix": "minmax(9rem, 0.9fr) repeat(3, minmax(0, 1fr)) 8.5rem",
+    /** The operator log: when, what was done, and by whom. */
+    "time-grow": "10.5rem minmax(0, 1fr)",
+    "time-grow-who": "10.5rem minmax(0, 1fr) minmax(14rem, 0.45fr)",
+    /** God mode's organisation row: who it is, then its four figures. */
+    "name-wide": "minmax(13rem, 1.1fr) minmax(0, 2.4fr)",
+    /** A form's first field wider than the two after it. */
+    "wide-two": "minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr)",
+    /** A run's timeline row: mark | who and what | time over cost (a phone) … */
+    step: "2rem minmax(0, 1fr) 5.5rem",
+    /** … and mark | who and what | cost | time, the same two right-hand columns on every row. */
+    "step-wide": "2rem minmax(0, 1fr) 6.5rem 5.25rem",
+    /** A run page from 1600: the steps, and the plan beside them. */
+    "run-wide": "minmax(0, 1fr) minmax(0, 32rem)",
+    /** A numbered item with its tag: number | words, and on a wide card | tag. */
+    numbered: "1.75rem minmax(0, 1fr)",
+    "numbered-tagged": "1.75rem minmax(0, 1fr) auto",
+    /** One task on one line: its state | what it is | who has it | the way to more. */
+    task: "7.25rem minmax(0, 1fr) auto 1rem",
+  },
   /** Where the org chart's connecting wire sits under a division's badge. */
   wireInset: "39px",
 } as const;

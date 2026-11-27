@@ -1,0 +1,118 @@
+import { createContext, useContext, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
+
+/**
+ * The figure tile: every "big number" in the console is one of these (ARCH-011).
+ *
+ * The value slot holds only a short value — a number, a few characters such as "73%" or "—", or one
+ * short word. Anything longer ("Not measured yet", "Usually 53% under the estimate") is the caption,
+ * and the value is "—" or the bare figure. Values are set in the body face with tabular lining
+ * figures, so columns of numbers line up and the display face's hooked "1" never reaches a figure.
+ *
+ * In a {@link StatRow} every tile has the same slots in the same places: label, value, meter (reserved
+ * in every tile when any tile in the row has one), caption. Captions therefore start on one line.
+ */
+
+/** The value classes, exported only so the guard test can name them; use {@link Stat}. */
+export const STAT_VALUE = {
+  md: "text-2xl max-sm:text-xl",
+  lg: "text-3xl max-sm:text-2xl",
+  xl: "text-5xl max-sm:text-4xl",
+} as const;
+
+const RowContext = createContext<{ meters: boolean } | null>(null);
+
+/** "—": what a figure slot shows when there is nothing measured to show. */
+export const NO_VALUE = "—";
+
+export function Stat({
+  label,
+  value,
+  caption,
+  meter,
+  size = "md",
+  tone = "ink",
+  plain = false,
+  valueAs: Value = "span",
+  className,
+  testId,
+}: {
+  /** The page's own title is a figure on one page (the balance): it is then the h1. */
+  valueAs?: "span" | "h1";
+  label: ReactNode;
+  /** A short value only. Explanations go in `caption`. */
+  value: ReactNode;
+  caption?: ReactNode;
+  /** A meter under the value: a percentage (0–100+) and what it says aloud. */
+  meter?: { value: number; label: string; tone?: "primary" | "bad" } | null;
+  size?: keyof typeof STAT_VALUE;
+  /** `good` and `bad` colour the value; used sparingly, for money not charged or a balance below zero. */
+  tone?: "ink" | "muted" | "good" | "bad";
+  /** No card of its own: a figure inside a hero or a card that is already drawn. */
+  plain?: boolean;
+  className?: string;
+  testId?: string;
+}) {
+  const row = useContext(RowContext);
+  const reserve = meter != null || row?.meters;
+  return (
+    <div
+      data-testid={testId}
+      className={cn(
+        "flex min-w-0 flex-col gap-1",
+        !plain && "rounded-md border bg-surface px-5 py-4 shadow-card max-sm:px-3.5 max-sm:py-3",
+        className,
+      )}
+    >
+      <span title={typeof label === "string" ? label : undefined} className="truncate text-sm text-ink-muted">
+        {label}
+      </span>
+      <Value
+        className={cn(
+          "truncate font-sans font-semibold leading-tight tracking-tight tabular-nums",
+          STAT_VALUE[size],
+          { ink: "text-ink", muted: "text-ink-muted", good: "text-success-text", bad: "text-attention-text" }[tone],
+        )}
+      >
+        {value}
+      </Value>
+      {reserve && (
+        <span aria-hidden={meter == null} className="flex h-4 items-center">
+          {meter != null && <Meter {...meter} />}
+        </span>
+      )}
+      {caption && <span className="text-sm text-ink-body">{caption}</span>}
+    </div>
+  );
+}
+
+function Meter({ value, label, tone = "primary" }: { value: number; label: string; tone?: "primary" | "bad" }) {
+  return (
+    <span role="img" aria-label={label} className="block h-2 w-full overflow-hidden rounded-full bg-border">
+      <span
+        className={cn("block h-full origin-left animate-grow rounded-full motion-reduce:animate-none", tone === "bad" ? "bg-attention-text" : "bg-primary")}
+        style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+      />
+    </span>
+  );
+}
+
+const COLS = {
+  2: "grid-cols-2",
+  3: "grid-cols-2 sm:grid-cols-3",
+  4: "grid-cols-2 xl:grid-cols-4",
+} as const;
+
+/**
+ * A row of figure tiles with a fixed number of equal slots. `meters`: some tile in the row has a meter,
+ * so every tile keeps its place and the captions stay aligned.
+ */
+export function StatRow({ cols, meters = false, label, className, children }: { cols: keyof typeof COLS; meters?: boolean; label?: string; className?: string; children: ReactNode }) {
+  return (
+    <RowContext.Provider value={{ meters }}>
+      <section aria-label={label} className={cn("grid items-stretch gap-3 sm:gap-4", COLS[cols], className)}>
+        {children}
+      </section>
+    </RowContext.Provider>
+  );
+}

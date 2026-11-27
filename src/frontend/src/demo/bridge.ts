@@ -284,6 +284,9 @@ const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-r
 
 /** How much of the page above a tall control stays in view: the page's heading, or the section's. */
 const CONTEXT = 96;
+/** Room kept above a control left where it is, and under it, clear of a phone's bottom bar and the note. */
+const EDGE_ROOM = 24;
+const FOOT_ROOM = 96;
 
 /**
  * Brings an element into view in the demo's own page — and in an Edge page's frame, for a control
@@ -311,12 +314,14 @@ function reveal(el: Element, smooth: boolean) {
   }
   const win = windowOf(el);
   const r = el.getBoundingClientRect();
+  const fromTop = win.scrollY + r.top;
   let by = r.top - (win.innerHeight - r.height) / 2;
-  if (r.height > win.innerHeight * 0.8) {
-    const fromTop = win.scrollY + r.top;
-    by = fromTop < win.innerHeight / 2 ? -win.scrollY : r.top - CONTEXT;
-  }
-  win.scrollBy({ top: by, behavior });
+  if (r.height > win.innerHeight * 0.8) by = fromTop < win.innerHeight / 2 ? -win.scrollY : r.top - CONTEXT;
+  // A tidy position, never an arbitrary slice of the page: a control already well in view stays where
+  // it is, and one that fits on the page's first screen is shown with the page at its top.
+  else if (r.top >= EDGE_ROOM && r.bottom <= win.innerHeight - FOOT_ROOM) by = 0;
+  else if (fromTop + r.height <= win.innerHeight - FOOT_ROOM) by = -win.scrollY;
+  if (by) win.scrollBy({ top: by, behavior });
   const frame = win.frameElement;
   if (frame && win !== window) reveal(frame, smooth);
 }
@@ -380,7 +385,8 @@ async function approach(el: HTMLElement) {
   if (instantNow) return;
   await sleep(250);
   const r = pageRect(el);
-  await moveCursor(r.left + r.width / 2, r.top + r.height / 2);
+  // The pointer's tip rests just inside the control's lower edge, its body below it: never over the label it presses.
+  await moveCursor(r.left + Math.min(r.width / 2, 24), r.bottom - Math.min(6, r.height / 4));
 }
 
 /** The window an element lives in: the console's, or an Edge page's frame. */

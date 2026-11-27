@@ -12,7 +12,7 @@ import { useViewport } from "@/lib/useViewport";
 import { useAppSelector } from "@/store";
 import { useGetNotificationsQuery, useMarkAllReadMutation, useMarkReadMutation } from "@/store/api";
 import type { NotificationItem } from "@/store/types";
-import { notificationHref, notificationLines, PHONE_PAGE, phoneShown, settledLabel } from "./notificationModel";
+import { byDay, notificationHref, notificationLines, PHONE_PAGE, phoneShown, settledLabel } from "./notificationModel";
 import { NOTIFICATIONS_POLL_MS } from "./useUnread";
 
 /** The feed of what needs the person, newest first: each links to what it is about, and can be marked read. */
@@ -21,8 +21,7 @@ export function NotificationFeed({ organisation, limit, onNavigate, compact = fa
   const view = viewOf(query);
   const [markAll, all] = useMarkAllReadMutation();
   const [problem, setProblem] = useState<string | null>(null);
-  // A phone opens on what is unread and the newest few, and shows older ones a page at a time.
-  const phone = useViewport() === "phone";
+  // The feed opens on what is unread and the newest few, and shows older ones a page at a time.
   const [older, setOlder] = useState(0);
 
   const readAll = async () => {
@@ -63,10 +62,17 @@ export function NotificationFeed({ organisation, limit, onNavigate, compact = fa
             <Empty icon="notifications" title="Nothing needs you" className={compact ? "p-4" : undefined}>
               Verdicts waiting, approvals, hires, budgets running low and anything that breaks appear here.
             </Empty>
+          ) : limit !== undefined ? (
+            // The bell's popover: the few that matter most, in the server's order (what is unread first).
+            <ul aria-label="Notifications" className="flex flex-col divide-y overflow-hidden rounded-sm border bg-surface">
+              {view.data.notifications.slice(0, limit).map((n) => (
+                <Row key={n.id} organisation={organisation} item={n} onNavigate={onNavigate} compact />
+              ))}
+            </ul>
           ) : (
-            <PagedRows items={view.data.notifications.slice(0, limit)} paged={phone && limit === undefined} older={older} onOlder={() => setOlder((n) => n + PHONE_PAGE)}>
+            <Feed items={view.data.notifications} older={older} onOlder={() => setOlder((n) => n + PHONE_PAGE)}>
               {(n) => <Row key={n.id} organisation={organisation} item={n} onNavigate={onNavigate} />}
-            </PagedRows>
+            </Feed>
           )}
         </>
       )}
@@ -74,16 +80,25 @@ export function NotificationFeed({ organisation, limit, onNavigate, compact = fa
   );
 }
 
-function PagedRows({ items, paged, older, onOlder, children }: { items: NotificationItem[]; paged: boolean; older: number; onOlder: () => void; children: (n: NotificationItem) => ReactNode }) {
-  const shown = paged ? phoneShown(items, older) : items;
+/**
+ * The whole feed, by day: every unread notice and the newest ten, at every size, then older ones ten
+ * at a time — so thirty notices are never one 6,000-pixel column (real-stack 21).
+ */
+function Feed({ items, older, onOlder, children }: { items: NotificationItem[]; older: number; onOlder: () => void; children: (n: NotificationItem) => ReactNode }) {
+  const shown = phoneShown(items, older);
   const hidden = items.length - shown.length;
   return (
     <>
-      <ul aria-label="Notifications" className="flex flex-col gap-2">
-        {shown.map(children)}
+      <ul aria-label="Notifications" className="flex flex-col gap-5">
+        {byDay(shown).map((group) => (
+          <li key={group.day} className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold text-ink-muted">{group.day}</h2>
+            <ul className="flex flex-col divide-y overflow-hidden rounded-md border bg-surface shadow-card">{group.items.map(children)}</ul>
+          </li>
+        ))}
       </ul>
       {hidden > 0 && (
-        <Button variant="soft" className="w-full" onClick={onOlder}>
+        <Button variant="soft" className="self-center" onClick={onOlder}>
           Show older ({formatNumber(Math.min(hidden, PHONE_PAGE))} of {formatNumber(hidden)})
         </Button>
       )}
@@ -91,7 +106,11 @@ function PagedRows({ items, paged, older, onOlder, children }: { items: Notifica
   );
 }
 
-function Row({ organisation, item, onNavigate }: { organisation: string; item: NotificationItem; onNavigate?: () => void }) {
+/**
+ * One notice. Unread is said one way only: a dot before it (and its title in bold); a read notice has
+ * neither. Its kind is one tag, the time sits in one place, and "Mark read" is a quiet action at the end.
+ */
+function Row({ organisation, item, onNavigate, compact = false }: { organisation: string; item: NotificationItem; onNavigate?: () => void; compact?: boolean }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   const [markRead] = useMarkReadMutation();
   const [problem, setProblem] = useState<string | null>(null);
@@ -99,6 +118,8 @@ function Row({ organisation, item, onNavigate }: { organisation: string; item: N
   // An answered notice is settled: its title already says what happened, so it is never new and has nothing to mark (D40).
   const unread = !item.read && !item.resolved;
   const settled = settledLabel(item);
+  // Narrow (a phone, or the bell's popover), the time and "Mark read" end the tag line instead of taking a column.
+  const inline = useViewport() === "phone" || compact;
   const read = async () => {
     setProblem(null);
     try {
@@ -112,41 +133,64 @@ function Row({ organisation, item, onNavigate }: { organisation: string; item: N
       data-notification={item.id}
       data-read={item.read || item.resolved}
       data-resolved={item.resolved}
-      className={cn("flex min-w-0 flex-col gap-1.5 rounded-sm border px-4 py-3", !unread ? "bg-surface" : item.severity === "urgent" ? "border-attention-line bg-attention-wash" : "border-primary-line bg-primary-tint")}
+      className={cn("grid min-w-0 gap-x-3 gap-y-1 py-3", inline ? "grid-cols-dot-grow" : "grid-cols-dot-grow-end", compact ? "px-3" : "px-4 sm:px-5")}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={item.resolved ? "quiet" : item.severity === "urgent" ? "attention-strong" : "primary"}>{lines.kind}</Badge>
-        {unread && <span className="text-xs font-semibold text-ink">New</span>}
-        {item.resolved && <Badge tone={settled === "Closed" ? "quiet" : "success"}>{settled}</Badge>}
-        <span className="ml-auto text-xs text-ink-muted">{timeAgo(item.createdAt)}</span>
-      </div>
-      <Link
-        href={notificationHref(item)}
-        onClick={() => {
-          if (unread) void read();
-          onNavigate?.();
-        }}
-        className={cn("break-words hover:text-primary-hover", TAP, item.resolved ? "font-medium text-ink-body" : "font-semibold text-ink")}
-      >
-        {lines.title}
-      </Link>
-      {lines.line && <p className="line-clamp-2 break-words text-sm text-ink-body">{lines.line}</p>}
-      <div className="flex flex-wrap items-center gap-x-3">
-        {unread && (
-          <Button size="sm" variant="ghost" className="px-0" onClick={() => void read()}>
-            Mark read
-          </Button>
+      <span className={cn("mt-2 size-2 rounded-full", unread ? "bg-primary" : "bg-transparent")}>{unread && <span className="sr-only">Unread</span>}</span>
+      <div className="flex min-w-0 flex-col gap-1">
+        <Link
+          href={notificationHref(item)}
+          onClick={() => {
+            if (unread) void read();
+            onNavigate?.();
+          }}
+          className={cn("break-words hover:text-primary-hover", TAP, unread ? "font-semibold text-ink" : "font-medium text-ink-body")}
+        >
+          {lines.title}
+        </Link>
+        {lines.line && <p className="break-words text-sm text-ink-body">{lines.line}</p>}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-0.5">
+          <Badge tone={!item.resolved && item.severity === "urgent" ? "warn" : "neutral"}>{lines.kind}</Badge>
+          {item.resolved && <Badge tone={settled === "Closed" ? "neutral" : "good"}>{settled}</Badge>}
+          {item.emailedAt && <span className="text-xs text-ink-muted">Also e-mailed</span>}
+          {technical && <code className="font-mono text-xs text-ink-muted">{item.kind}</code>}
+          {technical && lines.technical && <code className="basis-full break-all font-mono text-xs text-ink-muted">{lines.technical}</code>}
+          {/* Narrow, the time and "Mark read" end this line instead of taking a column of their own. */}
+          {inline && (
+            <span className="ml-auto flex items-center gap-1">
+              <Time at={item.createdAt} />
+              {unread && <MarkRead onClick={() => void read()} />}
+            </span>
+          )}
+        </div>
+        {problem && (
+          <p role="alert" className="text-sm text-attention-text">
+            {problem}
+          </p>
         )}
-        {item.emailedAt && <span className="text-xs text-ink-muted">Also e-mailed</span>}
-        {technical && <code className="font-mono text-xs text-ink-muted">{item.kind}</code>}
-        {technical && lines.technical && <code className="break-all font-mono text-xs text-ink-muted">{lines.technical}</code>}
       </div>
-      {problem && (
-        <p role="alert" className="text-sm text-attention-text">
-          {problem}
-        </p>
+      {!inline && (
+        <div className="flex flex-col items-end gap-0.5">
+          <Time at={item.createdAt} />
+          {unread && <MarkRead onClick={() => void read()} />}
+        </div>
       )}
     </li>
+  );
+}
+
+function Time({ at }: { at: string }) {
+  return (
+    <time dateTime={at} title={at} className="whitespace-nowrap pt-0.5 text-xs text-ink-muted">
+      {timeAgo(at)}
+    </time>
+  );
+}
+
+function MarkRead({ onClick }: { onClick: () => void }) {
+  return (
+    <Button size="sm" variant="ghost" className="-mr-2 px-2 text-primary-link hover:text-primary-hover" onClick={onClick}>
+      Mark read
+    </Button>
   );
 }
 
