@@ -16,7 +16,7 @@ export function useMasonry<T>(items: readonly T[], key: (item: T) => string, est
   const [heights, setHeights] = useState<Record<string, number>>({});
   const observed = useRef(new Map<string, HTMLElement>());
   const observer = useRef<ResizeObserver | null>(null);
-  const settled = useRef<{ signature: string; count: number } | null>(null);
+  const [floor, setFloor] = useState<{ signature: string; count: number } | null>(null);
 
   useLayoutEffect(() => {
     const el = container.current;
@@ -69,9 +69,9 @@ export function useMasonry<T>(items: readonly T[], key: (item: T) => string, est
   // Fewer, wider columns draw each division shorter, which could argue for more columns again: for one width and one set
   // of items the count only ever falls, so the layout settles instead of flipping between two answers.
   const signature = `${width}|${items.map(key).join(",")}`;
-  const kept = settled.current;
-  const count = kept && kept.signature === signature ? Math.min(kept.count, best.count) : best.count;
-  settled.current = { signature, count };
+  const count = floor && floor.signature === signature ? Math.min(floor.count, best.count) : best.count;
+  // Kept from render to render (React's "information from previous renders"): set only when it changes, so it settles.
+  if (!floor || floor.signature !== signature || floor.count !== count) setFloor({ signature, count });
   const tallFirst = count === best.count ? best.tallFirst : false;
   const columns = placeInColumns(tallFirst ? byHeight(items, height) : items, count, height, gap);
   return { container, columns, measure };

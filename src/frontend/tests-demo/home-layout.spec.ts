@@ -171,8 +171,8 @@ for (const [width, height] of [
       expect(tops).toHaveLength(5);
       expect(new Set(tops).size, `figure values ${tops.join(", ")}`).toBe(1);
       const used = await hero.evaluate((h) => {
-        const grid = h.querySelector("[data-org-figures]")!.getBoundingClientRect();
-        return grid.width / h.getBoundingClientRect().width;
+        const grid = h.querySelector("[data-org-figures]")?.getBoundingClientRect();
+        return (grid?.width ?? 0) / h.getBoundingClientRect().width;
       });
       expect(used, "the figures huddle at the left of the hero").toBeGreaterThan(0.8);
     });
