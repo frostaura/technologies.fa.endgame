@@ -1,4 +1,4 @@
-import { act, cleanup, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { modeSet } from "@/store/uiSlice";
 import { FakeEventSource, ME, json, renderWithStore, stubApi } from "@/test/harness";
@@ -166,7 +166,9 @@ describe("RunView after the real-stack walk", () => {
   it("D15: a re-run's You row says the change that was asked for", async () => {
     await open();
     feed([["message", { from: "owner", text: "A pager for: on-call teams", change: "Make it for small clinics instead" }]]);
-    expect(screen.getByText("Make it for small clinics instead")).toBeTruthy();
+    // Said under the heading as the request, and in the steps as what the owner asked.
+    expect(screen.getByTestId("run-request").textContent).toBe("Make it for small clinics instead");
+    expect(within(screen.getByRole("list", { name: "Steps" })).getByText("Make it for small clinics instead")).toBeTruthy();
   });
 
   it("D19 + D20: a build declined at its start reads as declined, is not scored, shows the note and offers Try again", async () => {

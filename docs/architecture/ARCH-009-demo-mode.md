@@ -140,6 +140,7 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `s3-change-running`, `s3-change-failed` | A change to Court booking playing from its estimate; one whose check of what worked before still fails after its repairs | |
 | `s3-stage-rules` | Learning's build stage asks before `docs/app.md` changes and refuses `docs/decisions.md` | |
 | `s3-suggestions`, `s3-employee-paused` | Two open ideas from the portfolio, one taken, one set aside; Kasper paused, so Court booking takes no new work | |
+| `run-long` | A long build that did not succeed, shaped like the longest real run: about 2,000 events and 430 actions, a request cut at 120 characters, a part sent back three times (`world/longRun.ts`; the run page is designed and measured against it) | |
 
 Scenarios are kept one file per flow file, `world/scenarios.s<n>.ts`, each registered by one
 side-effect import in `host.ts`. Not in `scenarios.ts`: a scenario file calls its `defineScenario`,

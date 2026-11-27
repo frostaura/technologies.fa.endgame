@@ -14,7 +14,18 @@ import { declinedByOwner, describeEvent, evaluationDetail, formatCredits, num, r
 export interface TimelineStep extends TraceStep {
   kind: "step";
   key: string;
+  /** The part of the plan it belongs to ({@link PART_START} before the parts, {@link PART_FINISH} after them). */
+  part?: string;
+  /** How many identical lines in a row this one stands for (shown "×n"). */
+  repeat?: number;
+  /** The tasks this one line made, when several were made at once. */
+  tasks?: string[];
 }
+
+/** The work before the plan's parts: placing it, hiring, planning. */
+export const PART_START = "\u0000start";
+/** The work after the plan's parts: the security review, publishing, the end. */
+export const PART_FINISH = "\u0000finish";
 
 export interface TimelineGroup {
   kind: "group";
@@ -30,6 +41,7 @@ export interface TimelineGroup {
   /** Web searches it made. */
   searches: number;
   items: TimelineItem[];
+  part?: string;
 }
 
 export type TimelineItem = TimelineStep | TimelineGroup;
@@ -87,8 +99,11 @@ export function groupTitle(agent: string, p: Record<string, unknown>): string {
   if (AGENT_TITLES[agent]) return AGENT_TITLES[agent];
   const sub = agent.match(/sub-(\d+)$/)?.[1];
   if (sub) return `A contractor's piece of the work (${sub})`;
+  // A factory agent's id ("evaluator-dive-signups-api-0-recheck") is never read out as words: it is named for its role.
+  if (/^evaluator-/.test(agent)) return "Checked the work";
+  if (/^builder-/.test(agent)) return "Built part of the work";
   const words = agent.replace(/^contractor-/, "").replace(/[-_.]+/g, " ").trim();
-  return words ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : "A contractor's piece of the work";
+  return words && !/\d/.test(words) ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : "A contractor's piece of the work";
 }
 
 /** What a reply came back with, in one line — the headline of a JSON report, or its first sentence. */
@@ -98,6 +113,11 @@ export function outcomeOf(text: string): string {
   if (start >= 0 && end > start) {
     try {
       const report = JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
+      // A check's bare verdict ({"passed":false}) is said, never shown as it was written.
+      if (typeof report.passed === "boolean" && Object.keys(report).every((k) => k === "passed" || k === "findings")) {
+        const found = Array.isArray(report.findings) ? report.findings.length : 0;
+        return report.passed ? "Found it works" : found > 0 ? `Found ${plural(found, "problem")}` : "Found it does not work yet";
+      }
       const headline = str(report, "headline") ?? str(report, "title");
       if (headline) return firstSentence(headline, 140);
       if (Array.isArray(report.findings)) return `Reported ${plural(report.findings.length, "finding")}`;
@@ -150,12 +170,12 @@ export function factoryAgentTitle(agent: string, planItem: (id: string) => strin
   if (agent === "builder-security-docs") return "Corrected what the app’s documents say, at no charge";
   const review = agent.match(/^security-reviewer-(\d+)$/);
   if (review) return review[1] === "0" ? "Reviewed the app for misuse of the platform" : "Reviewed the fixes";
-  const part = agent.match(/^(builder|evaluator)-(.+)-(\d+)$/);
+  const part = agent.match(/^(builder|evaluator)-(.+)-(\d+)(?:-([a-z]+))?$/);
   if (part) {
     const label = planItem(part[2] ?? "");
     if (!label) return null;
-    if (part[1] === "evaluator") return named("Checked", label);
-    return named(part[3] === "0" ? "Built" : "Rebuilt after a check", label);
+    if (part[1] === "evaluator") return named(part[4] ? "Checked again, by a second checker" : "Checked", label);
+    return named(part[3] === "0" && !part[4] ? "Built" : "Rebuilt after a check", label);
   }
   return null;
 }
@@ -167,6 +187,7 @@ const UNDER_WAY: [RegExp, string][] = [
   [/^Rebuilt after a check/, "Rebuilding after a check"],
   [/^Built:/, "Building:"],
   [/^Built /, "Building "],
+  [/^Checked again, by a second checker/, "Checking again, by a second checker"],
   [/^Checked:/, "Checking:"],
   [/^Checked /, "Checking "],
   [/^Reviewed /, "Reviewing "],
@@ -398,8 +419,37 @@ interface Container {
   activity: Activity | null;
 }
 
-export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem: (id: string) => string | null = () => null): Timeline {
+/**
+ * Which part of the plan an event moves the work into, or null when it stays where it is: a factory agent named for a part
+ * (`builder-<item>-0`, `evaluator-<item>-1-recheck`), a check of a part, a part's task taken on; the security review and
+ * publishing are the work after the parts. Creating a part's task does not move it: every task is created with the plan.
+ */
+export function partOf(e: RunEvent, parts: readonly { id: string; text: string }[]): string | null {
+  if (parts.length === 0) return null;
+  const p = e.payload ?? {};
+  const agent = str(p, "agent") ?? (e.type === "subagent.started" ? str(p, "subagent") : null);
+  if (agent) {
+    if (/^(security-reviewer|builder-security)/.test(agent)) return PART_FINISH;
+    const named = agent.match(/^(?:builder|evaluator)-(.+)-\d+(?:-[a-z]+)?$/)?.[1];
+    if (named && parts.some((x) => x.id === named)) return named;
+  }
+  if (e.type === "evaluation.passed" || e.type === "evaluation.failed") {
+    const item = str(p, "item");
+    const hit = parts.find((x) => x.id === item || x.text === item);
+    if (hit) return hit.id;
+  }
+  if (e.type === "task.claimed") {
+    const summary = (str(p, "summary") ?? str(p, "title") ?? "").replace(/^Check: /, "");
+    const hit = parts.find((x) => x.text === summary);
+    if (hit) return hit.id;
+  }
+  if (e.type === "message" && (str(p, "from") === "security-reviewer" || /^(published|security)/.test(str(p, "milestone") ?? ""))) return PART_FINISH;
+  return null;
+}
+
+export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem: (id: string) => string | null = () => null, parts: readonly { id: string; text: string }[] = []): Timeline {
   const technical = mode === "technical";
+  let part = PART_START;
   const top: Container = { items: [], activity: null };
   const groups = new Map<string, { group: TimelineGroup; container: Container }>();
   const said = new Set<string>();
@@ -423,7 +473,7 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
   function ensureGroup(agent: string, parent: string, p: Record<string, unknown>, e: RunEvent | null) {
     const existing = groups.get(agent);
     if (existing) return existing;
-    const group: TimelineGroup = { kind: "group", key: `group-${agent}`, agent, seq: e?.seq ?? 0, at: e?.at ?? "", title: groupTitle(agent, p), outcome: null, status: "working", credits: 0, searches: 0, items: [] };
+    const group: TimelineGroup = { kind: "group", key: `group-${agent}`, agent, seq: e?.seq ?? 0, at: e?.at ?? "", title: groupTitle(agent, p), outcome: null, status: "working", credits: 0, searches: 0, items: [], part };
     const entry = { group, container: { items: group.items, activity: null } };
     groups.set(agent, entry);
     const host = parent === agent ? top : containerOf(parent);
@@ -441,7 +491,7 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
     }
     const c = containerOf(owner);
     c.activity = null;
-    c.items.push({ ...step, kind: "step", key });
+    c.items.push({ ...step, kind: "step", key, part });
   };
 
   const opened: Activity[] = [];
@@ -449,6 +499,7 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
     const c = containerOf(owner);
     if (!c.activity) {
       c.activity = newActivity(e);
+      c.activity.step.part = part;
       opened.push(c.activity);
       c.items.push(c.activity.step);
     }
@@ -467,6 +518,12 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
     const p = e.payload ?? {};
     const owner = ownerOf(p);
     const kind = e.type === "message" ? str(p, "kind") : null;
+    const moved = partOf(e, parts);
+    if (moved && moved !== part) {
+      part = moved;
+      // A new part starts its own lines: the summary of what came before it is closed.
+      top.activity = null;
+    }
 
     // Counts first: accurate whatever is drawn.
     if (e.type === "model.replied") modelCalls += 1;
@@ -621,14 +678,53 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
       group.title = factoryAgentTitle(group.agent, planItem) ?? group.title;
       if (!isPlain(group.title)) group.title = "A contractor's piece of the work";
       if (group.status === "working") group.title = underWay(group.title);
+      // A builder's reply names its part by the plan's id ("the claim-seat item"): it is said as the part.
+      for (const x of parts) if (group.outcome && /[-_]/.test(x.id)) group.outcome = group.outcome.split(`the ${x.id} item`).join("the part").split(x.id).join("the part");
       group.outcome = plainOrNull(group.outcome);
     }
+  }
+
+  if (!technical) {
+    top.items = gatherRepeats(top.items);
+    for (const { group } of groups.values()) group.items.splice(0, group.items.length, ...gatherRepeats(group.items));
   }
 
   // Older research runs wrote their strands as workflow agents, never as `subagent.started`: each counts as one.
   const briefed = subagents > 0 ? subagents : [...groups.values()].length;
   return { items: top.items, actions: toolCalls + briefed, modelCalls: modelCalls > 0 ? modelCalls : replies, toolCalls, denials, declined };
 }
+
+/**
+ * The same line said again and again in a row is one line, counted ("Checked again ×6"); and the tasks a plan makes all at
+ * once ("New task: …" for every part) are one line that names them, not one line each.
+ */
+export function gatherRepeats(items: TimelineItem[]): TimelineItem[] {
+  const out: TimelineItem[] = [];
+  for (const item of items) {
+    const last = out.at(-1);
+    if (item.kind === "step" && last?.kind === "step" && last.part === item.part) {
+      if (last.title === item.title && last.detail === item.detail) {
+        out[out.length - 1] = { ...last, repeat: (last.repeat ?? 1) + 1, at: item.at };
+        continue;
+      }
+      // A task made and at once taken on is one line: who took it on says it exists.
+      const taken = item.title.match(/^(?:.+ took on|Taken on): (.+)$/)?.[1];
+      if (taken && last.title === `${NEW_TASK}${taken}`) {
+        out[out.length - 1] = item;
+        continue;
+      }
+      if (item.title.startsWith(NEW_TASK) && (last.tasks || last.title.startsWith(NEW_TASK))) {
+        const tasks = [...(last.tasks ?? [last.title.slice(NEW_TASK.length)]), item.title.slice(NEW_TASK.length)];
+        out[out.length - 1] = { ...last, title: `${formatNumber(tasks.length)} new tasks`, detail: tasks.join("\n"), tasks, at: item.at };
+        continue;
+      }
+    }
+    out.push(item);
+  }
+  return out;
+}
+
+const NEW_TASK = "New task: ";
 
 /**
  * The actions a run took, when it took any: a conversation that only talked has steps but no actions (D15). What a rule

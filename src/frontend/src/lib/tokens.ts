@@ -253,7 +253,21 @@ export const layout = {
   /** The narrowest a labelled field may be squeezed to in a row beside its button; below it the row wraps. */
   field: "12rem",
   /** Grid tracks: a chart's label column beside its bars; a table of figures with a name column. */
-  columns: { "chart-row": "minmax(3rem, 9rem) minmax(0, 1fr)", "name-figures": "minmax(0, 2fr) repeat(4, minmax(0, 1fr))" },
+  columns: {
+    "chart-row": "minmax(3rem, 9rem) minmax(0, 1fr)",
+    "name-figures": "minmax(0, 2fr) repeat(4, minmax(0, 1fr))",
+    /** A run's timeline row: mark | who and what | time over cost (a phone) … */
+    step: "2rem minmax(0, 1fr) 4.75rem",
+    /** … and mark | who and what | cost | time, the same two right-hand columns on every row. */
+    "step-wide": "2rem minmax(0, 1fr) 6.5rem 5.25rem",
+    /** A run page from 1600: the steps, and the plan beside them. */
+    "run-wide": "minmax(0, 1fr) minmax(0, 32rem)",
+    /** A numbered item with its tag: number | words, and on a wide card | tag. */
+    numbered: "1.75rem minmax(0, 1fr)",
+    "numbered-tagged": "1.75rem minmax(0, 1fr) auto",
+    /** One task on one line: its state | what it is | who has it | the way to more. */
+    task: "7.25rem minmax(0, 1fr) auto 1rem",
+  },
   /** Where the org chart's connecting wire sits under a division's badge. */
   wireInset: "39px",
 } as const;

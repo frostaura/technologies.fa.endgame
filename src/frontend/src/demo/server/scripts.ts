@@ -746,7 +746,7 @@ function pipeline(s: Script, world: World, run: DemoRun, o: Pipeline) {
           const a = appAt(w, appPath);
           if (a && prefix === "build") Object.assign(a, { status: "draft", running: "starting", health: "unknown", healthSummary: "Never published: the build did not succeed." });
           const what = item.text.replace(/\.$/, "");
-          stop(w, r, `"${what}" still did not work after 3 rounds of repair, each on a stronger model, so the app was not ${prefix === "change" ? "changed" : "published"}. Its work so far is saved and the repairs were not charged; “Try again” carries on from it.`, `'${item.detail.slice(0, 80)}' still failed its check after 3 repair rounds: ${fault.fault}`);
+          stop(w, r, `"${what}" still did not work after 3 rounds of repair, each on a stronger model, so the app was not ${prefix === "change" ? "changed" : "published"}. Its work so far is saved and the repairs were not charged; “Try again” carries on from it.`, `'${item.detail}' still failed its check after 3 repair rounds: ${fault.fault}`);
           return ["Tasks", "Tree", "App", "Run", "Idea"];
         }, `${prefix}:failed`);
         failed = true;

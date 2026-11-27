@@ -88,7 +88,10 @@ describe("RunView", () => {
     expect(screen.getByText("Waiting for you")).toBeTruthy();
     expect(screen.getAllByText("Argue against it first.").length).toBe(2);
     expect(screen.getByText("Passed its check")).toBeTruthy();
-    expect(screen.getByText("Checked and passed: Name the competitors")).toBeTruthy();
+    // The steps are gathered under the part they are for, which names it once; its lines say "this part".
+    const part = screen.getByRole("list", { name: "Steps: Part 1 of 1" });
+    expect(part.closest("[data-part]")?.textContent).toContain("Name the competitors");
+    expect(within(part).getByText("Checked and passed: this part")).toBeTruthy();
     const tasks = screen.getByRole("list", { name: "Tasks" });
     expect(within(tasks).getByText("In progress")).toBeTruthy();
     expect(screen.getByText("3 credits")).toBeTruthy();
@@ -125,7 +128,7 @@ describe("RunView", () => {
     expect(within(plan).getByText("Keep the club's books and who added each")).toBeTruthy();
     expect(within(plan).getByText("Part 2 of 2 of the plan")).toBeTruthy();
     expect(plan.textContent).not.toMatch(/\.cs|\.tsx|make test|make lint|migration/);
-    expect(screen.getByText("Checked and passed: Part 2 of 2 of the plan")).toBeTruthy();
+    expect(within(screen.getByRole("list", { name: "Steps: Part 2 of 2" })).getByText("Checked and passed: this part")).toBeTruthy();
     expect(screen.getByRole("list", { name: "Steps" }).textContent).not.toMatch(/\.tsx|Vitest|make /);
 
     act(() => void store.dispatch(modeSet("technical")));
@@ -167,6 +170,9 @@ describe("RunView", () => {
     store.dispatch(modeSet("technical"));
     await screen.findByRole("heading", { name: "Researching Pager" });
     feed(SCRIPT);
+    // A folded part draws none of its hundreds of technical lines until it is opened.
+    expect(screen.queryByText("Model call: vendor/small for research")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Getting ready/ }));
     expect(screen.getByText("Model call: vendor/small for research")).toBeTruthy();
     expect(screen.getByText("Denied: shell.exec")).toBeTruthy();
     expect(screen.getByText("Rule: protected floor")).toBeTruthy();
