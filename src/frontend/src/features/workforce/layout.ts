@@ -5,4 +5,4 @@ export const CHECK_ROW = "flex min-h-touch cursor-pointer items-center gap-3 rou
 export const CHECK_BOX = "size-5 shrink-0 accent-primary";
 
 /** A text area that grows with what is written, so it always shows whole lines, up to a screenful. */
-export const GROWING = "min-h-24 max-h-96 leading-relaxed [field-sizing:content]";
+export const GROWING = "!min-h-24 max-h-96 leading-relaxed [field-sizing:content]";

@@ -191,7 +191,8 @@ function EmployeeBody({ detail, tree }: { detail: EmployeeDetail; tree: Tree | u
         {actions.buttons}
       </header>
 
-      {actions.panel}
+      {/* The chosen action's panel, under the header (on a phone too, before the conversation's launcher). */}
+      <div className="flex flex-col gap-4 empty:hidden max-sm:-order-2">{actions.panel}</div>
 
       <StatRow cols={4} label="Track record" className={cn(RISE, stagger(1))}>
         <Stat

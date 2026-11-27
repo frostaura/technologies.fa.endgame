@@ -57,7 +57,9 @@ describe("PeopleView", () => {
     stub(json(MEMBERS));
     renderWithStore(<PeopleView />);
     const list = await screen.findByRole("list", { name: "People" });
-    const kit = list.querySelector('[data-member="kit@example.test"]') as HTMLElement;
+    // Someone with no passkey yet is an invitation waiting, grouped under the people who hold a role.
+    const kit = screen.getByRole("list", { name: "Invitations" }).querySelector('[data-member="kit@example.test"]') as HTMLElement;
+    expect(list.querySelector('[data-member="kit@example.test"]')).toBeNull();
     expect(within(kit).getByText("Set at Tools")).toBeTruthy();
     expect(within(kit).getByText(/No passkey yet/)).toBeTruthy();
     expect(within(list.querySelector('[data-member="o@example.test"]') as HTMLElement).getAllByText("Owner").length).toBe(2);
@@ -122,7 +124,7 @@ describe("PeopleView", () => {
     const list = await screen.findByRole("list", { name: "People" });
     const owner = list.querySelector('[data-member="o@example.test"]') as HTMLElement;
     expect(within(owner).getByText("Set at Acme")).toBeTruthy();
-    expect(within(list.querySelector('[data-member="kit@example.test"]') as HTMLElement).getByText("Set here")).toBeTruthy();
+    expect(within(screen.getByRole("list", { name: "Invitations" }).querySelector('[data-member="kit@example.test"]') as HTMLElement).getByText("Set here")).toBeTruthy();
     window.history.replaceState(null, "", "/");
   });
 
@@ -149,7 +151,7 @@ describe("PeopleView", () => {
     });
     const { store } = renderWithStore(<PeopleView />);
     const list = await screen.findByRole("list", { name: "People" });
-    const kit = list.querySelector('[data-member="kit@example.test"]') as HTMLElement;
+    const kit = screen.getByRole("list", { name: "Invitations" }).querySelector('[data-member="kit@example.test"]') as HTMLElement;
     expect(within(kit).getByText(/No passkey yet: their code works until/)).toBeTruthy();
     expect(screen.getByText(/It works for 7 days; a new one can be sent from their row./)).toBeTruthy();
     // The Owner, who has a passkey, has no such control.
