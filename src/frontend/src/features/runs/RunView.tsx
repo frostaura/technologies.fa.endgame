@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { ConfirmCard } from "@/components/ui/confirm";
 import { Disclosure, Fold } from "@/components/Fold";
@@ -80,25 +80,6 @@ const TONE_CLASS: Record<StepTone, string> = {
  * time and the cost are one quiet line under them (`MetaLine`), rather than a column that leaves the words a third of it.
  */
 const ROW = "grid grid-cols-lead-grow items-start gap-x-3 sm:grid-cols-step-wide";
-
-/** The page's own width at which the plan stands beside the steps: room for the steps' grid and the plan's 32rem. */
-const SPLIT_AT = 1180;
-
-/** Whether an element's own box is at least `px` wide, kept as it resizes. */
-function useBoxWider(ref: RefObject<HTMLElement | null>, px: number): boolean {
-  const [wider, setWider] = useState(false);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => setWider(el.getBoundingClientRect().width >= px);
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, px]);
-  return wider;
-}
 
 /** A media query as state: the side panel is beside the page only where the page keeps room for itself. */
 function useMinWidth(px: number): boolean {
@@ -204,8 +185,6 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
   // cost (spentCredits); the run's figure stands in until the log has caught up.
   const spent = log.events.length > 0 && caughtUp ? derived.settledCredits : run.spentCredits;
   const request = useMemo(() => fullRequest(run.title, log.events), [run.title, log.events]);
-  const split = useRef<HTMLDivElement>(null);
-  const wide = useBoxWider(split, SPLIT_AT);
 
   const act = async (action: "pause" | "resume" | "cancel") => {
     setControlError(null);
@@ -282,7 +261,7 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
     ) : null;
   const cost = (
     <div className="flex flex-col gap-2">
-      <CostPanel estimate={estimate} planned={planned} spent={spent} reserved={terminal ? 0 : derived.reservedCredits} scored={derived.scored} notCharged={derived.notCharged} declined={declined} finished={terminal} narrow={wide} />
+      <CostPanel estimate={estimate} planned={planned} spent={spent} reserved={terminal ? 0 : derived.reservedCredits} scored={derived.scored} notCharged={derived.notCharged} declined={declined} finished={terminal} />
       <CreditsNote />
     </div>
   );
@@ -346,30 +325,18 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
       <Approvals runId={run.id} approvals={derived.approvals} />
 
       {/* Where the page has the room, two columns: how it ended and the steps at the left, the figures and the plan at the
-          right; narrower, one column in that order of reading. The room is the page's own width, measured, not the window's:
-          beside the docked conversation a 1920 window leaves the page far less. */}
-      <div ref={split} data-split={wide || undefined} className={cn("flex flex-col gap-6", wide && "grid grid-cols-run-wide items-start")}>
-        {wide ? (
-          <>
-            <div className="col-start-1 row-start-1 flex min-w-0 flex-col gap-6">
-              {endCard}
-              {trace}
-            </div>
-            <div className="col-start-2 row-start-1 flex min-w-0 flex-col gap-6">
-              {cost}
-              {plan}
-              {inline && tasks}
-            </div>
-          </>
-        ) : (
-          <>
-            {endCard}
-            {cost}
-            {plan}
-            {inline && tasks}
-            {trace}
-          </>
-        )}
+          right; narrower, one column in that order of reading (the order of the markup, so a keyboard and a screen reader
+          follow it too). The room is the page column's own width — the container query `page-split:` (`pageAt.split`), not
+          the window's: beside the docked conversation a 1920 window leaves the page far less. The rows are "auto, then the
+          rest": the right-hand column spans both, so how it ended sits straight on the steps under it, with no gap. */}
+      <div data-split="" className="flex flex-col gap-6 page-split:grid page-split:grid-cols-run-wide page-split:grid-rows-lead-rest page-split:items-start">
+        {endCard && <div className="flex min-w-0 flex-col page-split:col-start-1 page-split:row-start-1">{endCard}</div>}
+        <div data-split-side="" className="flex min-w-0 flex-col gap-6 page-split:col-start-2 page-split:row-span-2 page-split:row-start-1">
+          {cost}
+          {plan}
+          {inline && tasks}
+        </div>
+        <div className={cn("flex min-w-0 flex-col page-split:col-start-1", endCard ? "page-split:row-start-2" : "page-split:row-span-2 page-split:row-start-1")}>{trace}</div>
       </div>
     </>
   );
@@ -493,7 +460,7 @@ function StoppedPanel({ run, derived, declined }: { run: Run; derived: DerivedRu
   );
 }
 
-function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, declined, finished, narrow = false }: { estimate: number | null; planned: number | null; spent: number; reserved: number; scored: { estimated: number; actual: number } | null; notCharged: number; declined: boolean; finished: boolean; narrow?: boolean }) {
+function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, declined, finished }: { estimate: number | null; planned: number | null; spent: number; reserved: number; scored: { estimated: number; actual: number } | null; notCharged: number; declined: boolean; finished: boolean }) {
   const replanned = planned !== null && estimate !== null && Math.abs(planned - estimate) >= 0.005 ? planned : null;
   // Spending is held against the latest figure: the plan's, once there is one.
   const against = replanned ?? estimate;
@@ -521,8 +488,8 @@ function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, dec
   const scoredWord = scored ? accuracy(scored.estimated, scored.actual) : null;
   // Four slots, always, in the same order: what was estimated, what is spent, the third figure (held now; scored once done), and what was not charged.
   return (
-    // Two by two in the side column of a wide page (and on a phone); four across in a page's full width.
-    <StatRow cols={narrow ? 2 : 4} meters={spentFigure.meter !== null} label="Cost" className={narrow ? undefined : "lg:grid-cols-4"}>
+    // Two by two on a phone and in the side column of a split page (`page-split:`); four across in a page's full width.
+    <StatRow cols={4} meters={spentFigure.meter !== null} label="Cost" className="lg:grid-cols-4 page-split:grid-cols-2">
       {estimateTile}
       <Stat label={spentFigure.label} value={formatCredits(spent)} caption={spentCaption} meter={spentFigure.meter} />
       {scored && scoredWord ? (

@@ -231,9 +231,10 @@ function AppBody({ app }: { app: AppDetail }) {
         </p>
       )}
 
-      {/* From 2000 the two ways to act on it sit side by side, tops aligned, each as tall as what it holds. Below that the
-          page column beside the docked conversation and the side panel is too narrow for two (about 745 px at 1920). */}
-      <div className={cn("grid grid-cols-1 items-start gap-6 max-sm:gap-5", builder && "4xl:grid-cols-2")}>
+      {/* Where the page column has the room for two (`page-wide:`, measured on the page column, not the window: beside the
+          docked conversation and the side panel a 1920 window leaves the page about 900 px, collapsed to its rail 1,380), the
+          two ways to act on it sit side by side, tops aligned, each as tall as what it holds. */}
+      <div className={cn("grid grid-cols-1 items-start gap-6 max-sm:gap-5", builder && "page-wide:grid-cols-2")}>
         {builder && (
           <Fold title={`Change ${app.name}`} summary="Say what to change; it is built in a preview first">
             <ErrorBoundary name="Changing this app">
@@ -253,8 +254,8 @@ function AppBody({ app }: { app: AppDetail }) {
         </ErrorBoundary>
       </Fold>
 
-      {/* History beside Sharing and Secrets only from 2000, for the same reason: at 1536–1999 its rows wrapped in a third of the page. */}
-      <div className="grid grid-cols-1 items-start gap-6 max-sm:gap-5 4xl:grid-cols-2">
+      {/* History beside Sharing and Secrets only where the page column has the same room: narrower, its rows wrapped in a third of the page. */}
+      <div className="grid grid-cols-1 items-start gap-6 max-sm:gap-5 page-wide:grid-cols-2">
         <Fold title="History" summary="Every version, and bringing one back">
           <ErrorBoundary name="The history">
             <History app={app} canRestore={builder} />

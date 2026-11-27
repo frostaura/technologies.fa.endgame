@@ -86,7 +86,8 @@ for (const width of [375, 768, 1024, 1512, 1920, 2560]) {
 
     // Every task is a part's, so there is no side panel; where the page has the room, the plan stands beside the steps.
     await expect(page.getByRole("complementary", { name: "Beside this page" })).toHaveCount(0);
-    const split = await page.locator("[data-split]").count();
+    // The split is the page column's container query (`page-split:`): the frame is always there, a grid only with the room.
+    const split = await page.locator("[data-split]").evaluateAll((els) => els.filter((e) => getComputedStyle(e).display === "grid").length);
     if (width >= 1920) expect(split, "the plan stands beside the steps").toBe(1);
     if (width <= 1512) expect(split).toBe(0);
     if (split) {

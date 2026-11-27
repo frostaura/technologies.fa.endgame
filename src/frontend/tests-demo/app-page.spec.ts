@@ -5,8 +5,8 @@ import { expect, test, type Page } from "@playwright/test";
  * sideways even with long names; the address breaks only after a "/"; "Open the app" is the primary
  * button only when the app can be used; "Save" sits on its field's row; every dashboard tile has its
  * "Take off" at its top right and a single number is a short tile; the side panel's chosen card is
- * unmistakable; a full dashboard opens short; and from 2000 px (beside the docked conversation and the side panel) the
- * page uses a second column.
+ * unmistakable; a full dashboard opens short; and where the page column itself is wide (a container query, so beside the
+ * docked conversation and the side panel as well as with the pane collapsed) the page uses a second column.
  */
 
 const SUB = "/technologies.fa.endgame/demo/index.html";
@@ -184,20 +184,39 @@ for (const size of SIZES) {
       await noSideways(page);
     });
 
-    if (size.width >= 2000) {
-      test("from 2000 px the page uses a second column", async ({ page }) => {
-        await open(page, "app-busy");
-        const change = await page.getByTestId("change-request").boundingBox();
-        const ask = await page.getByRole("region", { name: "Asking about this app" }).boundingBox();
-        expect(change && ask).toBeTruthy();
-        if (change && ask) {
-          expect(Math.abs(change.y - ask.y), "Change and Ask are not side by side").toBeLessThanOrEqual(1);
-          expect(ask.x).toBeGreaterThan(change.x + change.width);
-        }
+    test("the two ways to act on it sit side by side exactly where the page column is wide (60rem), whatever the window", async ({ page }) => {
+      await open(page, "app-busy");
+      await openFolds(page);
+      const room = await page.locator("main").evaluate((m) => {
+        const cs = getComputedStyle(m);
+        return m.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
       });
-    }
+      const change = await page.getByTestId("change-request").boundingBox();
+      const ask = await page.getByRole("region", { name: "Asking about this app" }).boundingBox();
+      expect(change && ask).toBeTruthy();
+      if (change && ask) {
+        const beside = Math.abs(change.y - ask.y) <= 1 && ask.x > change.x + change.width;
+        expect(beside, `the page column is ${room}px`).toBe(room >= 960);
+      }
+    });
   });
 }
+
+test("at 1920 with the conversation collapsed to its rail the page has the room, and uses a second column", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  // The pane's state is remembered per person; start this one collapsed.
+  await page.addInitScript(() => {
+    const get = Storage.prototype.getItem;
+    Storage.prototype.getItem = function (key: string) {
+      return String(key).startsWith("endgame.dock") ? JSON.stringify({ wide: false, collapsed: true }) : get.call(this, key);
+    };
+  });
+  await open(page, "app-busy");
+  await expect(page.locator("[data-dock=collapsed]")).toHaveCount(1);
+  const change = await page.getByTestId("change-request").boundingBox();
+  const ask = await page.getByRole("region", { name: "Asking about this app" }).boundingBox();
+  expect(change && ask && Math.abs(change.y - ask.y) <= 1 && ask.x > change.x + change.width, "Change and Ask are side by side").toBe(true);
+});
 
 /**
  * The demo's hosted app is drawn with the app kit's header (src/appkit/sdk-web/src/ui/layout.tsx): on a phone two rows —
