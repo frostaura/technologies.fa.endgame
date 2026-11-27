@@ -143,5 +143,22 @@ describe("describeEvent", () => {
     expect(describeEvent(e(15, "estimate.scored", { estimated: 60, actual: 54 }), "normal")?.detail).toBe("Estimated 60, cost 54 (10% under)");
     expect(accuracy(100, 117)).toBe("17% over");
     expect(accuracy(50, 50)).toBe("on the estimate");
+    // An estimate under a credit is too small to score as a percentage ("217% over" says nothing).
+    expect(accuracy(0.05, 0.1585)).toBe("under 1 credit, as estimated");
+    expect(accuracy(0.5, 1.4)).toBe("estimated under 1 credit");
+  });
+
+  it("writes a step's credits with the one formatter: never \"1 credits\", never more than two decimals", () => {
+    expect(describeEvent(e(16, "estimate.made", { credits: 1 }), "normal")?.credits).toBe("1 credit");
+    expect(describeEvent(e(17, "estimate.made", { credits: 7.4666 }), "normal")?.credits).toBe("7.47 credits");
+  });
+
+  it("marks an approval with the hand, asked in the waiting tone and answered in the quiet one, never the red shield", () => {
+    const asked = describeEvent(e(18, "approval.requested", { title: "Search the web?" }), "normal");
+    const answered = describeEvent(e(19, "approval.answered", { answer: "approved" }), "normal");
+    const declined = describeEvent(e(20, "tool.denied", { by: "owner", name: "web_search" }), "normal");
+    expect([asked?.icon, asked?.tone]).toEqual(["approval-asked", "approval"]);
+    expect([answered?.icon, answered?.tone]).toEqual(["approval-answered", "quiet"]);
+    expect([declined?.icon, declined?.tone]).toEqual(["approval-answered", "quiet"]);
   });
 });

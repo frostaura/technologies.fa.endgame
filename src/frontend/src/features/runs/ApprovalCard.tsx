@@ -1,5 +1,7 @@
 import { useId, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { StatusTag } from "@/components/ui/alert";
+import { Input } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { describeError } from "@/lib/queryState";
 import { useAppSelector } from "@/store";
@@ -52,9 +54,9 @@ function OpenApproval({ runId, approval, compact }: { runId: string; approval: D
 
   return (
     <div data-testid="approval-card" className={compact ? "flex flex-col gap-2.5 rounded-md border bg-surface px-4 py-3 shadow-card" : "flex flex-col gap-3 rounded-md border bg-surface px-5 py-4 shadow-card"}>
-      <Badge tone="warn" className="self-start">
+      <StatusTag state="approval-asked" className="self-start">
         Needs you
-      </Badge>
+      </StatusTag>
       <p className="text-base font-semibold">{approval.question}</p>
       {approval.detail && <ClampedText className="break-words text-sm text-ink-body">{approval.detail}</ClampedText>}
       {technical && approval.technical && <p className="break-words font-mono text-xs text-ink-body">{approval.technical}</p>}
@@ -69,14 +71,7 @@ function OpenApproval({ runId, approval, compact }: { runId: string; approval: D
             <label htmlFor={noteId} className="text-sm text-ink-body">
               Add a note (optional)
             </label>
-            <input
-              id={noteId}
-              value={note}
-              maxLength={2000}
-              onChange={(e) => setNote(e.target.value)}
-              className="min-h-touch rounded-xs border border-border-field bg-surface px-3"
-              autoComplete="off"
-            />
+            <Input id={noteId} value={note} maxLength={2000} onChange={(e) => setNote(e.target.value)} autoComplete="off" />
           </div>
           {/* On a phone the answer stays in reach above the bottom bar while the card is on screen. */}
           <div className="flex flex-wrap gap-2 max-sm:sticky max-sm:bottom-nav-safe max-sm:z-10 max-sm:-mx-4 max-sm:grid max-sm:grid-cols-2 max-sm:border-t max-sm:bg-surface max-sm:px-4 max-sm:py-2">

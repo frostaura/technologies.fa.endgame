@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { ConfirmCard } from "@/components/ui/confirm";
-import { Fold } from "@/components/Fold";
+import { Disclosure, Fold } from "@/components/Fold";
 import { useViewport } from "@/lib/useViewport";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { Icon } from "@/components/Icon";
@@ -9,10 +9,12 @@ import { Link } from "@/components/Link";
 import { Markdown } from "@/components/Markdown";
 import { Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { Alert, STATES, StatusTag } from "@/components/ui/alert";
 import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
 import { SECTION, SideCard, TITLE, useShowAll } from "@/components/ui/page";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { capitalise, formatCredits, formatDate, headlineCredits, formatNumber, formatTime, percent, plural, share } from "@/lib/format";
+import { capitalise, formatCredits, formatDate, headlineCredits, formatNumber, formatTime, plural, share } from "@/lib/format";
+import { ESTIMATE_FLOOR, spentAgainst } from "@/lib/estimates";
 import { RISE } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
@@ -74,6 +76,8 @@ const TONE_CLASS: Record<StepTone, string> = {
   factory: "bg-ground text-ink-body",
   money: "bg-ground text-ink-body",
   attention: "bg-attention-tint text-attention-text",
+  // A question put to the owner: the waiting tone of an approval (STATES["approval-asked"]), never the alarm.
+  approval: "bg-primary-tint text-primary-hover",
   quiet: "bg-ground text-ink-muted",
 };
 
@@ -197,6 +201,8 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
       // A build or change that finished leads to what it built: the app itself, and its page here (R7-2).
       <BuiltAppActions appId={derived.app.id} />
     ) : !terminal ? (
+      // The confirmation opens under the row that holds "Cancel", in the same column, so it sits under its trigger.
+      <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         {status === "paused" ? (
           <Button onClick={() => void act("resume")} disabled={controlState.isLoading}>
@@ -207,21 +213,21 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
             Pause
           </Button>
         )}
-        {confirmCancel ? (
-          <ConfirmCard
-            label="Confirm cancelling"
-            question="Stop this work for good?"
-            confirm="Yes, cancel it"
-            cancel="Keep going"
-            busy={controlState.isLoading}
-            onConfirm={() => void act("cancel")}
-            onCancel={() => setConfirmCancel(false)}
-          />
-        ) : (
-          <Button variant="secondary" onClick={() => setConfirmCancel(true)} disabled={controlState.isLoading}>
-            Cancel
-          </Button>
-        )}
+        <Button variant="danger-outline" aria-expanded={confirmCancel} onClick={() => setConfirmCancel(true)} disabled={controlState.isLoading}>
+          Cancel
+        </Button>
+      </div>
+      {confirmCancel && (
+        <ConfirmCard
+          label="Confirm cancelling"
+          question="Stop this work for good?"
+          confirm="Yes, cancel it"
+          cancel="Keep going"
+          busy={controlState.isLoading}
+          onConfirm={() => void act("cancel")}
+          onCancel={() => setConfirmCancel(false)}
+        />
+      )}
       </div>
     ) : null;
 
@@ -292,12 +298,12 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
       )}
 
       {(shownOutcome || stopped) && (
-        <EndCard tone={status === "failed" && !declined && !planDeclined ? "bad" : "plain"} outcome={shownOutcome} technical={mode === "technical"}>
+        <EndCard tone={status === "failed" && !declined && !planDeclined && !run.budgetExhausted ? "bad" : "plain"} outcome={shownOutcome} technical={mode === "technical"}>
           {stopped && <StoppedPanel run={run} derived={derived} declined={declined} />}
         </EndCard>
       )}
 
-      <CostPanel estimate={estimate} planned={planned} spent={spent} reserved={terminal ? 0 : derived.reservedCredits} scored={derived.scored} notCharged={derived.notCharged} declined={declined} />
+      <CostPanel estimate={estimate} planned={planned} spent={spent} reserved={terminal ? 0 : derived.reservedCredits} scored={derived.scored} notCharged={derived.notCharged} declined={declined} finished={terminal} />
 
       {/* From 1600 the plan stands beside the steps; narrower, it comes first. */}
       <div className="flex flex-col gap-6 3xl:grid 3xl:grid-cols-run-wide 3xl:items-start">
@@ -414,22 +420,24 @@ function StoppedPanel({ run, derived, declined }: { run: Run; derived: DerivedRu
   const cutOff = (derived.finishedReason ?? run.reason) === ANSWER_CUT_OFF;
   const why = run.budgetExhausted ? "budget" : declined ? "start-declined" : cutOff ? "cut-off" : derived.status === "cancelled" || run.status === "cancelled" ? "cancelled" : run.summary?.startsWith("The owner rejected the plan") ? "plan-declined" : "failed";
   if (run.canTryAgain) return <TryAgain runId={run.id} ideaId={run.ideaId} why={why} showCredits={run.budgetExhausted} />;
+  // Held by its budget: the amber pause with the way to more credits, never the red crashed panel (ARCH-011).
   return (
-    <div aria-label="Stopped for budget" role="group" className="flex flex-col gap-3">
-      <p className="max-w-prose font-medium text-ink">The credit budget ran out, so this work stopped. What was finished is kept, and nothing more was charged.</p>
-      <Link href={paths.credits()} className={cn(buttonVariants({ variant: "secondary" }), "self-start")}>
-        See credits
-      </Link>
-    </div>
+    <Alert
+      state="paused-by-budget"
+      testId="stopped-for-budget"
+      title="The credit budget ran out, so this work stopped."
+      action={
+        <Link href={paths.credits()} className={buttonVariants({ variant: "secondary" })}>
+          See credits
+        </Link>
+      }
+    >
+      What was finished is kept, and nothing more was charged.
+    </Alert>
   );
 }
 
-/** A figure tile's credits: an amount too small to print is "<0.01", never "0" (D12) and never a phrase cut short. */
-function tileCredits(n: number): string {
-  return n > 0 && n < 0.01 ? "<0.01 credits" : formatCredits(n);
-}
-
-function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, declined }: { estimate: number | null; planned: number | null; spent: number; reserved: number; scored: { estimated: number; actual: number } | null; notCharged: number; declined: boolean }) {
+function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, declined, finished }: { estimate: number | null; planned: number | null; spent: number; reserved: number; scored: { estimated: number; actual: number } | null; notCharged: number; declined: boolean; finished: boolean }) {
   const replanned = planned !== null && estimate !== null && Math.abs(planned - estimate) >= 0.005 ? planned : null;
   // Spending is held against the latest figure: the plan's, once there is one.
   const against = replanned ?? estimate;
@@ -445,26 +453,32 @@ function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, dec
     return (
       <StatRow cols={2} label="Cost">
         {estimateTile}
-        <Stat label="Charged" value={tileCredits(spent)} caption="You declined to start it, so nothing was done." />
+        <Stat label="Charged" value={formatCredits(spent)} caption="You declined to start it, so nothing was done." />
       </StatRow>
     );
+  // The one rule for a spent figure (spentAgainst): finished work says "Spent" with no bar; under a 1-credit estimate,
+  // no percentage and no alarm. Above it, the percentage names which estimate it is held against (R2-8).
+  const spentFigure = spentAgainst(spent, against, finished);
+  const spentCaption = against === null ? "Settled from each call’s own cost" : against >= ESTIMATE_FLOOR ? `${share(spent, against)}% of ${estimateName(against, estimate, replanned)}` : spentFigure.caption;
+  const tiny = scored !== null && scored.estimated < ESTIMATE_FLOOR;
+  const scoredWord = scored ? accuracy(scored.estimated, scored.actual) : null;
   // Four slots, always, in the same order: what was estimated, what is spent, the third figure (held now; scored once done), and what was not charged.
   return (
-    <StatRow cols={4} meters={!!against} label="Cost" className="lg:grid-cols-4">
+    <StatRow cols={4} meters={spentFigure.meter !== null} label="Cost" className="lg:grid-cols-4">
       {estimateTile}
-      <Stat
-        label="Spent so far"
-        value={tileCredits(spent)}
-        caption={against ? `${share(spent, against)}% of ${estimateName(against, estimate, replanned)}` : "Settled from each call’s own cost"}
-        meter={against ? { value: percent(share(spent, against), 100), label: `${share(spent, against)}% of the estimate spent`, tone: share(spent, against) > 100 ? "bad" : "primary" } : null}
-      />
-      {scored ? (
-        // The figure slot holds a figure ("79% under"); a cost exactly on the estimate says so in a word.
-        <Stat label="Estimate against actual" value={accuracy(scored.estimated, scored.actual) === "on the estimate" ? "Exact" : accuracy(scored.estimated, scored.actual)} caption={`${accuracy(scored.estimated, scored.actual) === "on the estimate" ? "On the estimate. " : ""}Against ${estimateName(scored.estimated, estimate, replanned)}: cost ${formatNumber(scored.actual)}`} />
+      <Stat label={spentFigure.label} value={formatCredits(spent)} caption={spentCaption} meter={spentFigure.meter} />
+      {scored && scoredWord ? (
+        // The figure slot holds a figure ("79% under"); a cost exactly on the estimate says so in a word; an estimate too small
+        // to measure against holds none.
+        <Stat
+          label="Estimate against actual"
+          value={tiny ? NO_VALUE : scoredWord === "on the estimate" ? "Exact" : scoredWord}
+          caption={tiny ? `${capitalise(scoredWord)}: cost ${formatNumber(scored.actual)}` : `${scoredWord === "on the estimate" ? "On the estimate. " : ""}Against ${estimateName(scored.estimated, estimate, replanned)}: cost ${formatNumber(scored.actual)}`}
+        />
       ) : (
-        <Stat label="Held for calls in flight" value={tileCredits(reserved)} caption="Reserved before each call, released when it settles" />
+        <Stat label="Held for calls in flight" value={formatCredits(reserved)} caption="Reserved before each call, released when it settles" />
       )}
-      <Stat label="Not charged" value={tileCredits(notCharged)} caption="Repairs of the work’s own mistakes, never billed" />
+      <Stat label="Not charged" value={formatCredits(notCharged)} caption="Repairs of the work’s own mistakes, never billed" />
     </StatRow>
   );
 }
@@ -497,9 +511,9 @@ function Approvals({ runId, approvals }: { runId: string; approvals: DerivedAppr
           className="fixed inset-x-0 top-0 z-30 flex min-h-touch items-center gap-3 border-b bg-surface px-4 pb-2 pt-safe-t text-left text-ink shadow-raised"
         >
           <span className="flex min-w-0 flex-1 flex-col gap-1 pt-2">
-            <Badge tone="warn" className="self-start">
-              {pending.length === 1 ? "Waiting for your approval" : `${pending.length} approvals wait for you`}
-            </Badge>
+            <StatusTag state="approval-asked" className="self-start">
+              {pending.length === 1 ? "Waiting for your approval" : `${formatNumber(pending.length)} approvals wait for you`}
+            </StatusTag>
             <span className="truncate text-sm text-ink-body">{pending[0]?.question ?? ""}</span>
           </span>
           <span className="shrink-0 pt-2 font-semibold text-primary-link">Answer</span>
@@ -747,7 +761,7 @@ function PartSection({ section, last, technical }: { section: Section; last: boo
     return () => el.removeEventListener("endgame:reveal", reveal);
   }, []);
   const lines = section.items.reduce((n, item) => n + (item.kind === "group" ? 1 : (item.repeat ?? 1)), 0);
-  const credits = section.credits > 0 ? formatCredits(Math.round(section.credits * 100) / 100) : null;
+  const credits = section.credits > 0 ? formatCredits(section.credits) : null;
   return (
     <li data-part={section.key} data-open={open || undefined} className="border-b last:border-b-0">
       <button type="button" aria-expanded={open} onClick={() => setToggled(!open)} className={cn(ROW, "min-h-touch w-full bg-surface px-4 py-3 text-left hover:bg-ground sm:px-5", open && "border-b")}>
@@ -864,7 +878,7 @@ function StepRow({ item }: { item: TimelineStep }) {
   return (
     <li data-seq={item.seq} className={cn(ROW, "border-b px-4 py-3 last:border-b-0 sm:px-5")}>
       <span className={cn("flex size-8 items-center justify-center rounded-xs", TONE_CLASS[item.tone])}>
-        <Icon name={item.icon} className="size-4" />
+        <StepIcon icon={item.icon} />
       </span>
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="flex min-w-0 items-baseline gap-2">
@@ -882,15 +896,23 @@ function StepRow({ item }: { item: TimelineStep }) {
           </button>
         )}
         {item.raw && item.raw !== "{}" && (
-          <details className="mt-1 min-w-0">
-            <summary className="min-h-touch cursor-pointer py-2 text-sm text-ink-muted">Raw event #{item.seq}</summary>
+          <Disclosure title={`Raw event #${item.seq}`} className="mt-1">
             <pre className="max-h-96 overflow-auto rounded-xs bg-ground p-3 font-mono text-xs">{item.raw}</pre>
-          </details>
+          </Disclosure>
         )}
       </div>
       <Meta credits={item.credits} at={item.at || null} />
     </li>
   );
+}
+
+/** A step's mark: an approval asked or answered is the hand (STATES), every other step its sprite icon. */
+function StepIcon({ icon }: { icon: TimelineStep["icon"] }) {
+  if (icon === "approval-asked" || icon === "approval-answered") {
+    const Hand = STATES[icon].icon;
+    return <Hand aria-hidden className="size-4" />;
+  }
+  return <Icon name={icon} className="size-4" />;
 }
 
 const GROUP_STATUS: Record<TimelineGroup["status"], { label: string; tone: BadgeTone }> = {
@@ -909,41 +931,30 @@ function GroupRow({ group }: { group: TimelineGroup }) {
   const [toggled, setToggled] = useState<boolean | null>(null);
   const open = toggled ?? group.status === "working";
   return (
-    <li data-group={group.agent} className="border-b last:border-b-0">
-      <details
-        open={open}
-        onToggle={(e) => {
-          // Only the person's own click counts: the browser also fires this when the page opens or folds it.
-          if (e.currentTarget.open !== open) setToggled(e.currentTarget.open);
-        }}
-        className="group/sub"
-      >
-        <summary className={cn(ROW, "min-h-touch cursor-pointer list-none px-4 py-3 hover:bg-ground sm:px-5 [&::-webkit-details-marker]:hidden")}>
-          <span className="flex size-8 items-center justify-center rounded-xs bg-ground text-ink-body">
-            <Icon name="contractors" className="size-4" />
+    <li data-group={group.agent} data-open={open || undefined} className="border-b last:border-b-0">
+      {/* A disclosure row (the timeline's own fold, as a part's is): the whole line opens and folds its steps. */}
+      <button type="button" aria-expanded={open} onClick={() => setToggled(!open)} className={cn(ROW, "min-h-touch w-full px-4 py-3 text-left hover:bg-ground sm:px-5")}>
+        <span className="flex size-8 items-center justify-center rounded-xs bg-ground text-ink-body">
+          <Icon name="contractors" className="size-4" />
+        </span>
+        <span className="flex min-w-0 flex-col gap-1">
+          <span className="break-words font-medium">{inPart(group.title, words)}</span>
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            <Badge tone={status.tone}>{status.label}</Badge>
+            {group.outcome && <span className="min-w-0 break-words text-ink-body">{inPart(group.outcome, words)}</span>}
+            {group.searches > 0 && <span className="text-ink-muted">{plural(group.searches, "search", "searches")}</span>}
+            <span className="text-primary-link">{open ? "Hide its steps" : `Show its ${plural(group.items.length, "step")}`}</span>
           </span>
-          <span className="flex min-w-0 flex-col gap-1">
-            <span className="break-words font-medium">{inPart(group.title, words)}</span>
-            <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-              <Badge tone={status.tone}>{status.label}</Badge>
-              {group.outcome && <span className="min-w-0 break-words text-ink-body">{inPart(group.outcome, words)}</span>}
-              {group.searches > 0 && <span className="text-ink-muted">{plural(group.searches, "search", "searches")}</span>}
-              <span className="text-primary-link">
-                <span className="group-open/sub:hidden">Show its {plural(group.items.length, "step")}</span>
-                <span className="hidden group-open/sub:inline">Hide its steps</span>
-              </span>
-            </span>
-          </span>
-          <Meta credits={credits} at={group.at || null} />
-        </summary>
-        {open && group.items.length > 0 && (
-          <ol aria-label={`Steps: ${group.title}`} className="ml-8 flex flex-col border-l-2 border-border sm:ml-10">
-            {group.items.map((item) => (
-              <TimelineRow key={item.key} item={item} />
-            ))}
-          </ol>
-        )}
-      </details>
+        </span>
+        <Meta credits={credits} at={group.at || null} />
+      </button>
+      {open && group.items.length > 0 && (
+        <ol aria-label={`Steps: ${group.title}`} className="ml-8 flex flex-col border-l-2 border-border sm:ml-10">
+          {group.items.map((item) => (
+            <TimelineRow key={item.key} item={item} />
+          ))}
+        </ol>
+      )}
     </li>
   );
 }

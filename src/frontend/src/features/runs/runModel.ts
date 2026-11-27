@@ -1,4 +1,5 @@
-import { formatNumber } from "@/lib/format";
+import { formatCredits, formatNumber } from "@/lib/format";
+import { ESTIMATE_FLOOR } from "@/lib/estimates";
 import { isPlain, plainOrNull, withoutPaths } from "@/lib/plain";
 
 const withoutPathsOrNull = (text: string | null) => (text === null ? null : withoutPaths(text));
@@ -418,13 +419,14 @@ export function isTerminal(status: RunStatus | null | undefined): boolean {
 
 export type Mode = "normal" | "technical";
 
-export type StepTone = "structure" | "people" | "factory" | "money" | "attention" | "quiet";
+/** `approval`: a question put to the owner (the hand, in the waiting tone); its answer is `quiet`. */
+export type StepTone = "structure" | "people" | "factory" | "money" | "attention" | "approval" | "quiet";
 
 export interface TraceStep {
   seq: number;
   at: string;
   tone: StepTone;
-  icon: "plan" | "build" | "evaluate" | "research" | "contractors" | "credits" | "verdict" | "assistants" | "secrets" | "publish" | "health" | "employee";
+  icon: "plan" | "build" | "evaluate" | "research" | "contractors" | "credits" | "verdict" | "assistants" | "secrets" | "publish" | "health" | "employee" | "approval-asked" | "approval-answered";
   title: string;
   detail: string | null;
   credits: string | null;
@@ -432,14 +434,10 @@ export interface TraceStep {
   raw: string | null;
 }
 
+/** A step's credits, in the one formatter: "1 credit", "7.47 credits", "<0.01 credits". */
 function credits(n: number | null): string | null {
   if (n === null) return null;
-  return `${formatCredits(n)} credits`;
-}
-
-export function formatCredits(n: number): string {
-  const rounded = Math.abs(n) < 10 && !Number.isInteger(n) ? Math.round(n * 100) / 100 : Math.round(n);
-  return rounded.toLocaleString("en-GB");
+  return formatCredits(n);
 }
 
 
@@ -464,7 +462,8 @@ export function refusalStep(p: Record<string, unknown>): Pick<TraceStep, "tone" 
   }
   const said = str(p, "declined") ?? (str(p, "name") === "web_search" ? "search the web" : "a step the work asked you about");
   const title = `You declined: ${said}`;
-  return { tone: "attention", icon: "verdict", title: isPlain(title) ? title : "You declined a step the work asked you about", detail: "It was not done. The work continues without it." };
+  // The owner's own answer at an approval: the answered hand, in the neutral tone (never the red shield).
+  return { tone: "quiet", icon: "approval-answered", title: isPlain(title) ? title : "You declined a step the work asked you about", detail: "It was not done. The work continues without it." };
 }
 
 /**
@@ -516,7 +515,7 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
         tone: "money",
         icon: "assistants",
         title: `Model call: ${str(p, "model") ?? "model"} for ${str(p, "taskType") ?? "a task"}`,
-        credits: num(p, "reservedCredits") !== null ? `${formatCredits(num(p, "reservedCredits") ?? 0)} reserved` : null,
+        credits: num(p, "reservedCredits") !== null ? `${formatNumber(num(p, "reservedCredits") ?? 0)} reserved` : null,
       };
     case "model.replied": {
       if (!technical) return null;
@@ -547,9 +546,9 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
     case "subagent.finished":
       return { ...base, tone: "people", icon: "contractors", title: str(p, "title") ? `Reported back: ${str(p, "title")}` : "A contractor reported back", detail: str(p, "summary") };
     case "approval.requested":
-      return { ...base, tone: "attention", icon: "verdict", title: "Asked for your approval", detail: [str(p, "title") ?? str(p, "question"), technical ? (str(p, "technical") ?? null) : null].filter(Boolean).join("\n") || null };
+      return { ...base, tone: "approval", icon: "approval-asked", title: "Asked for your approval", detail: [str(p, "title") ?? str(p, "question"), technical ? (str(p, "technical") ?? null) : null].filter(Boolean).join("\n") || null };
     case "approval.answered":
-      return { ...base, tone: "attention", icon: "verdict", title: `You answered: ${answerWord(str(p, "answer"))}`, detail: str(p, "comment") ?? str(p, "note") };
+      return { ...base, tone: "quiet", icon: "approval-answered", title: `You answered: ${answerWord(str(p, "answer"))}`, detail: str(p, "comment") ?? str(p, "note") };
     case "evaluation.passed":
       return { ...base, tone: "money", icon: "evaluate", title: `Checked and passed: ${itemName(p, planItem, mode)}`, detail: evaluationDetail(p, mode) };
     case "evaluation.failed":
@@ -563,7 +562,7 @@ export function describeEvent(e: RunEvent, mode: Mode, planItem: (id: string) =>
         tone: "money",
         icon: "credits",
         title: "Scored the estimate",
-        detail: scored ? `Estimated ${formatCredits(scored.estimated)}, cost ${formatCredits(scored.actual)} (${accuracy(scored.estimated, scored.actual)})` : null,
+        detail: scored ? `Estimated ${formatNumber(scored.estimated)}, cost ${formatNumber(scored.actual)} (${accuracy(scored.estimated, scored.actual)})` : null,
       };
     }
     case "message":
@@ -743,6 +742,8 @@ const PUBLIC_ONLY = /[^.!?]*\bonce you make the app public\b[^.!?]*[.!?]/i;
 
 export function accuracy(estimated: number, actual: number): string {
   if (estimated <= 0) return "no estimate";
+  // Too small an estimate to measure against: no percentage, and no alarm (ARCH-011, `spentAgainst`).
+  if (estimated < ESTIMATE_FLOOR) return actual < ESTIMATE_FLOOR ? "under 1 credit, as estimated" : "estimated under 1 credit";
   const diff = Math.round(((actual - estimated) / estimated) * 100);
   if (diff === 0) return "on the estimate";
   return diff > 0 ? `${diff}% over` : `${-diff}% under`;
