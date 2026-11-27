@@ -257,7 +257,7 @@ export const layout = {
     "chart-row": "minmax(3rem, 9rem) minmax(0, 1fr)",
     "name-figures": "minmax(0, 2fr) repeat(4, minmax(0, 1fr))",
     /** A run's timeline row: mark | who and what | time over cost (a phone) … */
-    step: "2rem minmax(0, 1fr) 4.75rem",
+    step: "2rem minmax(0, 1fr) 5.5rem",
     /** … and mark | who and what | cost | time, the same two right-hand columns on every row. */
     "step-wide": "2rem minmax(0, 1fr) 6.5rem 5.25rem",
     /** A run page from 1600: the steps, and the plan beside them. */

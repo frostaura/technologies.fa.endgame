@@ -702,7 +702,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Core. **Learn first:** RUN-01.
 - **What you learn:** each part of the work is a task claimed by a named employee.
 - **Steps:**
-  1. Tasks are gathered under the part of the plan they are for ("{n}. {the part's words}"), one line each: the badge ("To do", "In progress", "Done", "Did not succeed"), what the task is for that part ("Build", "Check", "Check, round {n}", "Check again"), and who holds it. A long plan shows its first four parts and **"Show all {n} parts"**. Tasks that are not one part's show their own words.
+  1. Tasks are gathered under the part of the plan they are for ("{n}. {the part's words}"), one line each: the badge ("To do", "In progress", "Done", "Did not succeed"), what the task is for that part ("Build", "Check", "Check {n}" for each check after a repair, "Check again"), and who holds it. A long plan shows its first four parts and **"Show all {n} parts"**. Tasks that are not one part's show their own words.
   2. Pressing a task with a note shows it ("Built and handed over: …", "The check of … is finished: it works.").
 - **You know it worked when:** tasks show "Done" with their summaries.
 - **Variations and refusals:** none yet: "No tasks yet. They appear here as the work is broken down." Finished without tasks: "This work was not broken into tasks."

@@ -344,7 +344,7 @@ function Request({ text }: { text: string }) {
         {text}
       </p>
       {(cut || whole) && (
-        <button type="button" aria-expanded={whole} onClick={() => setWhole((x) => !x)} className="min-h-touch rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover sm:min-h-0">
+        <button type="button" aria-expanded={whole} onClick={() => setWhole((x) => !x)} className="rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover touch:min-h-touch">
           {whole ? "Show less" : "Show all of it"}
         </button>
       )}
@@ -459,7 +459,8 @@ function CostPanel({ estimate, planned, spent, reserved, scored, notCharged, dec
         meter={against ? { value: percent(share(spent, against), 100), label: `${share(spent, against)}% of the estimate spent`, tone: share(spent, against) > 100 ? "bad" : "primary" } : null}
       />
       {scored ? (
-        <Stat label="Estimate against actual" value={accuracy(scored.estimated, scored.actual)} caption={`Against ${estimateName(scored.estimated, estimate, replanned)}: cost ${formatNumber(scored.actual)}`} />
+        // The figure slot holds a figure ("79% under"); a cost exactly on the estimate says so in a word.
+        <Stat label="Estimate against actual" value={accuracy(scored.estimated, scored.actual) === "on the estimate" ? "Exact" : accuracy(scored.estimated, scored.actual)} caption={`${accuracy(scored.estimated, scored.actual) === "on the estimate" ? "On the estimate. " : ""}Against ${estimateName(scored.estimated, estimate, replanned)}: cost ${formatNumber(scored.actual)}`} />
       ) : (
         <Stat label="Held for calls in flight" value={tileCredits(reserved)} caption="Reserved before each call, released when it settles" />
       )}
@@ -681,7 +682,7 @@ function sectionsOf(items: TimelineItem[], plan: DerivedPlan, mode: Mode, tasks:
 
 function Trace({ events, mode, derived, stream, status, replaying, declined }: { events: RunEvent[]; mode: Mode; derived: DerivedRun; stream: StreamStatus; status: RunStatus; replaying: boolean; declined: boolean }) {
   const plan = derived.plan;
-  const parts = useMemo(() => (plan?.accepted || plan ? plan.items.map((i) => ({ id: i.id, text: i.text })) : []), [plan]);
+  const parts = useMemo(() => (plan ? plan.items.map((i) => ({ id: i.id, text: i.text })) : []), [plan]);
   const timeline = useMemo(() => buildTimeline(events, mode, (id: string) => planItemLabel(plan, id, mode), parts), [events, mode, plan, parts]);
   const sections = useMemo(() => (plan && parts.length > 0 ? sectionsOf(timeline.items, plan, mode, derived.tasks, status, declined) : null), [plan, parts, timeline, mode, derived.tasks, status, declined]);
   const terminal = isTerminal(status);
@@ -780,7 +781,7 @@ function PartSection({ section, last, technical }: { section: Section; last: boo
 function Meta({ credits, at, until }: { credits: string | null; at: string | null; until?: string }) {
   return (
     <span className="flex flex-col items-end gap-0.5 text-sm tabular-nums text-ink-muted sm:contents">
-      <span className="text-right text-ink-body sm:pt-0.5">{credits}</span>
+      <span className="whitespace-nowrap text-right text-ink-body sm:pt-0.5">{credits}</span>
       <span className="text-right max-sm:order-first sm:pt-0.5">
         {at && <time dateTime={at}>{formatTime(at)}</time>}
         {until && until !== at && formatTime(until) !== formatTime(at ?? "") && (
@@ -876,7 +877,7 @@ function StepRow({ item }: { item: TimelineStep }) {
         </span>
         {detail && <p className={cn("max-w-prose whitespace-pre-line break-words text-ink-body", !whole && long && "line-clamp-3")}>{detail}</p>}
         {long && (
-          <button type="button" aria-expanded={whole} onClick={() => setWhole((x) => !x)} className="self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
+          <button type="button" aria-expanded={whole} onClick={() => setWhole((x) => !x)} className="self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover touch:min-h-touch">
             {whole ? "Show less" : "Show all of it"}
           </button>
         )}
@@ -1019,7 +1020,7 @@ function taskGroups(tasks: DerivedTask[], plan: DerivedPlan | null): TaskGroup[]
       groups.set(item.id, group);
     }
     const checks = group.tasks.filter((t) => t.role.startsWith("Check")).length;
-    group.tasks.push({ task, role: check ? (checks === 0 ? "Check" : `Check, round ${formatNumber(checks + 1)}`) : item.id === "keep" ? "Check again" : "Build" });
+    group.tasks.push({ task, role: check ? (checks === 0 ? "Check" : `Check ${formatNumber(checks + 1)}`) : item.id === "keep" ? "Check again" : "Build" });
   }
   const ordered = plan ? plan.items.map((i) => groups.get(i.id)).filter((g): g is TaskGroup => !!g) : [];
   return loose.tasks.length > 0 ? [...ordered, loose] : ordered;
