@@ -400,12 +400,14 @@ export function employeeCosts(record: Pick<TrackRecord, "cost">): { toDate: numb
   return { toDate: record.cost.toDateCredits, month: record.cost.monthCredits, ownMonth: record.cost.ownMonthCredits ?? record.cost.monthCredits };
 }
 
-/** The line under "Cost so far": this month against the budget, including the contractors it briefs, and its own share. */
+/** The one-line caption under "Cost so far": this month against the budget (the contractors it briefs included). */
 export function costLine(costs: { month: number; ownMonth: number }, monthlyLimit: number | null): string {
-  const theirs = costs.ownMonth < costs.month ? `, including the contractors it briefs; ${formatNumber(costs.ownMonth)} of its own` : "";
-  return monthlyLimit !== null
-    ? `Budget ${formatNumber(monthlyLimit)} a month, ${formatNumber(costs.month)} used this month${theirs}`
-    : `${formatNumber(costs.month)} this month${theirs}; no budget of its own, the one above holds`;
+  return monthlyLimit !== null ? `${formatNumber(costs.month)} of ${formatNumber(monthlyLimit)} this month` : `${formatNumber(costs.month)} this month, no budget of its own`;
+}
+
+/** What the cost tile's one-line caption leaves out: the share the contractors it briefs spent (D74), said in a sentence. */
+export function costNote(costs: { month: number; ownMonth: number }): string | null {
+  return costs.ownMonth < costs.month ? `This month’s cost includes the contractors it briefs; ${formatNumber(costs.ownMonth)} of it is its own.` : null;
 }
 
 /** A proposal's state as a badge. One the platform closed itself (`withdrawn`) reads as withdrawn, not as a person's no. */

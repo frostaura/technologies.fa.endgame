@@ -101,7 +101,8 @@ describe("EmployeeView", () => {
     const record = await screen.findByRole("region", { name: "Track record" });
     // An older control plane's own-only figures read as the whole, as the cap counts it.
     expect(record.textContent).toContain("68 credits");
-    expect(record.textContent).toContain("Budget 400 a month, 68 used this month, including the contractors it briefs; 1.3 of its own");
+    expect(record.textContent).toContain("68 of 400 this month");
+    expect(record.textContent).toContain("This month’s cost includes the contractors it briefs; 1.3 of it is its own.");
     expect(await screen.findByText(/has finished 7 pieces of work here, none of it split into tasks/)).toBeTruthy();
     expect(screen.queryByText(/has not taken on any/)).toBeNull();
   });
@@ -121,15 +122,17 @@ describe("EmployeeView", () => {
     stub(json({ ...employeeDetailFixture({ jobDescription: { ...employeeDetailFixture().employee.jobDescription, monthlyCreditLimit: 400 } }), trackRecord, recentRuns }), { "GET /api/tasks": json([]) });
     renderWithStore(<EmployeeView employeeId="e1" />);
     const record = await screen.findByRole("region", { name: "Track record" });
-    expect(record.textContent).toContain("Budget 400 a month, 68 used this month, including the contractors it briefs; 1.3 of its own");
-    const led = await screen.findByRole("table", { name: "Work it led" });
+    expect(record.textContent).toContain("68 of 400 this month");
+    expect(record.textContent).toContain("This month’s cost includes the contractors it briefs; 1.3 of it is its own.");
+    const led = await screen.findByRole("list", { name: "Work it led" });
     expect(within(led).getByRole("link", { name: "Research: A club gear log" }).getAttribute("href")).toBe("/runs/r2");
     expect(led.textContent).toContain("Did not succeed");
     // One status vocabulary (real-stack 51): a cancelled or failed piece of work never reads "Finished".
-    const cancelled = within(led).getByRole("link", { name: "Research: A lift-sharing board" }).closest("tr") as HTMLElement;
+    const cancelled = within(led).getByRole("link", { name: "Research: A lift-sharing board" }).closest("li") as HTMLElement;
     expect(cancelled.textContent).toContain("Cancelled");
     expect(led.textContent).not.toContain("Finished");
-    expect(within(led).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Work", "Status", "When"]);
+    // One table: its header names the columns once, with no Credits column where the work is not split into tasks.
+    expect(Array.from((led.parentElement as HTMLElement).querySelectorAll("[aria-hidden] > span")).map((h) => h.textContent)).toEqual(["Work", "Status", "When"]);
   });
 
   it("technical mode names the tools and the tier", async () => {
@@ -220,13 +223,13 @@ describe("EmployeeView", () => {
     renderWithStore(<EmployeeView employeeId="e1" />);
     const entries = await screen.findByRole("list", { name: "Memory entries" });
     expect(within(entries).getAllByRole("listitem")).toHaveLength(10);
-    const work = await screen.findByRole("table", { name: "Tasks" });
-    expect(within(work).getAllByRole("row")).toHaveLength(11);
+    const work = await screen.findByRole("list", { name: "Tasks" });
+    expect(within(work).getAllByRole("listitem")).toHaveLength(10);
     // A cancelled piece of work says so, and never "Finished".
     expect(work.textContent).toContain("Cancelled");
     expect(work.textContent).not.toContain("Finished");
     fireEvent.click(screen.getByRole("button", { name: "Show all 40 pieces of work" }));
-    expect(within(work).getAllByRole("row")).toHaveLength(41);
+    expect(within(work).getAllByRole("listitem")).toHaveLength(40);
     fireEvent.click(screen.getByRole("button", { name: "Show all 60 entries" }));
     expect(within(screen.getByRole("list", { name: "Memory entries" })).getAllByRole("listitem")).toHaveLength(60);
     fireEvent.change(screen.getByLabelText("Search what Ada remembers"), { target: { value: "no lights" } });
