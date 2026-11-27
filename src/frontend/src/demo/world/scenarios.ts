@@ -172,6 +172,41 @@ defineScenario({
 });
 
 defineScenario({ name: "manage-tree", title: "Managing the tree: an archived division, one that cannot be deleted, one that can", route: "/tree?scope=northwind", featured: BASE_FEATURED }, "archived-division");
+/**
+ * Real data is messier than Northwind: a division with a long name and a dozen projects, some of them named in
+ * full sentences, so the chart and Manage are seen with names that run long and columns that run unequal.
+ */
+defineScenario({
+  name: "messy-tree",
+  title: "A messy tree: long names, a division with a dozen projects",
+  route: "/",
+  featured: BASE_FEATURED,
+  apply: (w) => {
+    const at = new Date().toISOString();
+    const division = `${ORG}/community-programmes`;
+    w.nodes.push({ id: uuidFor(`node:${division}`), path: division, slug: "community-programmes", name: "Community programmes, outreach and partnerships", level: "division", createdAt: at, stage: null, ideaId: null, note: null });
+    const names = [
+      "Junior squash ladder and coaching sign-ups for the autumn term",
+      "Volunteers",
+      "Partner clubs' shared court calendar",
+      "Sponsorship tracker",
+      "Members' newsletter, written and sent every fortnight",
+      "Kit swap",
+      "Disability access audit and the changes that follow from it",
+      "Tournament draws",
+      "Lost property",
+      "Coaches' availability",
+      "Café loyalty card",
+      "Summer camp registrations with medical forms and photo consent",
+    ];
+    names.forEach((name, i) => {
+      const slug = `programme-${i + 1}`;
+      w.nodes.push({ id: uuidFor(`node:${division}/${slug}`), path: `${division}/${slug}`, slug, name, level: "project", createdAt: at, stage: i % 3 === 0 ? "planning" : "idea", ideaId: null, note: null });
+    });
+    const tech = w.nodes.find((n) => n.path === `${ORG}/technologies`);
+    if (tech) tech.name = "Technologies and the club's own digital services";
+  },
+});
 defineScenario({ name: "account", title: "Your account: passkeys and roles", route: "/account", featured: BASE_FEATURED });
 defineScenario({ name: "employee-released", title: "An employee who was let go", route: "/employees/{employee}", featured: { ...BASE_FEATURED, employee: uuidFor(`employee:${ORG}/operations/stock-counter:engineer`) } }, "employee-let-go");
 defineScenario({ name: "two-organisations", title: "A person in two organisations", route: "/", persona: "two-organisations", featured: BASE_FEATURED });

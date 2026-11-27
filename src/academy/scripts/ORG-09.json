@@ -26,7 +26,7 @@
       "kind": "demo",
       "highlight": {
         "text": "Court booking",
-        "note": "Court booking is live with an app, so it carries no stage chip: just its credits this month."
+        "note": "Court booking is live with an app of the same name, so it carries no stage chip, and its name and spend are said once."
       }
     },
     {
@@ -81,7 +81,7 @@
           "kind": "demo",
           "highlight": {
             "text": "Summer Ladder",
-            "note": "An archived project is a dashed card with the badge Archived, and the note “Archived.”."
+            "note": "An archived project is a muted card with the badge Archived, and the note “Archived.”."
           }
         }
       ]

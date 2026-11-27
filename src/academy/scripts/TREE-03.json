@@ -42,14 +42,14 @@
         {
           "type": {
             "into": {
-              "selector": "form[aria-label^='Add a'] input:not([aria-describedby])"
+              "selector": "form[aria-label^='Add a'] input[name='name']"
             },
             "text": "Loyalty Stamps"
           }
         }
       ],
       "highlight": {
-        "selector": "form[aria-label^='Add a'] input[aria-describedby]",
+        "selector": "form[aria-label^='Add a'] input[name='slug']",
         "note": "The address fills itself: northwind/operations/loyalty-stamps."
       }
     },

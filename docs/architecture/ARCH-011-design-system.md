@@ -82,8 +82,10 @@ hero: build `good`, change `info`, do not build `bad`.
 - `quiet`, `success`, `warn`, `attention` — status tags and meters only; `attention` also for the
   error alert and the danger button. Never a card's fill or a hero.
 - `border`, `border-strong`; `border-field` (≥ 3:1 on both surfaces) for every text box, select and check box.
-- `violet`, `teal` — retired from the look. Kept only for the organisation graph's node kinds, chart
-  series and avatar fills; `design.test.ts` allows their per-file counts to fall, never rise.
+- `violet`, `teal` — retired from the look. Kept only for chart series and avatar fills;
+  `design.test.ts` allows their per-file counts to fall, never rise. The org chart draws every
+  division's letter in ink, and the organisation graph tells its lines apart by ink, the accent and a
+  dash; neither file may use them at all.
 - No gradient band, no drifting aura, no `bg-night`.
 
 ## Do and don't (from the reviews)
@@ -109,7 +111,5 @@ header in both modes, and the rail layout on a phone on its side.
 
 ## Risks and open questions
 
-- The organisation graph and the org chart's division badges still use the retired hues; the home
-  lane decides their replacement.
 - The app kit's own template (`src/appkit`, and its copy in `src/demo/hosted/`) is not yet on this
   system: its field borders, dashed 404 and narrow list pages are the apps lane's.

@@ -30,13 +30,11 @@ const HAND_DRAWN_FIGURE = /<(span|p|div|strong|dd|td)[^>]*className=(?:"|\{cn\("
 const DASHED_ALLOWED = new Set(["src/demo/hosted/kit.tsx"]);
 
 /**
- * The two retired hues, counted per file. They stay only for the organisation graph's node kinds and
+ * The two retired hues, counted per file. The org chart and the organisation graph no longer use them; they stay only for
  * the chart series; the counts may fall, never rise, and a new file may not use them at all.
  */
 const RETIRED_HUES = /\b(?:bg|text|border|ring|fill|stroke)-(?:violet|teal)\b[\w/-]*/g;
 const RETIRED_HUE_ALLOWANCE: Record<string, number> = {
-  "src/features/home/OrgChart.tsx": 8,
-  "src/features/home/OntologyView.tsx": 11,
   "src/features/home/ConversationDock.tsx": 3,
   "src/features/apps/AskChart.tsx": 6,
   "src/features/runs/RunView.tsx": 8,
