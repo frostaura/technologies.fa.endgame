@@ -10,7 +10,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 
 ### APP-01 Open an app's page
 - **Who:** owner / admin / member (Builder or Viewer) / operator
-- **Starts at:** console `/apps/<appId>`, reached by selecting an app in the org chart (another reader covers the org chart)
+- **Starts at:** console `/apps/<appId>`, reached by selecting an app in the org chart (another reader covers the org chart), or by "Manage {name}" at the top of the build or change that made it (BLD-10)
 - **Needs:** at least the Viewer role at the app or above it
 - **Level:** Foundation
 - **Learn first:** signing in and the org chart (another reader's area)

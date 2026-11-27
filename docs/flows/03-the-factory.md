@@ -897,12 +897,13 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Steps:**
   1. "The builder · Running privately": "{name} is built and running privately. Only you and the people you choose can open it until you make it public."
   2. "Finished".
-  3. The app appears on the org chart. Opening and sharing it belong to another reader's area.
-- **You know it worked when:** the badge reads "Finished" and the app row appears on the org chart.
-- **Variations and refusals:** if it cannot start: "{name} is built and its work is saved, but it could not be started: …", and the run fails.
-- **Where:** `BuildWorkflow.PublishAsync`.
-- **Reachable from:** internal.
-- **Covered by tests:** `WorkflowTests.Build_places_plans_builds…`; `factory.spec.ts` steps 3 and 4.
+  3. At the top, beside the title, the way to what it built: **"Open {name}"** (the app itself, in a new tab, at the address its page shows) and **"Manage {name}"** (its page here, APP-01). On a phone both are full width, under the title. A finished change to an app leads to it the same way.
+  4. The app appears on the org chart. Sharing it belongs to another reader's area.
+- **You know it worked when:** the badge reads "Finished", "Open {name}" and "Manage {name}" lead to the app, and the app row appears on the org chart.
+- **Variations and refusals:** if it cannot start: "{name} is built and its work is saved, but it could not be started: …", and the run fails. A run that failed or was cancelled, work that has no app (research, a conversation), or an app the reader cannot open shows neither "Open" nor "Manage".
+- **Where:** `BuildWorkflow.PublishAsync`; `RunView.tsx` `BuiltAppActions` (the app from the run's placement step, `runModel.deriveRun` → `app`; its address from `GET /api/apps/{id}`).
+- **Reachable from:** internal; the run page (UI).
+- **Covered by tests:** `WorkflowTests.Build_places_plans_builds…`; `factory.spec.ts` steps 3 and 4; `BuiltAppActions.test.tsx`.
 
 ### BLD-11 See an operations hire for a recurring job
 - **Who:** nobody acts.

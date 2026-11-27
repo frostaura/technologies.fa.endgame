@@ -201,6 +201,8 @@ export interface DerivedRun {
   finishedReason: string | null;
   /** `run.finished`'s technical detail (what the gateway said, a fault): technical mode only. */
   finishedDetail: string | null;
+  /** The app a build or change works on, from its placement step (`workflow.step` "placement"), once it is placed. */
+  app: { id: string; name: string | null } | null;
 }
 
 export function deriveRun(events: readonly RunEvent[]): DerivedRun {
@@ -226,6 +228,7 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
     finishedSummary: null,
     finishedReason: null,
     finishedDetail: null,
+    app: null,
   };
   const tasks = new Map<string, DerivedTask>();
   const approvals = new Map<string, DerivedApproval>();
@@ -373,6 +376,11 @@ export function deriveRun(events: readonly RunEvent[]): DerivedRun {
         break;
       }
       case "message": {
+        if (str(p, "kind") === "workflow.step" && str(p, "step") === "placement") {
+          const data = (p.data ?? null) as Record<string, unknown> | null;
+          const appId = data ? str(data, "appId") : null;
+          if (appId) run.app = { id: appId, name: data ? str(data, "name") : null };
+        }
         if (str(p, "kind") === "plan.carried") {
           const kept = Array.isArray(p.items) ? p.items.filter((x): x is string => typeof x === "string") : [];
           run.carried = kept;

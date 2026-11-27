@@ -162,6 +162,22 @@ test.describe("the console on a phone", () => {
     expect(await height(page)).toBeLessThanOrEqual(BUDGET.run);
   });
 
+  test("a finished build leads to its app: Open and Manage full width, under the title (R7-2)", async ({ page }) => {
+    await open(page, "build-published");
+    await page.evaluate(() => (window as unknown as { endgameDemo: { clock: (a: { seek: string }) => void } }).endgameDemo.clock({ seek: "build:finished" }));
+    const actions = page.getByRole("group", { name: "The app it built" });
+    const title = page.getByRole("heading", { level: 1 });
+    for (const name of [/^Open /, /^Manage /]) {
+      const link = actions.getByRole("link", { name });
+      await inFirstScreen(page, link);
+      await thumbSized(link);
+      const [box, heading] = [await link.boundingBox(), await title.boundingBox()];
+      expect(box?.y ?? 0, "the app's actions sit under the title").toBeGreaterThan(heading?.y ?? 0);
+      expect(box?.width ?? 0, "full width on a phone").toBeGreaterThanOrEqual(375 - 2 * 24);
+    }
+    await noSideways(page);
+  });
+
   test("More holds every other page, the mode and signing out", async ({ page }) => {
     await open(page, "default", "/");
     await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /^More/ }).click();
