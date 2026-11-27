@@ -4,11 +4,12 @@ import { href } from "../lib/router.ts";
 import { curly } from "../content/text.ts";
 import { placeholderWords } from "../content/placeholders.ts";
 import { INLINE_STYLE as STYLE, type Tone } from "./inlineStyle.ts";
+import { highlight } from "./highlight.tsx";
 
 /**
  * Renders the inline markdown the flow documents use — **bold**, `code`, *emphasis*, links — turns
  * every flow id it meets (ID-07, OPS-12) into a link to that flow, and sets each `{placeholder}`
- * outside code as a small token of what it stands for. `tone="dark"` is for text on a dark panel:
+ * outside code as the words it stands for, in italic with a dotted underline. `mark` highlights a search's terms. `tone="dark"` is for text on a dark panel:
  * every inline style keeps its contrast there.
  */
 
@@ -23,7 +24,7 @@ function link(target: string): string | null {
   return null;
 }
 
-export function Inline({ text: raw, self, plainIds = false, tone = "light" }: { text: string; self?: string; plainIds?: boolean; tone?: Tone }) {
+export function Inline({ text: raw, self, plainIds = false, tone = "light", mark }: { text: string; self?: string; plainIds?: boolean; tone?: Tone; mark?: string[] }) {
   const style = STYLE[tone];
   const text = raw
     .split(/(`[^`]+`)/)
@@ -34,9 +35,9 @@ export function Inline({ text: raw, self, plainIds = false, tone = "light" }: { 
   let k = 0;
   for (const m of text.matchAll(TOKEN)) {
     const at = m.index ?? 0;
-    if (at > last) out.push(text.slice(last, at));
+    if (at > last) out.push(highlight(text.slice(last, at), mark, `t${k++}`));
     const t = m[0];
-    if (t.startsWith("**")) out.push(<strong key={k++} className={style.strong}><Inline text={t.slice(2, -2)} self={self} plainIds={plainIds} tone={tone} /></strong>);
+    if (t.startsWith("**")) out.push(<strong key={k++} className={style.strong}><Inline text={t.slice(2, -2)} self={self} plainIds={plainIds} tone={tone} mark={mark} /></strong>);
     // A short path or command stays on one line; only one too long for a line may break, and then anywhere.
     else if (t.startsWith("`")) out.push(<code key={k++} className={`${style.code} ${t.length <= 34 ? "whitespace-nowrap" : ""}`}>{t.slice(1, -1)}</code>);
     else if (t.startsWith("[")) {
@@ -61,6 +62,6 @@ export function Inline({ text: raw, self, plainIds = false, tone = "light" }: { 
     }
     last = at + t.length;
   }
-  if (last < text.length) out.push(text.slice(last));
+  if (last < text.length) out.push(highlight(text.slice(last), mark, `t${k}`));
   return <>{out}</>;
 }

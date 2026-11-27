@@ -1,17 +1,21 @@
-import { operatorFlows, track } from "../lib/data.ts";
+import { useState } from "react";
+import { REACHES, type Reach } from "../content/types.ts";
+import { flow, operatorFlows, track } from "../lib/data.ts";
+import { LEVEL_BLURB, REACH_LABEL } from "../lib/labels.ts";
 import { href } from "../lib/router.ts";
-import { FlowList } from "../components/FlowList.tsx";
-import { Eyebrow, Page } from "../components/Shell.tsx";
-import { LEVEL_BLURB } from "../lib/labels.ts";
-import { flow } from "../lib/data.ts";
 import { catalogue, useProgress } from "../lib/progress.ts";
 import { nextUp } from "../progress/derive.ts";
-import { REACHES } from "../content/types.ts";
-import { REACH_LABEL } from "../lib/labels.ts";
+import { FlowList } from "../components/FlowList.tsx";
+import { PageHeader } from "../components/PageHeader.tsx";
 import { ProgressRing } from "../components/ProgressMarks.tsx";
+import { Page } from "../components/Shell.tsx";
 import { ui } from "../components/ui.ts";
 
-/** FrostAura's own handbook: God mode and running the platform. Kept apart from client navigation. */
+/**
+ * FrostAura's own handbook: God mode and running the platform, kept apart from client navigation.
+ * The same light page as the academy; the tag and the header's name say whose it is. The list can be
+ * narrowed in place to the flows reached one way.
+ */
 export function OperatorHome() {
   const ids = track("Operator")?.flows ?? [];
   const flows = ids.flatMap((id) => flow(id) ?? []);
@@ -19,33 +23,49 @@ export function OperatorHome() {
   const progress = useProgress();
   const next = nextUp(progress, track("Operator"), catalogue);
   const done = flows.filter((f) => progress.flows[f.id]?.done).length;
+  const [only, setOnly] = useState<Reach | null>(null);
+  const shown = only ? flows.filter((f) => f.reach === only) : flows;
+  const choices: [Reach | null, string, number][] = [[null, "All", flows.length], ...reaches.map((r): [Reach, string, number] => [r, REACH_LABEL[r], flows.filter((f) => f.reach === r).length])];
   return (
     <Page>
-      <div className="grid gap-8 rounded-lg bg-night p-8 text-primary-ink sm:p-10 lg:grid-cols-3 lg:items-center">
-        <div className="lg:col-span-2">
-          <p className="text-eyebrow font-semibold uppercase text-live">FrostAura only</p>
-          <h1 className="mt-3 font-display text-title-sm font-bold sm:text-title">The operator handbook</h1>
-          <p className="mt-4 max-w-read text-lead-sm text-primary-ink-soft sm:text-lead">{LEVEL_BLURB.Operator} Every God-mode entry into an organisation is logged, and that organisation's Owner can read the log.</p>
-          {next && <a href={href(`/flow/${next.flow.id}`)} className={`${ui.light} mt-8 px-6`}>{done ? "Continue" : "Begin"} with {next.flow.id}</a>}
+      <PageHeader
+        tag="FrostAura only"
+        title="The operator handbook"
+        lede={`${LEVEL_BLURB.Operator} Every God-mode entry into an organisation is logged, and that organisation's Owner can read the log.`}
+      >
+        <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-4">
+          <div className="flex items-center gap-4" data-testid="operator-progress">
+            <ProgressRing done={done} total={flows.length} label={`Operator handbook: ${done} of ${flows.length} flows done`} />
+            <div>
+              <p className="font-display text-2xl font-semibold tabular-nums text-ink">{done} of {flows.length}</p>
+              <p className="text-sm text-ink-muted">flows done, counted apart from the client paths</p>
+            </div>
+          </div>
+          {next && <a href={href(`/flow/${next.flow.id}`)} className={`${ui.primary} px-6`}>{done ? "Continue" : "Begin"} with {next.flow.id}</a>}
         </div>
-        <div className="flex items-center gap-5 lg:justify-self-end" data-testid="operator-progress">
-          <ProgressRing done={done} total={flows.length} size="lg" tone="dark" label={`Operator handbook: ${done} of ${flows.length} flows done`} />
-          <div>
-            <p className="font-display text-3xl font-bold tabular-nums">{done} of {flows.length}</p>
-            <p className="text-sm text-primary-ink-soft">flows done, counted apart from the client paths</p>
+      </PageHeader>
+
+      <div className="mt-12 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <h2 className="font-display text-2xl font-semibold text-ink">In order</h2>
+        {/* Real filters: they narrow the list below, in place, and say which one is on. */}
+        <div role="group" aria-label="Show only the flows reached by" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <div className="inline-flex gap-1 rounded-full border bg-ground p-1">
+            {choices.map(([r, label, n]) => (
+              <button
+                key={label}
+                type="button"
+                aria-pressed={only === r}
+                onClick={() => setOnly(r)}
+                className={`inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-sm font-medium transition-colors touch:min-h-11 ${only === r ? "bg-surface text-ink shadow-toggle" : "text-ink-body hover:text-ink"}`}
+              >
+                {label} <span className="tabular-nums text-ink-muted">{n}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
-      <div className="mt-10 flex flex-wrap items-baseline justify-between gap-4">
-        <Eyebrow>In order</Eyebrow>
-        <nav aria-label="Reached by" className="flex flex-wrap items-center gap-2 text-sm text-ink-muted">
-          <span>Only those reached by</span>
-          {reaches.map((r) => (
-            <a key={r} href={href(`/operator/reach/${r}`)} className={`${ui.chip} hover:border-primary-line hover:text-ink`}>{REACH_LABEL[r]}</a>
-          ))}
-        </nav>
-      </div>
-      <div className="mt-4"><FlowList flows={flows} numbered next={next?.flow.id} /></div>
+      <p className="sr-only" role="status">{only ? `${shown.length} flows reached by ${REACH_LABEL[only]}` : ""}</p>
+      <div className="mt-4"><FlowList flows={shown} numbered={!only} next={next?.flow.id} hideReach={!!only} /></div>
     </Page>
   );
 }

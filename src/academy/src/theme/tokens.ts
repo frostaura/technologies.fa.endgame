@@ -49,6 +49,8 @@ export const academy = {
     ring: "3.25rem",
     "ring-lg": "7rem",
     medal: "3.5rem",
+    /** The search results panel under the header's box: wide enough for a title on two lines, never wider than the window. */
+    "search-panel": "min(37.5rem, calc(100vw - 2rem))",
   },
   /** The player: the console beside its side column, or on top of the steps on a phone. */
   gridTemplateColumns: {
@@ -57,6 +59,10 @@ export const academy = {
     /** Cards that fill their row: as many as fit at this width, never an orphan stretched alone. */
     cards: "repeat(auto-fill, minmax(17rem, 1fr))",
     "cards-sm": "repeat(auto-fill, minmax(13rem, 1fr))",
+    /** A grid of flow ids: every cell one width, so the ids line up in columns. */
+    ids: "repeat(auto-fill, minmax(5.5rem, 1fr))",
+    /** A reading column beside a column that takes the rest (About). */
+    about: "minmax(0, 42rem) minmax(0, 1fr)",
     /** A contents line in the PDFs: the id, the title (hanging under itself when it wraps), the page. */
     contents: "4.5rem 1fr auto",
   },
@@ -104,5 +110,5 @@ export const academy = {
     "sheet-b": "calc(1.5rem + env(safe-area-inset-bottom, 0px))",
   },
   /** `short:` — a phone on its side (or any window under 600 px tall): the stage's controls fold into one row. */
-  screens: { split: { raw: SPLIT_QUERY }, short: { raw: SHORT_QUERY }, mouse: { raw: MOUSE_QUERY }, touch: { raw: "(hover: none), (pointer: coarse)" } },
+  screens: { split: { raw: SPLIT_QUERY }, short: { raw: SHORT_QUERY }, mouse: { raw: MOUSE_QUERY }, touch: { raw: "(hover: none), (pointer: coarse)" }, tall: { raw: "(min-height: 1000px)" } },
 } as const;

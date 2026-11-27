@@ -5,7 +5,8 @@ import { ui } from "./ui.ts";
 
 export function LevelBadge({ level }: { level: Level | null }) {
   if (!level) return null;
-  const tone = level === "Operator" ? "bg-night text-primary-ink" : "bg-primary-tint text-primary-link";
+  // One accent: the operator handbook's flows are told apart by their name, not by a dark slab.
+  const tone = level === "Operator" ? "border border-border-strong bg-surface text-ink-body" : "bg-primary-tint text-primary-link";
   return <span className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${tone}`}>{level === "Operator" ? "Operator" : level}</span>;
 }
 
@@ -17,6 +18,11 @@ const REACH_ICON: Record<Reach, string> = {
   automatic: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2",
   none: "M5 12h14",
 };
+
+/** A route's sign on its own, at the size its context sets. */
+export function ReachIcon({ reach, className = "h-5 w-5" }: { reach: Reach; className?: string }) {
+  return <svg viewBox="0 0 24 24" className={className} aria-hidden="true"><path d={REACH_ICON[reach]} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+}
 
 /** How a flow is reached: one neutral chip with an icon per route. Colour is kept for state, never for kind. */
 export function ReachChip({ reach }: { reach: Reach }) {
@@ -39,4 +45,10 @@ export function ProgressDot({ state, className = "", size = "md" }: { state: Sta
       )}
     </span>
   );
+}
+
+/** Started or done, in words, for a list where a bare ring would need a legend (search results). Nothing for a flow not begun. */
+export function ProgressWord({ state }: { state: State | undefined }) {
+  if (!state) return null;
+  return <span className={`shrink-0 whitespace-nowrap text-xs font-medium ${state === "done" ? "text-success-text" : "text-primary-link"}`}>{state === "done" ? "Done" : "Started"}</span>;
 }
