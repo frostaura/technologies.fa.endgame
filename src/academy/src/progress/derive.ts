@@ -72,6 +72,8 @@ export function nextUp(p: Progress, track: Track | undefined, cat: Catalogue, af
     const f = cat.flow(id);
     if (!f) continue;
     const pre = pendingPrerequisite(f, p, cat, operator);
+    // The prerequisite still open is the flow being read now: the way on is the flow after it, never itself.
+    if (pre && after && (pre.id === after || cat.flow(after)?.id === pre.id)) return { flow: f };
     return pre ? { flow: pre, before: f } : { flow: f };
   }
   return undefined;

@@ -3,7 +3,8 @@ import scriptsJson from "../generated/scripts.json";
 import siteJson from "../generated/site.json";
 import indexJson from "../generated/search-index.json";
 import shotsJson from "../generated/shots.json";
-import type { Content, Flow, Level, Reach, Role } from "../content/types.ts";
+import printsJson from "../generated/prints.json";
+import { CLIENT_LEVELS, type Content, type Flow, type Level, type Reach, type Role } from "../content/types.ts";
 import type { StepScript } from "../content/scripts.ts";
 import { loadIndex, search as runSearch, type Hit } from "../content/search.ts";
 
@@ -22,6 +23,12 @@ export const shots = shotsJson as Record<string, string>;
 export function shotFor(flowId: string, key: number | string): string | undefined {
   return shots[`${flowId}/${key}`];
 }
+/** A step's print picture: a detail around what it rings, or the whole screen (`make academy-shots`). */
+const prints = printsJson as Record<string, { file: string; whole: boolean }>;
+export function printFor(flowId: string, key: number | string): { file: string; whole: boolean } | undefined {
+  return prints[`${flowId}/${key}`];
+}
+
 export const site = siteJson as {
   siteUrl: string;
   qr: { size: number; path: string };
@@ -46,6 +53,29 @@ export function isOperator(f: Flow): boolean {
 /** What client-facing navigation shows: everything but the operator handbook. */
 export const clientFlows = content.flows.filter((f) => !isOperator(f));
 export const operatorFlows = content.flows.filter(isOperator);
+
+const stepsOf = (flows: Flow[]) => flows.reduce((n, f) => n + f.steps.length, 0);
+
+/**
+ * The flows the four client paths teach — what progress is counted against, and what "flows" means
+ * wherever the academy gives a figure. A handful of reference entries sit outside every path (a
+ * behaviour with no steps of its own); they are browsable, and counted apart as `reference`.
+ */
+export const pathFlows: Flow[] = [...new Set(content.tracks.filter((t) => CLIENT_LEVELS.includes(t.level)).flatMap((t) => t.flows))].flatMap((id) => byId.get(id) ?? []);
+
+/**
+ * The academy's headline figures, counted once and shown the same on every page: the cover, your
+ * progress and About all read these. The operator handbook is counted apart, and never mixed in.
+ */
+export const figures = {
+  flows: pathFlows.length,
+  steps: stepsOf(pathFlows),
+  reference: clientFlows.length - pathFlows.length,
+  areas: content.areas.length,
+  paths: CLIENT_LEVELS.length,
+  operatorFlows: operatorFlows.length,
+  operatorSteps: stepsOf(operatorFlows),
+} as const;
 
 export function track(level: Level) {
   return content.tracks.find((t) => t.level === level);

@@ -12,7 +12,7 @@ import { INLINE_STYLE as STYLE, type Tone } from "./inlineStyle.ts";
  * every inline style keeps its contrast there.
  */
 
-const TOKEN = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|(?<![*\w])\*[^*\s][^*]*\*(?!\*)|\b[A-Z]{2,5}-\d{2}\b|\{[A-Za-z][A-Za-z0-9 ._-]*\})/g;
+const TOKEN = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|(?<![*\w])\*[^*\s][^*]*\*(?!\*)|\b[A-Z]{2,5}-\d{2}\b|\{[A-Za-z][A-Za-z0-9 ._-]*\}|<[A-Za-z][A-Za-z ._-]{0,15}>)/g;
 
 
 
@@ -43,7 +43,7 @@ export function Inline({ text: raw, self, plainIds = false, tone = "light" }: { 
       const to = lm ? link(lm[2] ?? "") : null;
       out.push(to ? <a key={k++} href={to} className={style.link}>{lm?.[1]}</a> : <Fragment key={k++}>{lm?.[1] ?? t}</Fragment>);
     } else if (t.startsWith("*")) out.push(<em key={k++}>{t.slice(1, -1)}</em>);
-    else if (t.startsWith("{")) {
+    else if (t.startsWith("{") || t.startsWith("<")) {
       out.push(
         <var key={k++} className={style.variable} title={`Stands for the ${placeholderWords(t)}, which the console fills in`} data-placeholder={t}>
           {placeholderWords(t)}

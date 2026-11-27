@@ -15,6 +15,8 @@ const config: Config = {
       screens: academy.screens,
       fontSize: Object.fromEntries(Object.entries(academy.fontSize).map(([k, [size, rest]]) => [k, [size, { ...rest }]])),
       maxWidth: academy.width,
+      gridTemplateColumns: academy.gridTemplateColumns,
+      gridTemplateRows: academy.gridTemplateRows,
       width: academy.width,
       height: academy.height,
       minHeight: academy.height,

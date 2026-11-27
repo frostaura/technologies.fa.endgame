@@ -30,8 +30,15 @@ const VIEWPORT = { width: 1180, height: 760 };
 const QUALITY = Number(process.env.SHOTS_QUALITY ?? 0.72);
 /** The demo's clock for anything it dates: one fixed moment, so "3 days ago" never drifts between runs. */
 const NOW = new Date("2026-11-25T10:00:00Z");
-const PRINT_WIDTH = 880;
-const PRINT_QUALITY = 0.7;
+const PRINT_QUALITY = 0.72;
+/**
+ * The print picture: the part of the screen the step rings, at twice the pixels, so its words print
+ * at 7 pt or more beside the step's text in the PDF (its 108 mm column). With no ring, the whole
+ * screen, printed across the page's full width. Never the caption bubble or the soft cursor: on
+ * paper the step's own words say what the bubble says.
+ */
+const DETAIL = { width: 600, height: 380 };
+const SCALE = 2;
 const WORKERS = Number(process.env.SHOTS_WORKERS ?? 4);
 
 interface Play {
@@ -49,6 +56,8 @@ export interface ShotIndex {
   format: 1;
   viewport: { width: number; height: number };
   shots: Record<string, string>;
+  /** Each picture's print copy: the JPEG beside it, and whether it is a detail around the ring or the whole screen. */
+  print?: Record<string, { file: string; whole: boolean }>;
   hashes: Record<string, string>;
 }
 
@@ -101,7 +110,7 @@ async function settle(page: Page) {
 }
 
 async function capture(browser: Browser, play: Play, base: string, index: ShotIndex, encoder: Page): Promise<string[]> {
-  const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1, reducedMotion: "reduce", colorScheme: "light", locale: "en-GB", timezoneId: "UTC" });
+  const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: SCALE, reducedMotion: "reduce", colorScheme: "light", locale: "en-GB", timezoneId: "UTC" });
   const page = await context.newPage();
   const problems: string[] = [];
   try {
@@ -113,7 +122,7 @@ async function capture(browser: Browser, play: Play, base: string, index: ShotIn
     await call("goto", { route: play.start, persona: play.persona, scenario: play.scenario });
     await settle(page);
     const demo = play.steps.filter((s): s is DemoStep => s.kind === "demo");
-    let previous: { hash: string; file: string } | null = null;
+    let previous: { hash: string; file: string; print?: { file: string; whole: boolean } } | null = null;
     for (const [i, step] of demo.entries()) {
       try {
         // A step may hand the same world to someone else (the operator acts, the Owner reads), as the flow page plays it.
@@ -132,23 +141,41 @@ async function capture(browser: Browser, play: Play, base: string, index: ShotIn
       if (!key) continue;
       // Whatever the step started (a send, a sign-in, a refresh) has drawn its result, then the picture.
       await settle(page);
-      const png = await page.screenshot({ type: "png", animations: "disabled", caret: "hide" });
+      const png = await page.screenshot({ type: "png", animations: "disabled", caret: "hide", scale: "css" });
       const hash = sha(png);
       if (previous && previous.hash === hash) {
         index.shots[key] = previous.file;
+        if (index.print && previous.print) index.print[key] = previous.print;
         continue;
       }
       const file = `${key}.webp`;
       const target = path.join(out, file);
+      const ring = await page.evaluate(() => {
+        const r = document.querySelector("[data-demo-spotlight]:not([hidden])")?.getBoundingClientRect();
+        return r && r.width > 0 ? { x: r.left, y: r.top, width: r.width, height: r.height } : null;
+      });
+      // The detail: the ring's surroundings, the ring a little above the middle, kept inside the screen.
+      const clip = ring
+        ? {
+            x: Math.max(0, Math.min(VIEWPORT.width - DETAIL.width, ring.x + ring.width / 2 - DETAIL.width / 2)),
+            y: Math.max(0, Math.min(VIEWPORT.height - DETAIL.height, ring.y + ring.height / 2 - DETAIL.height * 0.42)),
+            ...DETAIL,
+          }
+        : undefined;
+      const print = { file: file.replace(/\.webp$/, ".jpg"), whole: !clip };
       if (index.hashes[file] !== hash || !existsSync(target) || !existsSync(target.replace(/\.webp$/, ".jpg"))) {
         mkdirSync(path.dirname(target), { recursive: true });
         writeFileSync(target, await encode(encoder, png, "image/webp", QUALITY));
-        // The PDFs take a JPEG beside it: Chromium embeds a JPEG as it is, where a WebP would be stored uncompressed.
-        writeFileSync(target.replace(/\.webp$/, ".jpg"), await encode(encoder, png, "image/jpeg", PRINT_QUALITY, PRINT_WIDTH));
+        // The PDFs take a JPEG: Chromium embeds a JPEG as it is, where a WebP would be stored uncompressed.
+        const hide = await page.addStyleTag({ content: "[data-demo-note], [data-demo-cursor] { visibility: hidden !important; }" });
+        const paper = await page.screenshot({ type: "png", animations: "disabled", caret: "hide", scale: "device", ...(clip ? { clip } : {}) });
+        await hide.evaluate((el) => (el as Element).remove());
+        writeFileSync(path.join(out, print.file), await encode(encoder, paper, "image/jpeg", PRINT_QUALITY));
         index.hashes[file] = hash;
       }
       index.shots[key] = file;
-      previous = { hash, file };
+      (index.print ??= {})[key] = print;
+      previous = { hash, file, print };
     }
   } finally {
     await context.close();
@@ -180,8 +207,13 @@ async function main() {
   const filtered = !!process.env.ACADEMY_FLOWS;
   const old: ShotIndex | null = existsSync(indexFile) ? (JSON.parse(readFileSync(indexFile, "utf8")) as ShotIndex) : null;
   const sameShape = old?.viewport.width === VIEWPORT.width && old.viewport.height === VIEWPORT.height;
-  const index: ShotIndex = { format: 1, viewport: VIEWPORT, shots: filtered && sameShape ? { ...old.shots } : {}, hashes: sameShape && old ? { ...old.hashes } : {} };
-  if (filtered) index.shots = Object.fromEntries(Object.entries(index.shots).filter(([k]) => !list.some((p) => k.startsWith(`${p.flow}/`))));
+  // Print copies older than the detail crop carry no `print` entry: they are captured again.
+  const samePrint = !!old?.print;
+  const index: ShotIndex = { format: 1, viewport: VIEWPORT, shots: filtered && sameShape ? { ...old.shots } : {}, print: filtered && sameShape ? { ...(old.print ?? {}) } : {}, hashes: sameShape && samePrint && old ? { ...old.hashes } : {} };
+  if (filtered) {
+    index.shots = Object.fromEntries(Object.entries(index.shots).filter(([k]) => !list.some((p) => k.startsWith(`${p.flow}/`))));
+    index.print = Object.fromEntries(Object.entries(index.print ?? {}).filter(([k]) => !list.some((p) => k.startsWith(`${p.flow}/`))));
+  }
   mkdirSync(out, { recursive: true });
 
   const server = await serve(demoDir, port, "/demo/");
@@ -216,7 +248,8 @@ async function main() {
     }
   }
   const sorted = (o: Record<string, string>) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true })));
-  writeFileSync(indexFile, `${JSON.stringify({ ...index, shots: sorted(index.shots), hashes: sorted(index.hashes) }, null, 2)}\n`);
+  const sortedPrint = Object.fromEntries(Object.entries(index.print ?? {}).sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true })));
+  writeFileSync(indexFile, `${JSON.stringify({ ...index, shots: sorted(index.shots), print: sortedPrint, hashes: sorted(index.hashes) }, null, 2)}\n`);
   const { files, bytes } = sizeOf(out);
   process.stdout.write(
     `Captured ${Object.keys(index.shots).length} steps from ${list.length} plays in ${Math.round((Date.now() - started) / 1000)} s: ${files} images, ${(bytes / 1024 / 1024).toFixed(1)} MB (${files ? Math.round(bytes / files / 1024) : 0} KB each on average), in ${path.relative(process.cwd(), out)}/\n`,

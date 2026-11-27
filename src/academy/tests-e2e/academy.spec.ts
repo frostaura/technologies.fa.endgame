@@ -57,7 +57,7 @@ test("the cover names the academy and its QR code reads the site's address", asy
   const code = jsQR(Uint8ClampedArray.from(pixels), 400, 400);
   expect(code?.data).toBe(SITE_URL);
   await expect(page.getByText(SITE_URL.replace(/^https:\/\//, ""), { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Download the academy (PDF)" })).toHaveAttribute("href", "./academy.pdf");
+  await expect(page.getByRole("link", { name: "The academy (PDF)" })).toHaveAttribute("href", "./academy.pdf");
   const pdf = await page.request.get("./academy.pdf");
   expect(pdf.status()).toBe(200);
 });
@@ -201,18 +201,19 @@ test("the address is the step: keys, Back and Forward, an edited address and scr
   // A link to another step of the same flow, pasted into the address bar.
   await page.evaluate(() => (window.location.hash = "#/flow/IDEA-02/step/5"));
   await agrees(5, "");
-  // Scrolling the page, once it has come to rest on step 5: the step crossing the reading line becomes the step in the address.
+  // Scrolling the steps beside the console, once it has come to rest on step 5: the step crossing the reading line becomes the step in the address.
   await page.waitForTimeout(1600);
   await page.evaluate(() => {
+    const col = document.querySelector<HTMLElement>("[data-testid=side-column]");
     const el = document.getElementById("step-2");
-    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - window.innerHeight * 0.42 + 8 });
+    if (col && el) col.scrollTo({ top: col.scrollTop + el.getBoundingClientRect().top - col.getBoundingClientRect().top - col.clientHeight * 0.3 + 8 });
   });
   await agrees(2, "Where it goes");
 });
 
-test("the step being read has one outline, its chip inside it, also under the keyboard's focus", async ({ page }) => {
+test("the step being read has one outline, its kind inside it, also under the keyboard's focus", async ({ page }) => {
   await withDemo(page);
-  await page.goto("./#/flow/IDEA-02/step/2");
+  await page.goto("./#/flow/OPS-12/step/1");
   await page.keyboard.press("ArrowRight");
   const button = page.locator("[aria-current=step]");
   await expect(button).toBeFocused();
@@ -220,8 +221,11 @@ test("the step being read has one outline, its chip inside it, also under the ke
   const ring = await button.evaluate((b) => getComputedStyle(b).boxShadow);
   expect(ring === "none" || (ring.match(/-?\d+(\.\d+)?px/g) ?? []).every((v) => parseFloat(v) === 0), ring).toBe(true);
   const card = page.locator("[data-testid=step-card]", { has: button });
-  const [c, chip] = [await card.boundingBox(), await card.getByText("Live", { exact: true }).boundingBox()];
+  const [c, chip] = [await card.boundingBox(), await card.getByText("Terminal", { exact: true }).boundingBox()];
   expect(c && chip && chip.y + chip.height <= c.y + c.height && chip.y >= c.y).toBe(true);
+  // The live console is the rule: no step repeats a "Live" chip; the frame says it once.
+  await page.goto("./#/flow/IDEA-02/step/1");
+  await expect(page.getByTestId("side-column").getByText("Live", { exact: true })).toHaveCount(0);
 });
 
 test("a step's placeholders read as what they stand for, and quoted words on the dark panel stay legible", async ({ page }) => {
@@ -245,13 +249,15 @@ test("a step's placeholders read as what they stand for, and quoted words on the
   expect((hi + 0.05) / (lo + 0.05)).toBeGreaterThanOrEqual(4.5);
 });
 
+const columnTop = (page: Page) => page.evaluate(() => document.querySelector("[data-testid=side-column]")?.scrollTop ?? -1);
+
 test("a flow opened from the end of another starts at its top, on its first step", async ({ page }) => {
   await withDemo(page);
   await page.goto("./#/flow/ID-02/step/4");
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+  await expect.poll(() => columnTop(page)).toBeGreaterThan(100);
   await page.getByRole("link", { name: /^Next:/ }).click();
   await expect(page).toHaveURL(/#\/flow\/(?!ID-02)[A-Z]+-\d+\/step\/1$/);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await expect.poll(() => columnTop(page)).toBe(0);
   // It stays there: the reading line does not carry the step on once the page has come to rest.
   await page.waitForTimeout(1200);
   await expect(page).toHaveURL(/\/step\/1$/);
@@ -357,13 +363,14 @@ test("on a phone, the player keeps the step and its controls in reach: buttons, 
   await next.click();
   await expect(page).toHaveURL(/\/step\/2$/);
   await expect(controls.getByText("Step 2 of 5")).toBeVisible();
-  // The step being read sits under the stage, on screen, not under the pager.
+  // The console is on screen above the pager, and the pager carries the step's own words.
   await expect
     .poll(async () => {
-      const [f, s, p] = [await frame.boundingBox(), await page.locator("[aria-current=step]").boundingBox(), await controls.boundingBox()];
-      return !!(f && s && p && f.y + f.height <= s.y && s.y < p.y);
+      const [f, p] = [await frame.boundingBox(), await controls.boundingBox()];
+      return !!(f && p && f.y >= 0 && f.y + f.height <= p.y);
     })
     .toBe(true);
+  await expect(controls).toContainText("Where it goes");
   // A swipe left over the stage moves on; a swipe right goes back.
   await page.waitForTimeout(1200);
   await swipe(page, 320, 80, 300);
@@ -379,7 +386,6 @@ test("on a phone, the player keeps the step and its controls in reach: buttons, 
   await expect(page.getByRole("button", { name: "Smaller console" })).toHaveAttribute("aria-pressed", "true");
   const big = await frame.boundingBox();
   expect(big && fb && big.height > fb.height).toBe(true);
-  await expect(controls).toContainText("Where it goes");
   const pb = await controls.boundingBox();
   expect(pb && big && big.y + big.height <= pb.y + 1).toBe(true);
   expect(await fitsWidth(page)).toBe(true);
@@ -427,7 +433,7 @@ test("the progress page counts the paths, moves progress by code, and resets onl
   await expect(page.getByRole("region", { name: "The operator handbook" })).toContainText(/0 of \d+ done/);
   // Export as a code, reset, and bring it back.
   await page.getByRole("button", { name: "Copy a code" }).click();
-  const code = await page.locator("textarea[readonly]").inputValue();
+  const code = await page.locator("input[readonly]").inputValue();
   expect(code).toMatch(/^EGA2\./);
   await page.getByRole("button", { name: "Reset progress…" }).click();
   const dialog = page.getByRole("dialog", { name: "Reset your progress?" });
@@ -488,4 +494,171 @@ test("the print version carries no device-local progress", async ({ page }) => {
   await expect(page.locator("body")).not.toContainText("Pick up where you left off");
   await expect(page.locator("body")).not.toContainText("Your progress");
   await expect(page.getByTestId("header-resume")).toHaveCount(0);
+});
+
+/* ------------------------------------------------------------------ layout guarantees */
+
+const DESKTOPS = [
+  { width: 1280, height: 800 },
+  { width: 1512, height: 900 },
+  { width: 1920, height: 1080 },
+  { width: 2560, height: 1300 },
+] as const;
+
+const inside = (r: { x: number; y: number; width: number; height: number } | null, vw: number, vh: number) => !!r && r.x >= 0 && r.y >= 0 && r.x + r.width <= vw + 0.5 && r.y + r.height <= vh + 0.5;
+
+test("on arrival at every desktop size, the title, the whole console and every step control are in view, with nothing to scroll", async ({ browser }) => {
+  for (const viewport of DESKTOPS) {
+    const context = await browser.newContext({ viewport });
+    const page = await context.newPage();
+    await withDemo(page);
+    for (const address of ["./#/flow/IDEA-02", "./#/flow/ORG-08/step/3", "./#/flow/ID-02/step/4"]) {
+      await page.goto(address);
+      const frame = page.getByTestId("demo-frame");
+      await expect(frame).toBeVisible();
+      const controls = page.getByRole("group", { name: "Step controls" });
+      const targets = [
+        page.getByRole("heading", { level: 1 }),
+        frame,
+        controls.getByRole("button", { name: "Previous step" }),
+        controls.getByText(/^Step \d+ of \d+$/),
+        controls.getByRole("button", { name: "Next step" }).or(controls.getByRole("button", { name: "Finish" })).or(controls.getByRole("link")).first(),
+        page.getByRole("button", { name: "Try it yourself" }).first(),
+        page.getByRole("button", { name: "Show me again" }),
+      ];
+      for (const t of targets) expect(inside(await t.boundingBox(), viewport.width, viewport.height), `${address} at ${viewport.width}×${viewport.height}`).toBe(true);
+      // One sticky unit: the page itself never scrolls, so the console never slides under the header (A1–A3).
+      expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1)).toBe(true);
+      const [header, f] = [await page.getByRole("banner").boundingBox(), await frame.boundingBox()];
+      expect(header && f && f.y >= header.y + header.height).toBe(true);
+      expect(await fitsWidth(page)).toBe(true);
+    }
+    // On a wide screen the console is the hero: it takes the width after the side column (A4).
+    if (viewport.width >= 1920) expect(((await page.getByTestId("demo-frame").boundingBox())?.width ?? 0) / viewport.width).toBeGreaterThan(0.55);
+    await context.close();
+  }
+});
+
+test("the frame has an accessible name and no title, so no browser tooltip covers the page (A17)", async ({ page }) => {
+  await withDemo(page);
+  for (const address of ["./#/flow/IDEA-02", "./#/demo"]) {
+    await page.goto(address);
+    const frame = page.locator("iframe");
+    await expect(frame).toHaveCount(1);
+    expect(await frame.getAttribute("title")).toBeNull();
+    await expect(frame).toHaveAccessibleName(/Endgame live demo|Live demo console: /);
+  }
+  // Nothing is drawn over the console while it plays: no "Tap to try it yourself" pill (A8).
+  await page.goto("./#/flow/IDEA-02");
+  await expect(page.getByText("Tap to try it yourself")).toHaveCount(0);
+});
+
+test("on a phone held upright, the console takes at least 60% of the height, and its caption sits outside it", async ({ browser }) => {
+  for (const viewport of [{ width: 375, height: 812 }, { width: 390, height: 844 }, { width: 768, height: 1024 }]) {
+    const context = await browser.newContext({ viewport, isMobile: viewport.width < 768, hasTouch: true });
+    const page = await context.newPage();
+    await withDemo(page);
+    await page.goto("./#/flow/IDEA-02/step/1");
+    const frame = page.getByTestId("demo-frame");
+    await expect(frame).toBeVisible();
+    const box = await page.getByTestId("stage-media").boundingBox();
+    expect((box?.height ?? 0) / viewport.height, `${viewport.width}×${viewport.height}`).toBeGreaterThanOrEqual(0.6);
+    // The caption is set under the console, and the console is asked for no note of its own.
+    const caption = await page.getByTestId("caption").boundingBox();
+    expect(caption && box && caption.y >= box.y + box.height).toBe(true);
+    await expect.poll(async () => (await received(page)).filter((l) => l.startsWith("highlight")).length).toBeGreaterThan(0);
+    for (const l of (await received(page)).filter((x) => x.startsWith("highlight"))) expect(l).not.toContain('"note"');
+    expect(await fitsWidth(page)).toBe(true);
+    await context.close();
+  }
+});
+
+test("on a phone on its side, the console fills the height with a slim step bar over its foot", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 812, height: 375 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  await withDemo(page);
+  await page.goto("./#/flow/IDEA-02/step/1");
+  const media = await page.getByTestId("stage-media").boundingBox();
+  const overlay = await page.getByTestId("step-overlay").boundingBox();
+  expect(media && media.height >= 375 * 0.75).toBe(true);
+  expect(overlay && media && overlay.y + overlay.height <= media.y + media.height && overlay.height <= 64).toBe(true);
+  expect(await fitsWidth(page)).toBe(true);
+  await context.close();
+});
+
+test("no page scrolls sideways, at any size", async ({ browser }) => {
+  const sizes = [{ width: 375, height: 812 }, { width: 812, height: 375 }, { width: 768, height: 1024 }, { width: 1280, height: 800 }, { width: 2560, height: 1300 }];
+  for (const viewport of sizes) {
+    const context = await browser.newContext({ viewport });
+    const page = await context.newPage();
+    await withDemo(page);
+    for (const address of ["./", "./#/learn", "./#/path/Developer", "./#/browse", "./#/area/02", "./#/who/owner", "./#/reach/none", "./#/search?q=passkey", "./#/progress", "./#/about", "./#/finish", "./#/operator", "./#/nope", "./#/flow/OPS-01", "./#/flow/APP-01/step/3", "./#/demo"]) {
+      await page.goto(address);
+      await page.waitForTimeout(150);
+      expect(await fitsWidth(page), `${address} at ${viewport.width}×${viewport.height}`).toBe(true);
+    }
+    await context.close();
+  }
+});
+
+test("the headline figures are one set: the cover, your progress and About agree", async ({ page }) => {
+  await page.goto("./");
+  const flows = await page.locator("[data-figure=flows]").first().textContent();
+  const steps = await page.locator("[data-figure=steps]").first().textContent();
+  expect(Number(flows)).toBeGreaterThan(100);
+  await page.goto("./#/progress");
+  await expect(page.getByTestId("overall")).toContainText(`of ${flows}`);
+  await page.goto("./#/about");
+  expect(await page.locator("[data-figure=flows]").first().textContent()).toBe(flows);
+  expect(await page.locator("[data-figure=steps]").first().textContent()).toBe(steps);
+  await expect(page.getByTestId("figures-note")).toContainText(`${flows} flows and ${steps} steps`);
+});
+
+test("Next always leads to another flow, never the one being read (A21)", async ({ page }) => {
+  await withDemo(page);
+  for (const id of ["ID-01", "OPS-01"]) {
+    await page.goto(`./#/flow/${id}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    for (const link of await page.getByRole("link", { name: /^Next/ }).all()) expect(await link.getAttribute("href")).not.toMatch(new RegExp(`/flow/${id}$`));
+    await expect(page.locator("#worked")).toBeVisible();
+    await expect(page.getByText(new RegExp(`Next: ${id}\\b`))).toHaveCount(0);
+  }
+});
+
+/* ------------------------------------------------------------------ with the real console */
+
+
+test("the console's caption sits beside what it names, never over it, with one pointer, and is not printed twice (A5, A16)", async ({ browser }) => {
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 1920, height: 1080 }]) {
+    const context = await browser.newContext({ viewport });
+    const page = await context.newPage();
+    for (const address of ["./#/flow/ORG-08/step/1", "./#/flow/IDEA-02/step/1", "./#/flow/CRED-01/step/1"]) {
+      await page.goto(address);
+      const frame = page.frameLocator("[data-testid=demo-frame]");
+      const note = frame.locator("[data-demo-note]");
+      await expect(note).toBeVisible({ timeout: 20_000 });
+      await page.waitForTimeout(600);
+      const [n, ring] = [await note.boundingBox(), await frame.locator("[data-demo-spotlight]").boundingBox()];
+      expect(n && ring, address).toBeTruthy();
+      if (n && ring) {
+        const w = Math.max(0, Math.min(n.x + n.width, ring.x + ring.width) - Math.max(n.x, ring.x));
+        const h = Math.max(0, Math.min(n.y + n.height, ring.y + ring.height) - Math.max(n.y, ring.y));
+        expect(w * h, `${address} at ${viewport.width}: the caption covers what it points at`).toBe(0);
+      }
+      // Its words are not repeated under the frame.
+      const words = ((await note.textContent()) ?? "").trim();
+      await expect(page.getByTestId("caption")).not.toHaveText(words);
+    }
+    await context.close();
+  }
+});
+
+test("on a phone, a long console address never widens the page (A18)", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  await page.goto("./#/flow/APP-01/step/3");
+  await expect(page.getByTestId("demo-frame")).toBeVisible();
+  await page.waitForTimeout(4000);
+  expect(await fitsWidth(page)).toBe(true);
+  await context.close();
 });

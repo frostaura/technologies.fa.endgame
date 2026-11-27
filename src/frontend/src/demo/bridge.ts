@@ -378,7 +378,8 @@ async function approach(el: HTMLElement) {
   if (instantNow) return;
   await sleep(250);
   const r = pageRect(el);
-  await moveCursor(r.left + r.width / 2, r.top + r.height / 2);
+  // The pointer's tip rests just inside the control's lower edge, its body below it: never over the label it presses.
+  await moveCursor(r.left + Math.min(r.width / 2, 24), r.bottom - Math.min(6, r.height / 4));
 }
 
 /** The window an element lives in: the console's, or an Edge page's frame. */

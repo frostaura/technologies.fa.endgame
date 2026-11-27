@@ -72,7 +72,7 @@ export function App() {
   else if (head === "finish") page = <Finish />;
 
   return (
-    <Shell operator={operator}>
+    <Shell operator={operator} player={head === "flow"}>
       <Title text={operator && !head.startsWith("flow") ? `Operator handbook · ${TITLE}` : title} />
       {page}
     </Shell>
