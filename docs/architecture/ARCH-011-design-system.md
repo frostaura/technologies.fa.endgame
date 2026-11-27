@@ -5,7 +5,7 @@
 | **ID** | ARCH-011 |
 | **Title** | The console's design system: tiers, primitives, status vocabulary, palette |
 | **Status** | Current |
-| **Covers** | `src/frontend/src/lib/tokens.ts`, `tailwind.config.ts`, `src/frontend/src/components/ui/**`, `src/frontend/src/components/states.tsx`, `src/frontend/src/features/shell/**`, `src/frontend/src/design.test.ts` |
+| **Covers** | `src/frontend/src/lib/tokens.ts`, `src/frontend/src/lib/format.ts`, `src/frontend/src/lib/estimates.ts`, `tailwind.config.ts`, `src/frontend/src/components/ui/**`, `src/frontend/src/components/{Fold,Sheet,BottomNav,states}.tsx`, `src/frontend/src/features/shell/**`, `src/frontend/src/design.test.ts`, `src/frontend/tests-demo/{phone,shared-layer}.spec.ts` |
 
 ## Context
 
@@ -27,17 +27,23 @@ Widths are the console's own viewport (inside the academy's frame, the frame's w
 
 | Tier | Width | What the shell does |
 | --- | --- | --- |
-| phone | < 640, or short and < 1024 | One column, the compact sticky header (it tucks away on scroll down and returns on scroll up), the bottom bar, sheets. |
-| **rail** (`rail:`) | height < 500 and width < 1024 — a phone on its side | The bar becomes a 4.5 rem rail at the left edge; the header is one line; the page and its side panel sit side by side; bottom sheets come in from the right. |
-| tablet | 640–1023 | The full header on one row (Sign out and System as icons); the side panel's cards under the page, two across. |
+| phone | < 640 (any height, upright or not) | One column; the compact header, which is pinned and slides away on scroll down and back on scroll up, naming the PARENT until the page's title scrolls under it and then this place's short name (one name, never the title twice); the bottom bar (five slots, always; its balance tab says "Credits" with the figure as a badge); sheets. A short upright window — a phone with its keyboard open, 375×450 — stays this layout. |
+| **rail** (`rail:`) | height < 500, **wider than it is tall**, width 560–1023 — a phone on its side | The bar becomes a 4.5 rem rail at the left edge; the header is one line; the page is ONE full-width column beside the rail, its side cards under it two across; bottom sheets are a panel at the right sized to what they hold. Never applied to an upright window: content is never crushed beside a rail. |
+| tablet | 640–1023 | The header on ONE row that never wraps: the mark, the organisation switcher, the Credits chip, Talk (on every page), the bell and the account menu, which holds the mode switch, System and Sign out below `hd`; where you are on a row of its own. The side panel's cards under the page, two across. |
 | desktop | ≥ 1024 | The page beside the side panel (22 rem). |
-| `xl` | ≥ 1280 | The trail moves into the header row; Sign out and the credits pill's "left" show their words. |
+| `hd` | ≥ 1100 | The mode switch, System (an icon link of its own, never inside the switch) and Sign out sit in the header row. |
+| `xl` | ≥ 1280 | The trail moves into the header row; Sign out shows its word. |
 | `3xl` | ≥ 1600 | `ContentGrid` sets independent sections two across; the side panel widens to 26 rem. |
 | `4xl` | ≥ 2000 | The whole console (header, page, panel) is capped at `layout.width.frame` (2200 px) and centred. |
 
 Text runs at a readable measure (`max-w-prose`) wherever it is a paragraph. `touch:` marks any screen
 worked by touch (a coarse pointer, or the phone layouts): every control there is at least 44 px, on a
-tablet as on a phone.
+tablet as on a phone (the demo suite walks every main screen at 375, 768, 834 and 1024 with touch).
+
+The header's balance is a neutral chip — "Credits", the figure, a small dot: green with room to spend, amber
+below zero, red only at a real limit (nothing left to spend, the overdraft included), grey for an organisation
+never topped up. Never a coloured pill. God mode is one slim bar (32 px; 44 where worked by touch) — "God mode",
+the way out, and a chevron that expands what it means.
 
 ## Primitives
 
@@ -49,15 +55,22 @@ tablet as on a phone.
 | `useShowAll(items, n)` | `components/ui/page.tsx` | Any list that can outgrow a screen (a run's tasks, an employee's memory) | Shows the first `n` and "Show all N". |
 | `PageHeader`, `TITLE`, `SECTION` | `components/ui/page.tsx` | The page's h1 (one size: 3xl, 2xl on a phone) and a section's h2 | Title icons are ink, never tinted. |
 | `ContentGrid` | `components/ui/page.tsx` | Independent sections | One column, two from 1600. `masonry`: sections of very different heights flow down two columns, each under the one before, never in rows that leave holes (the verdict's evidence). |
-| `Stat`, `StatRow`, `NO_VALUE` | `components/ui/stat.tsx` | **Every big number** | The value is short: a number, a few characters ("73%", "53% under") or one word ("Healthy"). Anything longer is the caption; the value is then "—". Tabular body figures. A `StatRow` has a fixed number of equal slots; `meters` reserves the meter's place in every tile so captions align. |
+| `Button`, `buttonVariants` | `components/ui/button.tsx` | **Every button**, and a link that looks like one | Three heights: `sm` 32, `md` 40 (default), `lg` 48 — each at least 44 where worked by touch; `icon` a square of 40 (44). ONE radius (`rounded-xs`). One label size per height (sm/md `text-sm`, lg `text-base`). Variants: `primary`, `secondary` (outlined), `quiet` (words in the link colour), `danger` (only inside `ConfirmCard`), `danger-outline` (the control that asks to remove). One disabled look: a grey fill and muted words, never a faded colour. A page passes only layout classes. Pills are chips, never buttons. A raw `<button>` is for what is not a button visually (a pressable row or card, a tab, a switch, a chevron row). |
+| `Stat`, `StatRow`, `NO_VALUE` | `components/ui/stat.tsx` | **Every label and number** | Two looks only: boxed, and `plain` (in a hero or a card already drawn). The value is short: a number, a few characters ("73%", "53% under") or one word ("Healthy"); it is NEVER ellipsised — when its slot is too narrow its type steps down until it fits. The label wraps rather than being cut. The caption is one line; an explanation goes in the text or `Alert` beside it. Tabular body figures. A `StatRow` has a fixed number of equal slots; `meters` reserves the meter's place in every tile so captions align. |
+| `formatNumber`, `formatCredits`, `signedNumber` | `lib/format.ts` | **Every number of credits**, on every page and in every run, part and step | ONE precision rule: from 10, whole and grouped ("1,840"); under 10, up to two decimals, trailing zeros dropped ("7.47", "0.2", "1.5"); under a hundredth, "<0.01"; a debt with a true minus tight to its digits ("−120"); a change "+3,000"; "1 credit" singular only when what shows is exactly 1. The only exception is `approxCredits`, a usual cost said in a sentence, which reads "less than 0.1 credits" below a tenth. No `toFixed` or hand-written sign anywhere else. |
+| `spentAgainst`, `ESTIMATE_FLOOR` | `lib/estimates.ts` | **Every "spent" against an estimate** | Finished work says "Spent", with no bar; work under way "Spent so far", with a bar. Against an estimate under 1 credit there is no percentage and no red: "Under 1 credit, as estimated", or "Estimated under 1 credit". Above it, the true percentage, the bar red only past 100%. |
+| `Table`, `TableRow`, `Cell` | `components/ui/table.tsx` | **Every list with columns** (People, Recent work, hiring, credits budgets, autonomy rules, the operator log, an answer's rows) | One header style (sentence case, small, muted, on the ground band; it wraps, never cuts). Columns sized by kind, never by content: `grow` (the name), `text`, `figure` (right-aligned, tabular), `status`, `date`, `action`. Below its threshold (`at`: narrow 36 rem, medium 48, wide 60) — measured on the TABLE'S OWN BOX by a container query, so it switches beside a side panel or a pane as well as on a small screen — every row is a card: the primary cell as its title, each other cell with its column's name beside it. A row's confirmation or form is its `after`. |
 | `Badge` (the status tag) | `components/ui/badge.tsx` | A status | Five tones only (below). One line; cut with a tooltip. |
 | `Chip`, `PersonChip` | `components/ui/chip.tsx` | A name, a count, a person | One line, never wraps, solid. A person's avatar colour comes from their stable id. |
-| `ConfirmCard` + `danger` button | `components/ui/confirm.tsx` | Drop, cancel, decline, delete, remove, revoke, stop sharing, let go | A white card in place: the question, what follows, a destructive confirm and a quiet way back. Escape cancels. It scrolls itself fully into view above a phone's bottom bar. `onSubmit` + children for one that takes a reason. |
+| `ConfirmCard` | `components/ui/confirm.tsx` | **Every confirmation** — drop, cancel, decline, delete, remove, revoke, stop sharing, let go, bring back — and **every short in-place form** (`destructive={false}` + `onSubmit`: change a budget, reassign, correct a memory, set a cap, top up) | One layout: the question, optional detail, optional fields, then on one line a confirm (destructive-styled when it removes) and an outlined safe choice of EQUAL size. It is IN THE FLOW directly after the row or cell that holds its trigger (a `TableRow`'s `after`), so it pushes what follows down and never covers the next row, and it anchors itself horizontally to the control that was pressed (under it, starting at its left edge, or ending at its right edge when the control sits at the right). Escape cancels. It scrolls itself fully into view above a phone's bottom bar. |
+| `Alert`, `StatusTag`, `STATES` | `components/ui/alert.tsx` | A state panel (icon, title, explanation, the one action) and the states pages get wrong | A page names the state; tone and icon come from `STATES` (below). |
 | `Failed` | `components/states.tsx` | A read that failed | An error icon (never the shield). A 401/403/404 on a whole page is the `NotFoundPage`. |
 | `NotFoundPage` | `components/states.tsx` | Nothing at this address, not yours to see | Fills the frame: what happened, then the places to go. |
 | `Empty` | `components/states.tsx` | A read that worked and found nothing | Quiet text and one action. No box. |
 | `Working`, `Spinner` | `components/states.tsx` | Something being worked out | A spinner beside the words; `Spinner inherit` inside a busy button. |
-| `Fold` | `components/Fold.tsx` | A section a phone folds away | Open, every fold's row is the same section heading. |
+| `Fold`, `Disclosure` | `components/Fold.tsx` | A section a phone folds away; a disclosure on every layout | ONE fold: always a card that fills its column, with one header row open or closed (title, the line about it while closed, a chevron at the right); what it holds opens inside the same card under a rule, and a card it holds is flattened — never a card in a card, never a fold in a fold, never the browser's own triangle. |
+| `Sheet` | `components/Sheet.tsx` | Every sheet: More, Needs you, Where you are, the conversation (the conversation lane uses it too) | One family: a grab handle, at most 85% of the visible height, a cue at its foot while there is more to scroll, its close at one inset. On a phone on its side a bottom sheet is a panel at the right sized to its content. |
+| `Chip`, `Badge`, `Select`, `LINK`, `MENU` | `components/ui/{chip,badge,field,layout}.ts(x)` | A name; a status; a choice; a text link; a menu or popover | One chip height (32; 44 when pressed by touch) and one tone. One tag height (24), sentence case. The house select: the browser's control underneath (a phone opens its own picker), the house edge and chevron on top. One link style: the link colour, medium, underlined. One menu look: a defined edge and lift, inner padding, 8 px off its trigger, scrolling inside so it ends on a whole item. |
 | Trail | `features/shell/crumbs.ts` | The breadcrumb, desktop and phone | Always from the organisation; ancestors linked; the current place in ink; one separator; a place named like its parent shown once. `crumbShort` (a crumb's `short`, or its label cut at 32) is the header's and the trail's name; the h1 carries the full title. |
 
 ## The status vocabulary
@@ -69,6 +82,13 @@ tablet as on a phone.
 | `good` | green | Finished well | Healthy, Done, Finished, Live now, Passed its check, Agreed, Hired, Added, Active, Registered, In credit, Fits the budget |
 | `warn` | amber | Waits on a person, or is held | Waiting for you, Needs you, Verdict waiting, Approval needed, Paused, Struggling, Sent back, Below zero, Nothing to do for N days |
 | `bad` | red | Failed or refused | Did not succeed, Down, Stopped, Refused, At its limit, More than the budget has room for, Research did not finish |
+
+In code, `STATES` (`components/ui/alert.tsx`) fixes the ones pages got wrong, so a page names the state and
+cannot pick the colour: **paused by its budget** is `warn` (amber, a pause icon) with the action that fixes it —
+raise the budget — never the red crashed panel and never "Rebuild and restart"; **an approval asked** is `info`
+and **answered** `neutral`, both with a hand, never the red danger shield (no state draws a shield); **cancelled,
+withdrawn, declined** are `neutral` everywhere; a withdrawn, declined or accepted hire shows no budget warning;
+**failed** and **crashed** are `bad`.
 
 "Declined by you" and "Not published" are never red or green. A verdict's kind is one tag on a white
 hero: build `good`, change `info`, do not build `bad`.
@@ -96,18 +116,40 @@ hero: build `good`, change `info`, do not build `bad`.
 - Don't stretch a side card to the page's height (real-stack 20, the 6,292 px notifications panel). Do: cards that end with their content, sticky while they fit.
 - Don't show 60 memory cards beside a short page (real-stack 50). Do: `useShowAll`.
 - Don't use a pink pill for "Drop this idea?" and a full card for "Let Kasper go?" (console-desktop 22). Do: `ConfirmCard` for both.
+- Don't open a confirmation 600 px from the Remove that asked for it (round two, console-desktop 38). Do: the card in the flow under the row, anchored to the trigger.
+- Don't let a balance read "1…" (round two, console-small 22). Do: a `Stat` whose type steps down to fit.
+- Don't show "217%" in red against an estimate of 0.05 credits (round two, real-stack 26). Do: `spentAgainst`, "Under 1 credit, as estimated".
+- Don't draw a budget pause as the red crashed panel (round two, console-desktop 28). Do: `Alert state="paused-by-budget"` with "Raise the budget".
+- Don't take the rail for a portrait window with its keyboard open (round two, console-small 1). Do: the rail only wider than tall and at least 560 px wide.
 - Don't mark a never-published app "Healthy" (console-desktop 34). Do: "—" with "Not published yet".
 - Don't use a shield with a tick for a failure (console-desktop 61). Do: `Failed`'s error icon.
 - Don't stretch the portrait layout across a phone on its side (console-small 4). Do: the rail tier.
 
 ## Guards
 
-`src/frontend/src/design.test.ts` (Vitest, part of `make test-frontend`): no figure-sized text outside
-`Stat`; `border-dashed` only in the drop-zone allowlist; chips and tags never wrap; the status tones
-are exactly the five; violet and teal may only fall; no gradient or aura; field edges at 3:1 and every
-tag at 4.5:1. `tokens.test.ts` keeps every colour in the token file. `tests-demo/phone.spec.ts`
-(part of `make demo-e2e`) holds 44 px targets on a phone and on a touch tablet, a one-row tablet
-header in both modes, and the rail layout on a phone on its side.
+`src/frontend/src/design.test.ts` (Vitest, part of `make test-frontend`), each rule with a cheap check:
+
+- no figure-sized text outside `Stat`; a `Stat` value is never `truncate`d;
+- no `toFixed`/`toLocaleString` for a figure outside `lib/format.ts`;
+- `border-dashed` only in the drop-zone allowlist; chips and tags never wrap; tags never `uppercase`;
+- the status tones are exactly the five; the budget pause, approvals and cancellations are never `bad`; no shield;
+- violet and teal may only fall; no gradient or aura; field edges at 3:1 and every tag at 4.5:1;
+- buttons: no raw `<button>` drawing a radius with a fill or edge outside a per-file allowlist that may only
+  fall; no shape class passed to a `Button`; the five variants, three heights, one radius, one disabled look;
+  the retired variant names only in the conversation lane's files;
+- a `danger` button only inside `ConfirmCard`, which anchors itself and draws equal choices;
+- no hand-built table of three or more columns (`*:grid-cols-[a_b_c]`): it is the `Table`; the table's card form
+  is a container query;
+- no raw `<select>`; no native `<details>` outside its allowlist;
+- the rail needs `orientation: landscape` and `railMin`; the mode switch never holds System; the balance chip
+  is never a tinted pill; a bottom sheet is at most 85% tall.
+
+`tokens.test.ts` keeps every colour in the token file. In the built demo (`make demo-e2e`):
+`tests-demo/phone.spec.ts` holds 44 px targets on a phone and on touch tablets at 768, 834 and 1024, a one-row
+tablet header with two organisations in both modes, and the rail layout on a phone on its side;
+`tests-demo/shared-layer.spec.ts` opens every confirmation in the demo and holds it within reach of its trigger
+(under it, and beside it on the page), and holds a short upright window (375×450, 390×480) to the phone layout
+with its field and primary action usable above the bar.
 
 ## Risks and open questions
 
