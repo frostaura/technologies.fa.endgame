@@ -198,6 +198,16 @@ describe("the chart's shape", () => {
     expect(within(card).getAllByText("Ledger")).toHaveLength(1);
   });
 
+  it("offers nothing to open on an app with no version yet, saying so in muted words", () => {
+    stubApi({ "GET /api/me": json(ME) });
+    const draft = { ...app, name: "Ledger", status: "draft", spend: { monthCredits: 5 } };
+    const tree = { ...TREE, divisions: [division("d1", "Tools", [project("p1", "Ledger", [draft])]), division("d2", "Kit", [])] } as unknown as Tree;
+    renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    const card = screen.getByRole("article", { name: "Ledger" });
+    expect(within(card).queryByRole("link", { name: "Open the app" })).toBeNull();
+    expect(within(card).getByText("No version yet").className).toContain("text-ink-muted");
+  });
+
   it("draws every division's letter in ink, never in a hue of its own", () => {
     stubApi({ "GET /api/me": json(ME) });
     const tree = { ...TREE, divisions: [division("d1", "Tools", []), division("d2", "Kit", []), division("d3", "Lab", [])] } as unknown as Tree;

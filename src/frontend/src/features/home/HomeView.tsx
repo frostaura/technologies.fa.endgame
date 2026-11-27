@@ -169,7 +169,7 @@ function Organisation({
             {/* A phone has the four figures just below: the summary line would say them twice. */}
             {org.summary && <span className="text-ink-body max-sm:hidden">{org.summary}</span>}
           </div>
-          <Link href={paths.start()} className={cn(buttonVariants({ size: "lg" }), "max-sm:min-h-touch max-sm:px-4 max-sm:text-sm")}>
+          <Link href={paths.start()} className={cn(buttonVariants({ size: "lg" }), "shrink-0")}>
             New idea
           </Link>
         </div>

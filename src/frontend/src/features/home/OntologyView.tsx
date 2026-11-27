@@ -7,6 +7,7 @@ import { navigate, paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useViewport } from "@/lib/useViewport";
 import { Disclosure } from "@/components/Fold";
+import { LINK } from "@/components/ui/layout";
 import { useAppSelector } from "@/store";
 import { useGetOntologyQuery } from "@/store/api";
 import type { Ontology, OntologyNode } from "@/store/types";
@@ -243,7 +244,7 @@ function Graph({ graph, view }: { graph: Ontology; view: "org-chart" | "data-flo
         <div aria-label={view === "data-flow" ? "How data flows" : "Who works on what"} role="group" className="flex flex-col gap-2.5">
           {groups.map((g, i) => (
             <Disclosure key={g.type} title={`${g.label} · ${g.items.length}`} summary={g.items.slice(0, 3).map((p) => nodeName(p.node, mode)).join(", ") + (g.items.length > 3 ? "…" : "")} defaultOpen={i === 0}>
-              <ul className="flex flex-col divide-y rounded-md border bg-surface">
+              <ul className="-mx-4 flex flex-col divide-y">
                 {g.items.map((p) => (
                   <NodeEdges key={p.node.id} node={p.node} graph={graph} showType={false} />
                 ))}
@@ -316,7 +317,7 @@ function NodeName({ node, inline = false }: { node: OntologyNode; inline?: boole
   const name = nodeName(node, mode);
   if (href)
     return (
-      <Link href={href} className={cn("rounded-xs text-primary-link hover:text-primary-hover", inline ? "touch:py-3" : "flex min-h-touch items-center self-start font-semibold md:min-h-0")}>
+      <Link href={href} className={cn(LINK, inline ? "touch:py-3" : "flex min-h-touch items-center self-start md:min-h-0")}>
         {name}
       </Link>
     );
