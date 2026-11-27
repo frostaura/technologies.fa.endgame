@@ -260,7 +260,9 @@ public sealed class FakeControlPlane : IAsyncDisposable
             forwardedProto = c.Request.Headers["X-Forwarded-Proto"].ToString(),
             origin = c.Request.Headers.Origin.ToString(),
         }));
-        web.MapFallback(() => Results.Content("<!doctype html><div id=\"root\">console</div>", "text/html"));
+        web.MapPost("/mcp", () => Results.Json(new { from = "control-plane" }));
+        // The console serves its static files too (/assets/…, /brand/…): a fallback that matches files.
+        web.MapFallback("{**path}", () => Results.Content("<!doctype html><div id=\"root\">console</div>", "text/html"));
     }
 
     private bool Authorised(HttpContext context) =>

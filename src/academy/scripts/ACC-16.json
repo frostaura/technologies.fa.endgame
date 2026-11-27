@@ -19,7 +19,7 @@
       "goto": "/__app/0b0e0000-0000-4000-8000-000000000000/path/",
       "highlight": {
         "text": "There is no app at this address",
-        "note": "An address Edge knows no app at: its own page (404), with the way to Endgame — never the console."
+        "note": "An app's address that is no app's: Edge's own page (404), with the way to Endgame — never the console's sign-in."
       }
     },
     {

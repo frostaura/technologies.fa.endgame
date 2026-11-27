@@ -79,6 +79,9 @@ public sealed class EdgePipelineTests : IAsyncLifetime
                 ["ReverseProxy:Routes:api:ClusterId"] = "control-plane",
                 ["ReverseProxy:Routes:api:Order"] = "10",
                 ["ReverseProxy:Routes:api:Match:Path"] = "/api/{**rest}",
+                ["ReverseProxy:Routes:mcp:ClusterId"] = "control-plane",
+                ["ReverseProxy:Routes:mcp:Order"] = "11",
+                ["ReverseProxy:Routes:mcp:Match:Path"] = "/mcp",
                 ["ReverseProxy:Routes:console:ClusterId"] = "console",
                 ["ReverseProxy:Routes:console:Order"] = "100",
                 ["ReverseProxy:Routes:console:Match:Path"] = "{**rest}",
@@ -329,30 +332,100 @@ public sealed class EdgePipelineTests : IAsyncLifetime
         Assert.Contains("console", await client.GetStringAsync("/acme/settings"), StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task An_organisation_app_host_is_never_served_the_console_an_unknown_address_there_is_the_edges_no_app_page()
+    /// <summary>The console's own addresses (src/frontend/src/lib/router.ts) and its static files.</summary>
+    public static TheoryData<string> ConsoleAddresses() =>
+    [
+        "/", "/sign-in", "/runs/abc", "/ideas/abc", "/apps/abc", "/apps/abc/", "/tree", "/credits", "/start",
+        "/assets/index-abc123.js", "/brand/endgame-mark.svg", "/favicon.ico",
+    ];
+
+    [Theory]
+    [MemberData(nameof(ConsoleAddresses))]
+    public async Task On_an_organisation_host_the_console_is_served_exactly_as_on_the_platform_host_signed_in_or_out(string path)
     {
-        foreach (var path in new[] { "/community/no-such-app/web/", "/", "/acme/settings", "/apps/notes/nope/" })
+        // The developer's stack is used at http://frostaura.localhost:8095/: the console lives on an organisation's own host too.
+        foreach (var cookie in new[] { null, $"endgame.session={FakeControlPlane.MemberSession}" })
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, path);
-            request.Headers.Host = $"acme.endgame.test:{publicPort}";
-            using var response = await client.SendAsync(request);
-            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-            var html = await response.Content.ReadAsStringAsync();
-            Assert.Contains("<h1>There is no app at this address</h1>", html, StringComparison.Ordinal);
-            Assert.Contains($"<p class=\"address\">acme.endgame.test:{publicPort}{path}</p>", html, StringComparison.Ordinal);
-            Assert.Contains("<a class=\"button\" href=\"https://endgame.test/\">Go to Endgame</a>", html, StringComparison.Ordinal);
-            Assert.DoesNotContain("console", html, StringComparison.Ordinal);
+            foreach (var host in new[] { $"acme.endgame.test:{publicPort}", null })
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, path);
+                if (host is not null)
+                {
+                    request.Headers.Host = host;
+                }
+
+                if (cookie is not null)
+                {
+                    request.Headers.Add("Cookie", cookie);
+                }
+
+                using var response = await client.SendAsync(request);
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                Assert.Contains("<div id=\"root\">console</div>", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task On_an_organisation_host_the_control_plane_is_reached_exactly_as_on_the_platform_host()
+    {
+        foreach (var host in new[] { $"acme.endgame.test:{publicPort}", null })
+        {
+            foreach (var (method, path) in new[] { (HttpMethod.Get, "/api/system/status"), (HttpMethod.Get, "/api/me"), (HttpMethod.Post, "/mcp") })
+            {
+                using var request = new HttpRequestMessage(method, path);
+                if (host is not null)
+                {
+                    request.Headers.Host = host;
+                }
+
+                using var response = await client.SendAsync(request);
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                Assert.Equal("control-plane", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("from").GetString());
+            }
+        }
+    }
+
+    [Fact]
+    public async Task An_app_shaped_address_on_an_organisation_host_that_is_no_apps_is_the_edges_no_app_page_signed_in_or_out()
+    {
+        // Real-stack 55. "apps" is a division with apps on this host; the console's own /apps/<id> is one segment shorter.
+        foreach (var path in new[] { "/apps/no-such-app/web/", "/apps/notes/nope/", "/apps/notes/nope", "/apps/notes/web-two/deep/page?x=1" })
+        {
+            foreach (var cookie in new[] { null, $"endgame.session={FakeControlPlane.MemberSession}" })
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, path);
+                request.Headers.Host = $"acme.endgame.test:{publicPort}";
+                if (cookie is not null)
+                {
+                    request.Headers.Add("Cookie", cookie);
+                }
+
+                using var response = await client.SendAsync(request);
+                Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                var html = await response.Content.ReadAsStringAsync();
+                Assert.Contains("<h1>There is no app at this address</h1>", html, StringComparison.Ordinal);
+                Assert.Contains($"<p class=\"address\">acme.endgame.test:{publicPort}{path.Split('?')[0]}</p>", html, StringComparison.Ordinal);
+                Assert.Contains("<a class=\"button\" href=\"https://endgame.test/\">Go to Endgame</a>", html, StringComparison.Ordinal);
+                Assert.DoesNotContain("console", html, StringComparison.Ordinal);
+            }
         }
 
-        // The identity pages' scripts call the control plane on that host; those still reach it.
-        using var api = new HttpRequestMessage(HttpMethod.Get, "/api/system/status");
-        api.Headers.Host = $"acme.endgame.test:{publicPort}";
-        using var apiResponse = await client.SendAsync(api);
-        Assert.Equal("control-plane", (await apiResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("from").GetString());
+        // A real app's address there still reaches the app.
+        using var app = new HttpRequestMessage(HttpMethod.Get, "/apps/notes/web/api/whoami");
+        app.Headers.Host = $"acme.endgame.test:{publicPort}";
+        using var appResponse = await client.SendAsync(app);
+        Assert.Equal(HttpStatusCode.OK, appResponse.StatusCode);
+        Assert.Equal("/api/whoami", (await appResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("path").GetString());
+
+        // A first segment that is no division with an app on this host is the console's, which has its own not-found.
+        using var other = new HttpRequestMessage(HttpMethod.Get, "/community/no-such-app/web/");
+        other.Headers.Host = $"acme.endgame.test:{publicPort}";
+        Assert.Contains("console", await (await client.SendAsync(other)).Content.ReadAsStringAsync(), StringComparison.Ordinal);
 
         // On the platform's own host an unknown address is the console's (it has its own not-found page).
         Assert.Contains("console", await client.GetStringAsync("/acme/no-such-app"), StringComparison.Ordinal);
+        Assert.Contains("console", await client.GetStringAsync("/apps/no-such-app/web/"), StringComparison.Ordinal);
     }
 
     [Fact]
