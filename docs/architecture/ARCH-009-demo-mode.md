@@ -124,6 +124,7 @@ and what `{idea}`, `{run}`, `{app}`, `{employee}` and `{hire}` in a route stand 
 | `s4-hiring`, `s4-hires-all-decided`, `s4-hire-manager-gone` | Technologies' hiring with Lark waiting, Sol hired by auto-mode and Bea declined; every proposal decided; Lark drafted to report to Tomas, since let go | |
 | `s4-contractor-working`, `s4-contractor-finishes` | Odile's data contractor at work; and finishing inside a playing run (`s4:contractor-finished`): its lesson to Odile, its role raised and hired | |
 | `s4-employee-record`, `s4-employee-working`, `s4-employee-team`, `s4-employee-at-cap` | Kasper with his tasks; at work on a live run; with Mina reporting to him; at his monthly cap, told so | |
+| `s4-employee-long-record` | Kasper after a long season: sixty things remembered and forty pieces of work in every state, with long titles (the real stack's busiest record) | |
 | `s4-idle-sweep`, `s4-released-with-memory`, `s4-memory-to-tidy` | Ruth idle under checkpoints and Ivo let go by the sweep; Tomas let go with his memory; Kasper's memory with a note learned twice and one removed | |
 | `s4-credits-at-zero`, `s4-below-zero`, `s4-top-ups-waiting` | The balance at 0, at −120, and five top-up requests already waiting | |
 | `s4-operator-log`, `s4-operator-log-empty` | Northwind's operator log with every kind of entry, and with none | |

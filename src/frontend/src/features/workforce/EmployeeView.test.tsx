@@ -211,4 +211,46 @@ describe("EmployeeView", () => {
     expect(await screen.findByRole("button", { name: "Rehire Ada" })).toBeTruthy();
     expect(screen.getByText(/Archived when it was let go/)).toBeTruthy();
   });
+
+  it("keeps a long record in hand: the newest ten memories and pieces of work, then Show all, and the memory searchable by words and kind", async () => {
+    const kinds = ["fact", "practice", "preference", "lesson"] as const;
+    const memory = Array.from({ length: 60 }, (_, i) => ({ ...MEMORY[0], id: `lm${i}`, title: i === 37 ? "Court 3 has no lights" : `Note ${i}`, body: `Body ${i}`, kind: kinds[i % 4] }));
+    const tasks = Array.from({ length: 40 }, (_, i) => ({ ...TASKS[0], id: `lt${i}`, title: `Piece ${i}`, status: i % 8 === 3 ? "cancelled" : "done", updatedAt: `2026-11-${String(26 - (i % 20)).padStart(2, "0")}T10:00:00Z` }));
+    stub(json(employeeDetailFixture()), { "GET /api/employees/e1/memory": json(memory), "GET /api/tasks": json(tasks) });
+    renderWithStore(<EmployeeView employeeId="e1" />);
+    const entries = await screen.findByRole("list", { name: "Memory entries" });
+    expect(within(entries).getAllByRole("listitem")).toHaveLength(10);
+    const work = await screen.findByRole("table", { name: "Tasks" });
+    expect(within(work).getAllByRole("row")).toHaveLength(11);
+    // A cancelled piece of work says so, and never "Finished".
+    expect(work.textContent).toContain("Cancelled");
+    expect(work.textContent).not.toContain("Finished");
+    fireEvent.click(screen.getByRole("button", { name: "Show all 40 pieces of work" }));
+    expect(within(work).getAllByRole("row")).toHaveLength(41);
+    fireEvent.click(screen.getByRole("button", { name: "Show all 60 entries" }));
+    expect(within(screen.getByRole("list", { name: "Memory entries" })).getAllByRole("listitem")).toHaveLength(60);
+    fireEvent.change(screen.getByLabelText("Search what Ada remembers"), { target: { value: "no lights" } });
+    expect(within(screen.getByRole("list", { name: "Memory entries" })).getAllByRole("listitem").map((li) => li.querySelector("span")?.textContent)).toEqual(["Court 3 has no lights"]);
+    fireEvent.change(screen.getByLabelText("Search what Ada remembers"), { target: { value: "" } });
+    fireEvent.click(within(screen.getByRole("group", { name: "Show entries of one kind" })).getByRole("button", { name: /^Lessons/ }));
+    // Shown in full once "Show all" was chosen: every lesson, and only lessons.
+    expect(within(screen.getByRole("list", { name: "Memory entries" })).getAllByRole("listitem")).toHaveLength(15);
+  });
+
+  it("draws the actions as one group, the rest behind More on a phone, and opens that menu when a lesson points into it", async () => {
+    stub(json(employeeDetailFixture()));
+    renderWithStore(<EmployeeView employeeId="e1" />);
+    const group = await screen.findByRole("group", { name: "Actions" });
+    const more = within(group).getByRole("button", { name: "More" });
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    const menu = document.getElementById(more.getAttribute("aria-controls") ?? "") as HTMLElement;
+    expect(menu.hasAttribute("data-fold-body")).toBe(true);
+    expect(within(menu).getByRole("button", { name: "Let go" }).className).toContain("border-attention-text");
+    menu.dispatchEvent(new CustomEvent("endgame:reveal", { bubbles: true }));
+    await waitFor(() => expect(more.getAttribute("aria-expanded")).toBe("true"));
+    // The panel an action opens is under the header, not inside the group, so the group never moves.
+    fireEvent.click(within(menu).getByRole("button", { name: "Reassign" }));
+    expect(group.contains(screen.getByRole("form", { name: "Reassign" }))).toBe(false);
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+  });
 });

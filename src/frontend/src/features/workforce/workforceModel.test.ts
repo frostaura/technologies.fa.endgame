@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { MemoryChange } from "@/store/types";
-import { expectedMonthly, memoryChangeTitle, memoryChangeWhy, nameWithRole, plainTool, toolLabel } from "./workforceModel";
+import { expectedMonthly, groupedTools, memoryChangeTitle, memoryChangeWhy, nameWithRole, personLabels, plainTool, toolLabel, workStatus } from "./workforceModel";
 
 const SRC = path.join(import.meta.dirname, "../../../..");
 
@@ -75,5 +75,38 @@ describe("the memory's change log (D28)", () => {
   it("titles a correction from what it became", () => {
     const corrected = change({ action: "corrected", memoryId: "gone", detail: { before: { title: "Desk opens at 8" }, after: { title: "Desk opens at 9" } } });
     expect(memoryChangeTitle(corrected, [])).toBe("Desk opens at 9");
+  });
+});
+
+describe("telling people and work apart", () => {
+  const tree = { organisation: { id: "o", slug: "acme", name: "Acme" }, divisions: [{ slug: "c", name: "Community", projects: [{ slug: "reading", name: "Club Reading List", apps: [] }, { slug: "dive", name: "Dive Trip Ready", apps: [] }] }] } as never;
+
+  it("names where each works when two people share a name and a role (real-stack 5), and only then", () => {
+    const labels = personLabels(
+      [
+        { id: "n1", name: "Nadia", role: "QA engineer", scope: "acme/c/reading" },
+        { id: "n2", name: "Nadia", role: "QA engineer", scope: "acme/c/dive" },
+        { id: "k", name: "Kasper", role: "Software engineer", scope: "acme/c/dive" },
+      ],
+      tree,
+    );
+    expect(labels.get("n1")).toBe("Nadia · QA engineer, Club Reading List");
+    expect(labels.get("n2")).toBe("Nadia · QA engineer, Dive Trip Ready");
+    expect(labels.get("k")).toBe("Kasper · Software engineer");
+  });
+
+  it("says every state of a piece of work in one vocabulary, a cancelled or failed one never Finished", () => {
+    expect(workStatus("cancelled")).toMatchObject({ label: "Cancelled", tone: "neutral", ended: true });
+    expect(workStatus("failed")).toMatchObject({ label: "Did not succeed", tone: "bad" });
+    expect(workStatus("succeeded").label).toBe(workStatus("done").label);
+    expect(workStatus("waiting_approval")).toMatchObject({ label: "Waiting for you", tone: "warn" });
+    expect(workStatus("blocked").label).toBe("Waiting to start");
+  });
+
+  it("groups a job's tools under headings, keeping one the console does not name under Other", () => {
+    const groups = groupedTools(["read_file", "edit_file", "notes", "mystery_tool", "run(npm test)"]);
+    expect(groups.map((g) => g.title)).toEqual(["Reading", "Changing the work", "Keeping track and others", "Other"]);
+    expect(groups.find((g) => g.title === "Changing the work")?.tools).toEqual(["edit_file", "run(npm test)"]);
+    expect(groups.find((g) => g.title === "Other")?.tools).toEqual(["mystery_tool"]);
   });
 });

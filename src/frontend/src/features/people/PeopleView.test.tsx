@@ -63,6 +63,10 @@ describe("PeopleView", () => {
     expect(within(kit).getByText("Set at Tools")).toBeTruthy();
     expect(within(kit).getByText(/No passkey yet/)).toBeTruthy();
     expect(within(list.querySelector('[data-member="o@example.test"]') as HTMLElement).getAllByText("Owner").length).toBe(2);
+    // One table: the column headings over the rows, and a role that is not changed here in the same column as one that is.
+    const table = list.parentElement as HTMLElement;
+    expect(table.textContent).toContain("PersonRoleWhere it was setSince");
+    expect(screen.getByText("Invitations waiting")).toBeTruthy();
     const roles = screen.getByRole("region", { name: "What each role may do" });
     for (const r of ["Owner", "Admin", "Builder", "Viewer"]) expect(within(roles).getByText(r)).toBeTruthy();
   });
