@@ -231,7 +231,7 @@ export const layout = {
     /** A thumbnail of an attached image. */
     thumb: "4.5rem",
     /** The panel of what it can use, and the "/" and "@" menus, at their tallest. */
-    popover: "min(28rem, 60dvh)",
+    popover: "min(28rem, 50dvh)",
   },
   /** How far below the top a sticky panel sits: under the shell's header. */
   chrome: "var(--shell-chrome, 0px)",
