@@ -42,7 +42,8 @@ The example feature is **Notes**; replace it with the real product, keeping its 
 - **Back end:** endpoints return `TypedResults`; errors are problem details
   (`TypedResults.Problem(statusCode: 404, …)`). Request records carry DataAnnotations
   (`[Required]`, `[StringLength]`) — the kit checks them before the handler runs and answers 400
-  with field errors. Store `EndgameUser.Id` as an owner, never an email.
+  with field errors. Store `EndgameUser.Id` as an owner, never an email; a record that is a person's own is found
+  again by it (see "A person's own record").
 - **Signed-in only:** add `.RequireUser()` and take `EndgameUser user`. Browsers are sent to sign
   in; API calls get 401 with `signInUrl`. Take `EndgameUser?` where signing in is optional.
 - **Front end:** primitives from `@endgame/appkit/ui`; classes from the token layer only
@@ -68,6 +69,25 @@ The example feature is **Notes**; replace it with the real product, keeping its 
 - **Recurring work:** `app.MapSchedule("nightly-digest", "0 3 * * *", run => …)`.
   **Inbound calls** from devices or services: `app.MapWebhook("name", WebhookVerification.HmacSha256(…), …)`.
 
+## A person's own record — found again, never made twice
+
+People leave and come back: a new session, the same person. Anything a signed-in person makes or joins that is theirs —
+a membership of a trip, a sign-up, an RSVP, their own checklist or settings — is **keyed by `EndgameUser.Id`** (the
+platform's stable id; never the email, never the session) and **found again on return**:
+
+1. **A unique index** on the person's id and what it belongs to (`HasIndex(f => new { f.NoteId, f.PersonId }).IsUnique()`),
+   so the database refuses a second one whatever the code does.
+2. **Joining is safe to repeat**: `PUT …/follow` (or a POST that looks first) finds the person's row and answers it (200);
+   only the first time makes one (201). A second call never makes a second row. Catch the unique violation of two calls
+   at once, re-read, and answer the row that won.
+3. **The page reads the person's own record every time it opens** (`GET …/follow` → `{ following, id }`), and shows it —
+   "Following", their ticks, "You are on this trip" — never offers to join again.
+
+The example is `NoteFollow` (`api/Notes/NoteFollow.cs`, the follow endpoints in `NotesEndpoints.cs`,
+`web/src/notes/FollowNote.tsx`) with its tests (`api.tests/NoteFollowTests.cs`, `NoteDetailPage.test.tsx`): a person who
+comes back is found again, and following again leaves one follow. The factory checks every such requirement by coming back
+later: the same member, signed in afresh, does it again and reads it back, and a second record fails the check.
+
 ## Test ids — every screen carries them
 
 The factory's browser checks drive every app the same way, so every app names its elements the
@@ -87,8 +107,9 @@ same way, with `data-testid`. `<entity>` is the singular noun in kebab-case (`no
 | `save-<entity>` | the form's submit button |
 | `set-<field>-<value>` | a button that sets one field to one value (`set-status-finished`), on an item or its page |
 
-The Notes example carries all but the last (`page-home`, `note-list`, `note-item`, `open-note`,
-`new-note`, `note-title`, `note-body`, `save-note`, `page-note`, `page-new-note`). A test id is
+The Notes example carries every form (`page-home`, `note-list`, `note-item`, `open-note`, `new-note`, `note-title`,
+`note-body`, `save-note`, `page-note`, `page-new-note`, and `set-following-true` / `set-following-false` on the follow
+button). A test id is
 never repeated on one screen. The plan item names the test ids its screens carry; the factory
 checks that each one is in `web/src` as `data-testid="…"`. Tests select by them
 (`getByTestId("note-item")`), as the template's do.

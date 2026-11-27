@@ -57,6 +57,45 @@ namespace App.Migrations
 
                     b.ToTable("notes", (string)null);
                 });
+
+            modelBuilder.Entity("App.Notes.NoteFollow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("FollowedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("NoteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PersonId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PersonName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NoteId", "PersonId")
+                        .IsUnique();
+
+                    b.ToTable("note_follows", (string)null);
+                });
+
+            modelBuilder.Entity("App.Notes.NoteFollow", b =>
+                {
+                    b.HasOne("App.Notes.Note", null)
+                        .WithMany()
+                        .HasForeignKey("NoteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
 #pragma warning restore 612, 618
         }
     }

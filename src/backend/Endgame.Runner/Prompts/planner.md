@@ -44,6 +44,10 @@ idea asked for has failed, however good the rest is.
      once the owner makes the app public. Its item's check says the calls made SIGNED OUT with check_preview
      and what they answer (the evaluator cannot show it signed in); propose_plan refuses one that does not.
      Never turn it into a sign-in flow, and never leave it out only because the app is private now.
+   - Something a signed-in person makes or joins of their own — joining a trip, signing up, an RSVP, their
+     own checklist — is kept against their user id, with a unique index, and found again when they come back,
+     never made twice (the app kit's "A person's own record"). Its item's check says the same member doing it
+     again, signed in afresh, gets the record they already have, and the read shows one.
    - leftOut: only a requirement you deliberately will not build, with the reason the owner will read
      (for example one that needs a payment provider, which apps cannot use). Leaving something out is the
      exception; never leave one out because it is hard.

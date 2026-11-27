@@ -290,6 +290,17 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
         return new TreeView(clock.GetUtcNow(), viewer, root, divisionViews, needs);
     }
 
+    /// <summary>
+    /// What is at <paramref name="scope"/> and beneath it, counted from the same tree document home counts, read as the
+    /// organisation's Owner sees it (R5-1): the conversation's <c>read_organisation</c> answers "how many apps?" from this.
+    /// </summary>
+    public async Task<ScopeContentsView> ContentsAsync(ResolvedScope scope, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        var everything = new RoleGrant(Guid.Empty, MemberRole.Owner, NodeLevel.Organisation, scope.OrganisationId, scope.PathAt(NodeLevel.Organisation));
+        return ScopeContents.From(await TreeAsync(scope.OrganisationId, [everything], cancellationToken), scope);
+    }
+
     /// <summary>For each employee, the newest of <paramref name="runs"/> (newest first) it works in: as the run's owner, or by a task or a charged model call in it.</summary>
     public static Dictionary<Guid, Guid> WorkingIn(IReadOnlyList<RunRecord> runs, IEnumerable<(Guid RunId, Guid EmployeeId)> workedIn)
     {

@@ -90,6 +90,19 @@ public sealed partial record PlanRequirement(string Id, string Text)
     /// </summary>
     public static bool IsAboutScreen(string? text) => !NeedsNoSignIn(text) && (Screen().IsMatch(text ?? "") || ViewNoun().IsMatch(text ?? ""));
 
+    /// <summary>
+    /// Whether the words ask for something a signed-in person makes or joins that is their own — joining a trip, signing up,
+    /// registering, an RSVP, their own list or checklist (R3-5). Such a record must be found again when the person comes back,
+    /// never made a second time, so the check of it comes back later: the same person, signed in afresh, does it again and
+    /// reads it back, and code sees one record, not two (<c>EvaluationGate</c>, ARCH-006). Never a requirement for people who
+    /// do not sign in.
+    /// </summary>
+    public static bool IsOwnRecord(string? text) => !NeedsNoSignIn(text) && OwnRecord().IsMatch(text ?? "");
+
+    // Present forms only: "joins a trip" is the person doing it; "sees how many have joined" is somebody reading it.
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b(join(s|ing)?|sign(s|ing)? (themselves )?up|register(s|ing)?|enrol(l)?(s|ing)?|rsvps?|claim(s|ing)?|subscrib(e|es|ing)|check(s|ing)? in|book(s|ing)? (a|their|my|your) (place|spot|seat)|keep(s|ing)? (their|my|your|his|her) own|tick(s|ing)? off (their|my|your|his|her))\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex OwnRecord();
+
     [System.Text.RegularExpressions.GeneratedRegex(@"\b(screens?|pages?|layout|laid out|dashboards?|on (their|a|the|your|my|his|her|any) (phones?|mobiles?|tablets?)|phones?(?!\s+numbers?)|mobile(?!\s+numbers?)|tablets?|responsive|looks?|design(ed)?|styl(e|ed|ing)|themes?|dark mode|colou?rs?|fonts?|icons?|highlight(ed|s)?|prominent(ly)?|at a glance|front and cent(re|er)|the product)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex Screen();
 

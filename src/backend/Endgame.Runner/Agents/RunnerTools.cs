@@ -98,7 +98,7 @@ public sealed partial class CallAppTool(IAppCaller caller, Guid appId) : ITool
 
     public string Name => ToolName;
 
-    public string Description => "Call the running app as a SIGNED-IN test member, exactly as a person using it would: any method, a path relative to the app (for example 'api/bookings' or 'api/courts/2/bookings?date=2026-11-25'), an optional JSON body. 'as' names the test member (the same name is the same person every time, so ownership can be checked with two names); 'role' is member (an ordinary member), admin, or viewer. Use it to show each requirement working in the running app.";
+    public string Description => "Call the running app as a SIGNED-IN test member, exactly as a person using it would: any method, a path relative to the app (for example 'api/bookings' or 'api/courts/2/bookings?date=2026-11-25'), an optional JSON body. 'as' names the test member (the same name is the same person every time, so ownership can be checked with two names); 'role' is member (an ordinary member), admin, or viewer. Every call signs that member in afresh, as a person coming back later would be: the same person, a new session. Use it to show each requirement working in the running app.";
 
     public JsonObject Parameters => Schema.Object(new JsonObject
     {
@@ -123,8 +123,11 @@ public sealed partial class CallAppTool(IAppCaller caller, Guid appId) : ITool
         var platformRole = role switch { "admin" => "admin", "viewer" => "viewer", _ => "builder" };
         try
         {
-            var answer = await caller.CallAsync(appId, persona, platformRole, method, path, Json.Str(call.Arguments, "body"), cancellationToken);
-            return new ToolOutcome(string.Create(CultureInfo.InvariantCulture, $"HTTP {answer.Status} {answer.ContentType} — {method} {path} as {persona} ({role})\n\n{OutputText.Truncate(answer.Body, 8000)}"));
+            var sent = Json.Str(call.Arguments, "body");
+            var answer = await caller.CallAsync(appId, persona, platformRole, method, path, sent, cancellationToken);
+            // What was sent is kept on its own line, so the gate can tell the same call made again from a different one (R3-5).
+            var sentLine = string.IsNullOrWhiteSpace(sent) ? "" : $"\n{SentPrefix}{OutputText.Truncate(sent.ReplaceLineEndings(" "), 2000)}";
+            return new ToolOutcome(string.Create(CultureInfo.InvariantCulture, $"HTTP {answer.Status} {answer.ContentType} — {method} {path} as {persona} ({role}){sentLine}\n\n{OutputText.Truncate(answer.Body, 8000)}"));
         }
         catch (Exception e) when (e is ServiceProblemException or HttpRequestException)
         {
@@ -142,8 +145,40 @@ public sealed partial class CallAppTool(IAppCaller caller, Guid appId) : ITool
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
+    public const string SentPrefix = "Sent: ";
+
+    /// <summary>
+    /// Every signed-in call the agent made that the app answered, in the order made: method, path (query dropped), who, the
+    /// status, what was sent and what came back — read back from the run log, for the gate's check of coming back later (R3-5).
+    /// </summary>
+    public static IReadOnlyList<AppAttempt> AttemptsIn(IEnumerable<RunEvent> log, string agentId) =>
+        log.Where(e => e.Type == HarnessEvents.ToolResult && Json.Str(e.Payload, HarnessEvents.AgentField) == agentId
+                && Json.Str(e.Payload, "name") == ToolName && Json.Bool(e.Payload, "isError") != true)
+            .Select(e => Json.Str(e.Payload, "content") ?? "")
+            .Select(content => (content, head: Attempt().Match(content.Split('\n')[0])))
+            .Where(x => x.head.Success)
+            .Select(x =>
+            {
+                var split = x.content.IndexOf("\n\n", StringComparison.Ordinal);
+                var header = split < 0 ? x.content : x.content[..split];
+                var sent = header.Split('\n').Skip(1).FirstOrDefault(l => l.StartsWith(SentPrefix, StringComparison.Ordinal))?[SentPrefix.Length..];
+                return new AppAttempt(x.head.Groups[2].Value, x.head.Groups[3].Value.Split('?')[0], x.head.Groups[4].Value,
+                    int.Parse(x.head.Groups[1].Value, CultureInfo.InvariantCulture), sent, split < 0 ? "" : x.content[(split + 2)..]);
+            })
+            .ToList();
+
     [System.Text.RegularExpressions.GeneratedRegex(@"^HTTP \d{3} .*? — (GET|POST|PUT|PATCH|DELETE) (\S*) as ")]
     private static partial System.Text.RegularExpressions.Regex CallLine();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^HTTP (\d{3}) .*? — (GET|POST|PUT|PATCH|DELETE) (\S*) as (\S+) \(")]
+    private static partial System.Text.RegularExpressions.Regex Attempt();
+}
+
+/// <summary>One signed-in call to the running app, as the run log holds it: who made it, what was sent, what came back.</summary>
+public sealed record AppAttempt(string Method, string Path, string Persona, int Status, string? Sent, string Body)
+{
+    /// <summary>The call as the gate's other lists name it: <c>"POST api/trips/7/join"</c>.</summary>
+    public string Call => $"{Method} {Path}";
 }
 
 /// <summary>
@@ -290,19 +325,19 @@ public sealed partial class CheckPreviewTool(IPreviewProbe probe, Guid appId) : 
 }
 
 /// <summary>
-/// The conversation's read tools over the tree: the scope's resolved cascade (levels, context,
-/// settings, budgets), its workforce, and — through endpoints this lane asks for — its tasks, runs
-/// and credits.
+/// The conversation's read tools over the tree: what is at the scope and beneath it (every division, project and app,
+/// each app's state, and home's counts), the scope's resolved cascade (levels, context, settings, budgets), its
+/// workforce, its tasks, runs and credits.
 /// </summary>
 public sealed class ReadOrganisationTool(ControlPlaneClient controlPlane, string scope) : ITool
 {
     public string Name => "read_organisation";
 
-    public string Description => "Read about the organisation at the scope being discussed (or a scope beneath it): 'overview' (levels, context, settings, budgets, and needsYou: everything waiting on the owner — approvals, verdicts, hires — so read it whenever you are asked what is waiting), 'workforce', 'tasks', 'runs' or 'credits'.";
+    public string Description => "Read about the organisation at the scope being discussed (or a scope beneath it): 'contents' (every division, project and app there and beneath it, each app with its state — live, sleeping, building, never built, paused, down, archived — and the counts home shows; read it whenever you are asked how many apps, projects, divisions or employees there are, or which apps are live), 'overview' (the contents, then the levels on the path down to the scope, context, settings, budgets, and needsYou: everything waiting on the owner — approvals, verdicts, hires — so read it whenever you are asked what is waiting), 'workforce', 'tasks', 'runs' (the 20 most recent pieces of work, chats included: never count apps from it) or 'credits'.";
 
     public JsonObject Parameters => Schema.Object(new JsonObject
     {
-        ["what"] = Schema.Enum("What to read.", "overview", "workforce", "tasks", "runs", "credits"),
+        ["what"] = Schema.Enum("What to read.", "contents", "overview", "workforce", "tasks", "runs", "credits"),
         ["scope"] = Schema.Str("A scope path beneath the one being discussed, such as 'frostaura/technologies'. Default: the one being discussed."),
     }, "what");
 
@@ -314,25 +349,50 @@ public sealed class ReadOrganisationTool(ControlPlaneClient controlPlane, string
     public async Task<ToolOutcome> ExecuteAsync(ToolCall call, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(call);
-        var at = Json.Str(call.Arguments, "scope") is { Length: > 0 } s ? s : scope;
-        var path = Json.Str(call.Arguments, "what") switch
+        var at = Uri.EscapeDataString(Json.Str(call.Arguments, "scope") is { Length: > 0 } s ? s : scope);
+        var what = Json.Str(call.Arguments, "what");
+        var path = what switch
         {
-            "workforce" => $"/internal/employees?scope={Uri.EscapeDataString(at)}",
-            "tasks" => $"/internal/tasks?scope={Uri.EscapeDataString(at)}",
-            "runs" => $"/internal/runs?scope={Uri.EscapeDataString(at)}&limit=20",
-            "credits" => $"/internal/credits?scope={Uri.EscapeDataString(at)}",
-            _ => $"/internal/context?scope={Uri.EscapeDataString(at)}",
+            "contents" => $"/internal/contents?scope={at}",
+            "workforce" => $"/internal/employees?scope={at}",
+            "tasks" => $"/internal/tasks?scope={at}",
+            "runs" => $"/internal/runs?scope={at}&limit=20",
+            "credits" => $"/internal/credits?scope={at}",
+            _ => $"/internal/context?scope={at}",
         };
-        using var response = await controlPlane.Http.GetAsync(path, cancellationToken);
-        var text = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        var (ok, text) = await ReadAsync(path, cancellationToken);
+        if (!ok)
         {
-            // A failed read is never an empty answer.
-            return ToolOutcome.Error(string.Create(CultureInfo.InvariantCulture, $"The read failed ({(int)response.StatusCode}): {OutputText.Truncate(text, 600)}. Tell the owner it could not be read; do not say there is nothing."), "read_failed");
+            return Failed(text);
         }
 
-        return new ToolOutcome(OutputText.Truncate(text, 12_000));
+        if (what is "workforce" or "tasks" or "runs" or "credits" or "contents")
+        {
+            return new ToolOutcome(OutputText.Truncate(text, 12_000));
+        }
+
+        // The overview leads with what is there (R5-1): its levels are only the path down to the scope, and a model that
+        // counted them, or the apps it happened to see in recent runs, said "we run 1 app" of an organisation with three.
+        var (contentsOk, contents) = await ReadAsync($"/internal/contents?scope={at}", cancellationToken);
+        if (!contentsOk)
+        {
+            return Failed(contents);
+        }
+
+        var overview = new JsonObject { ["contents"] = JsonNode.Parse(contents), ["cascade"] = JsonNode.Parse(text) };
+        return new ToolOutcome(OutputText.Truncate(overview.ToJsonString(), 16_000));
     }
+
+    private async Task<(bool Ok, string Text)> ReadAsync(string path, CancellationToken cancellationToken)
+    {
+        using var response = await controlPlane.Http.GetAsync(path, cancellationToken);
+        var text = await response.Content.ReadAsStringAsync(cancellationToken);
+        return response.IsSuccessStatusCode ? (true, text) : (false, string.Create(CultureInfo.InvariantCulture, $"{(int)response.StatusCode}): {OutputText.Truncate(text, 600)}"));
+    }
+
+    // A failed read is never an empty answer.
+    private static ToolOutcome Failed(string why) =>
+        ToolOutcome.Error($"The read failed ({why}. Tell the owner it could not be read; do not say there is nothing.", "read_failed");
 
     private bool Within(string other) => other == scope || other.StartsWith(scope + "/", StringComparison.Ordinal);
 }

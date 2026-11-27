@@ -55,7 +55,19 @@ export function headroom(world: World, scope: string): number {
 }
 
 /** An open proposal's room and fit, as they are now (a decided one keeps what it was decided on). */
+/** `WorkforceLimits.DeclinedHireHoldDays`: how long a person's decline of a recurring role the platform raised holds (R5-3). */
+export const DECLINED_HIRE_HOLD_DAYS = 30;
+
+/** `HireService.ViewAsync`'s hold fields: an open recurring-role proposal says how long a decline holds; a declined one says when it can come back. */
+function withHold(h: Hire): Hire {
+  const holds = (h.trigger === "recurring" || h.trigger === "promotion") && !!h.needKey && h.raisedBy === "runner";
+  h.holdDays = holds && h.status === "proposed" ? DECLINED_HIRE_HOLD_DAYS : null;
+  h.proposedAgainFrom = holds && h.status === "declined" && h.decision?.via === "person" && !h.withdrawn ? new Date(Date.parse(h.decision.at) + DECLINED_HIRE_HOLD_DAYS * 86_400_000).toISOString() : null;
+  return h;
+}
+
 function withRoom(world: World, h: Hire): Hire {
+  withHold(h);
   if (h.status !== "proposed") return h;
   h.headroomCredits = headroom(world, h.scope);
   h.withinBudget = h.expectedMonthlyCredits <= h.headroomCredits;
@@ -367,7 +379,7 @@ area("WorkforceEndpoints", {
     else if (req.params.decision === "decline") Object.assign(h, { status: "declined", decision: { via: "person", by, at: new Date().toISOString(), note } });
     else throw new Refusal(problem(404, "not_found", "Not found", "There is nothing at this address."));
     world.changed.push("Hire", "Tree", "Employee", "Ontology", "Notifications");
-    return ok(h);
+    return ok(withHold(h));
   },
 
   "POST hires": (req, { world }) => {

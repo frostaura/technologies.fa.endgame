@@ -853,7 +853,9 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
         // Not for the check of what worked before: a regression is shown by the data the part reads in the running app (KeepCheck).
         var screenClaimed = item.Id != KeepItem && plan.RequirementsOf(item).Any(r => PlanRequirement.IsAboutScreen(r.Text) && marks.Any(m => Json.Str(m, "id") == r.Id && Json.Bool(m, "met") == true));
         var tests = screenClaimed ? await ScreenTests.RunAsync(workspace, cancellationToken) : ScreenTests.Outcome.NotRun;
-        return EvaluationGate.Apply(plan, item, answer, calls, await MissingTestIdsAsync(workspace, item, cancellationToken), signedOut, tests.Tests, tests.Problem);
+        // Every signed-in call in the order made, for the check of coming back later (R3-5).
+        var attempts = evaluators.SelectMany(e => CallAppTool.AttemptsIn(log, e)).ToList();
+        return EvaluationGate.Apply(plan, item, answer, calls, await MissingTestIdsAsync(workspace, item, cancellationToken), signedOut, tests.Tests, tests.Problem, attempts);
     }
 
     /// <summary>The second look at the same build: what code refused, word for word, and how each requirement is shown.</summary>
@@ -1164,6 +1166,8 @@ public sealed partial class BuildWorkflow(Estimator estimator, IPreviewProbe? pr
             var kind = Json.Strings(last, "failing").FirstOrDefault(x => x.StartsWith(id + ":", StringComparison.Ordinal))?.Split(':')[1];
             var todo = kind == EvaluationGate.NotMet
                 ? "It does not work yet: make it work in the running app."
+                : kind == EvaluationGate.Unshown && PlanRequirement.IsOwnRecord(text)
+                    ? "The checker did not show it coming back later. It is something a person makes or joins of their own: make sure the same person doing it again, signed in afresh, gets the record they already have (found by their user id, a unique index behind it), and that their page reads it on return instead of offering it again."
                 : kind == EvaluationGate.Unshown && PlanRequirement.IsAboutScreen(text)
                     ? "The checker said it works but named nothing code can verify. It is about how a screen presents something, so it is shown by the screen's own test: make sure one test says exactly this in its title, passes, and name it (file > title) in your reply."
                     : kind == EvaluationGate.Unshown

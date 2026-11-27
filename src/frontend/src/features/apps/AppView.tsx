@@ -216,7 +216,7 @@ function AppBody({ app }: { app: AppDetail }) {
           </ErrorBoundary>
         </Fold>
       )}
-      <Fold title="Ask about it" summary="A question about its data, answered with a chart">
+      <Fold title="Ask about this app" summary="A question about its data, answered with a chart">
         <ErrorBoundary name="Asking about this app">
           <AskPanel appId={app.id} canAsk={builder} />
         </ErrorBoundary>

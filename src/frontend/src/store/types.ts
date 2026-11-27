@@ -747,6 +747,10 @@ export interface Hire {
   createdAt: string;
   /** Declined by the platform, not a person: the work it was for stopped before anything was built. `decision.note` says why. */
   withdrawn?: boolean;
+  /** On an open proposal the platform raised for a recurring contractor role: the days a decline holds — it is not proposed again here before then (R5-3). */
+  holdDays?: number | null;
+  /** On such a proposal a person declined: when the platform may propose it again. */
+  proposedAgainFrom?: string | null;
 }
 
 export interface HireEdit {

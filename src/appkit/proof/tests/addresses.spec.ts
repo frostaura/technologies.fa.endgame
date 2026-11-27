@@ -141,7 +141,7 @@ for (const shape of shapes) {
       const ids = Object.values((await doc.json()).paths as Record<string, Record<string, { operationId: string }>>)
         .flatMap((ops) => Object.values(ops).map((o) => o.operationId))
         .sort();
-      expect(ids).toEqual(["createNote", "getCurrentUser", "getNote", "listNotes"]);
+      expect(ids).toEqual(["createNote", "followNote", "getCurrentUser", "getNote", "getNoteFollow", "listNotes", "unfollowNote"]);
 
       // Platform callbacks are never reachable from the public side.
       expect((await request.post(at("_platform/schedules/anything"))).status()).toBe(404);

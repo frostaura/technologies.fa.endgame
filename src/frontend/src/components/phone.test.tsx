@@ -6,6 +6,7 @@ import { currentViewport } from "@/lib/useViewport";
 import { breakpoints, viewportQueries } from "@/lib/tokens";
 import { AppShell } from "@/features/shell/AppShell";
 import { Talk } from "@/features/shell/talk";
+import { AskPanel } from "@/features/apps/AskPanel";
 import { BottomNav } from "./BottomNav";
 import { ClampedHeading, Disclosure, Fold } from "./Fold";
 import { Sheet } from "./Sheet";
@@ -176,6 +177,32 @@ describe("a fold's title, said once", () => {
     expect(echo?.textContent).toBe("Dashboard");
     const heading = screen.getAllByRole("heading", { level: 2 }).find((h) => !h.hasAttribute("data-fold-echo"));
     expect(heading?.querySelector("button")?.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("on an app's page, says “Ask about this app” once on a phone, and names the question field by it (R5-2)", () => {
+    pretend(PHONE);
+    stubApi({ "GET /api/me": json(ME) });
+    renderWithStore(
+      <Fold title="Ask about this app" summary="A question about its data, answered with a chart">
+        <AskPanel appId="a1" canAsk />
+      </Fold>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Ask about this app/ }));
+    const shown = screen.getAllByRole("heading", { name: "Ask about this app" }).filter((h) => !h.hasAttribute("data-fold-echo"));
+    expect(shown).toHaveLength(1);
+    expect(shown[0]?.querySelector("button")?.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("textbox", { name: "Ask about this app" }).tagName).toBe("INPUT");
+  });
+
+  it("on a desktop, the panel keeps its own heading and there is no row", () => {
+    stubApi({ "GET /api/me": json(ME) });
+    renderWithStore(
+      <Fold title="Ask about this app">
+        <AskPanel appId="a1" canAsk />
+      </Fold>,
+    );
+    expect(screen.queryByRole("button", { name: /Ask about this app/ })).toBeNull();
+    expect(screen.getByRole("heading", { level: 2, name: "Ask about this app" })).toBeTruthy();
   });
 
   it("leaves a heading of other words alone", () => {

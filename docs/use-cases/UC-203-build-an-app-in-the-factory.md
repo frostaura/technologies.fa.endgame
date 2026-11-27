@@ -37,7 +37,9 @@
    `POST /internal/apps/{id}/probe` — re-reading every view of the data after each change of state, and checking the
    screens' navigation and test ids in the code and its tests — and answers `{passed, evidence, requirements: [{id, met,
    evidence}], faults}`. Code's gate fails the item unless every requirement is met with evidence naming a call that was
-   made and every promised test id is written in `web/src` as `data-testid="…"` (`evaluation.passed` /
+   made and every promised test id is written in `web/src` as `data-testid="…"`, and — for a requirement where a signed-in
+   person makes or joins something of their own — unless the same member made the same call again and the app answered
+   the record they already had (the same id, or 409, never a second 201 or another id), then read it back (`evaluation.passed` /
    `evaluation.failed`, with a plain `summary`). The preview and its database are destroyed when the evaluation ends.
 6. **Repair.** A failed item goes back to a builder one tier up, with the faults, not billed; at most three rounds.
 7. **Progress.** A passed item is recorded in `PROGRESS.md` and committed.

@@ -13,4 +13,19 @@
 
 Who may: anyone reads; signed-in people write. Nobody edits or deletes yet.
 
-Migrations: `InitialCreate`.
+## NoteFollow — table `note_follows`
+
+A signed-in person following a note: their own record, one per person and note.
+
+| Field | Type | Rules |
+| --- | --- | --- |
+| `Id` | uuid (v7) | Set by the server. |
+| `NoteId` | uuid | The note; deleting the note deletes its follows. |
+| `PersonId` | text ≤ 64 | The follower's `EndgameUser.Id` — stable across sign-ins. |
+| `PersonName` | text ≤ 200 | Their display name when they followed. |
+| `FollowedAt` | timestamptz | Set by the server. |
+
+Unique: (`NoteId`, `PersonId`) — the database refuses a second follow by the same person. Following again answers the
+follow they have.
+
+Migrations: `InitialCreate`, `AddNoteFollows`.

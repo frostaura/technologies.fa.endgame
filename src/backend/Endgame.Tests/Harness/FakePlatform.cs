@@ -65,6 +65,9 @@ public sealed class FakeControlPlane : HttpMessageHandler
 
     public JsonObject Context { get; }
 
+    /// <summary>What <c>GET /internal/contents</c> answers: what is at the scope and beneath it (R5-1).</summary>
+    public JsonObject Contents { get; set; } = new() { ["counts"] = new JsonObject { ["apps"] = 0 }, ["divisions"] = new JsonArray() };
+
     public List<(long Seq, string Type, JsonObject Payload)> Events { get; } = [];
 
     public decimal? Headroom { get; set; }
@@ -173,6 +176,7 @@ public sealed class FakeControlPlane : HttpMessageHandler
                         .Select(e => (JsonNode)new JsonObject { ["seq"] = e.Seq, ["type"] = e.Type, ["payload"] = e.Payload.DeepClone() }).ToArray())),
                 ("GET", var p) when p.StartsWith("/internal/employees/", StringComparison.Ordinal) && Guid.TryParse(p[20..], out var who) && EmployeeDetails.TryGetValue(who, out var detail) => Json(detail),
                 ("GET", "/internal/context") => Json(Context),
+                ("GET", "/internal/contents") => Json(Contents),
                 ("POST", "/internal/approvals") => Approve(body!.AsObject()),
                 ("POST", "/internal/tasks") => CreateTask(body!.AsObject()),
                 ("POST", "/internal/tasks/checkout") => Checkout(body!.AsObject()),

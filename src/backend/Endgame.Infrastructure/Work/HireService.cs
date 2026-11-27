@@ -22,6 +22,11 @@ public sealed record HireDecisionView(string Via, string By, DateTimeOffset At, 
 /// <param name="RaisedBy"><c>person</c> or <c>runner</c>.</param>
 /// <param name="ExpectedMonthlyCredits">What it should cost a month: never more than its own budget (<c>jobDescription.monthlyCreditLimit</c>) when it has one.</param>
 /// <param name="Withdrawn">Declined by the platform, not by a person: the work it was for stopped before anything was built (D81). <c>decision.note</c> says why.</param>
+/// <param name="HoldDays">
+/// On an open proposal the platform raised for a recurring contractor role: how many days a decline holds — no new proposal for
+/// this role here before then (R5-3, <see cref="WorkforceLimits.DeclinedHireHoldDays"/>). Null where a decline holds nothing.
+/// </param>
+/// <param name="ProposedAgainFrom">On such a proposal a person declined: the moment it can be proposed again; null otherwise.</param>
 public sealed record HireView(
     Guid Id,
     string Status,
@@ -42,7 +47,9 @@ public sealed record HireView(
     HireDecisionView? Decision,
     Guid? EmployeeId,
     DateTimeOffset CreatedAt,
-    bool Withdrawn = false);
+    bool Withdrawn = false,
+    int? HoldDays = null,
+    DateTimeOffset? ProposedAgainFrom = null);
 
 /// <summary>A need for a hire: the drafted job description, what it should cost a month and why.</summary>
 public sealed record HireInput(
@@ -119,6 +126,14 @@ public sealed class HireService(
         if (existing is not null)
         {
             return new HireRaised(await ViewAsync(existing, cancellationToken), false);
+        }
+
+        // A person's decline holds (R5-3): the platform does not propose the same recurring role here again inside the hold,
+        // however many more contractors are briefed. Answered with the declined proposal, nothing created. A person asking
+        // for the hire is never held.
+        if (byUser is null && needKey is not null && Holds(trigger) && await DeclinedHoldingAsync(scope.OrganisationId, needKey, cancellationToken) is { } declined)
+        {
+            return new HireRaised(await ViewAsync(declined, cancellationToken), false);
         }
 
         if (input.ExpectedMonthlyCredits is not { } asked || asked < 0)
@@ -374,7 +389,8 @@ public sealed class HireService(
                 briefer.Id,
                 decimal.Round(recurring.CostCredits * 30m / recurring.WindowDays, 2),
                 contractor.Role), null, runId, cancellationToken);
-            promotion = raised.Hire;
+            // A decline still holding answers with the declined proposal: nothing new was proposed (R5-3).
+            promotion = raised.Hire.Status == HireStatuses.Declined ? null : raised.Hire;
         }
 
         return (await employees.GetAsync(organisationId, contractorId, cancellationToken), written, promotion);
@@ -510,6 +526,28 @@ public sealed class HireService(
     private async Task<decimal> HeadroomAsync(ResolvedScope scope, CancellationToken cancellationToken) =>
         (await ledger.PositionAsync(scope, null, clock.GetUtcNow(), cancellationToken)).Headroom().Credits;
 
+    /// <summary>The needs a person's decline holds for <see cref="WorkforceLimits.DeclinedHireHoldDays"/>: a contractor role that kept recurring.</summary>
+    public static bool Holds(string trigger) => trigger is HireTriggers.Promotion or HireTriggers.Recurring;
+
+    /// <summary>When a proposal a person declined can be proposed again by the platform; null when the decline holds nothing.</summary>
+    public static DateTimeOffset? ProposedAgainFrom(string status, string trigger, string? needKey, Guid? raisedBy, string? decidedVia, Guid? decidedBy, DateTimeOffset? decidedAt) =>
+        status == HireStatuses.Declined && Holds(trigger) && needKey is not null && raisedBy is null && decidedVia == IdeaDecisions.ByPerson && decidedBy is not null && decidedAt is { } at
+            ? at.AddDays(WorkforceLimits.DeclinedHireHoldDays)
+            : null;
+
+    /// <summary>The newest proposal for <paramref name="needKey"/> a person declined whose hold has not lapsed.</summary>
+    private async Task<HireProposalRecord?> DeclinedHoldingAsync(Guid organisationId, string needKey, CancellationToken cancellationToken)
+    {
+        var since = clock.GetUtcNow().AddDays(-WorkforceLimits.DeclinedHireHoldDays);
+        session.UseOrganisation(organisationId);
+        var declined = await db.HireProposals.AsNoTracking()
+            .Where(h => h.OrganisationId == organisationId && h.NeedKey == needKey && h.Status == HireStatuses.Declined
+                && h.DecidedVia == IdeaDecisions.ByPerson && h.DecidedBy != null && h.DecidedAt > since)
+            .OrderByDescending(h => h.DecidedAt)
+            .ToListAsync(cancellationToken);
+        return declined.FirstOrDefault(h => ProposedAgainFrom(h.Status, h.Trigger, h.NeedKey, h.RaisedByUserId, h.DecidedVia, h.DecidedBy, h.DecidedAt) is not null);
+    }
+
     private async Task<HireProposalRecord?> ExistingAsync(Guid organisationId, string needKey, CancellationToken cancellationToken)
     {
         session.UseOrganisation(organisationId);
@@ -548,6 +586,8 @@ public sealed class HireService(
         return new HireView(h.Id, h.Status, h.Trigger, h.NeedKey, path, h.Reason, h.Name, h.Role,
             new JobDescriptionView(h.Mandate, path, h.Tools, h.Services, h.MonthlyCreditLimit, h.ModelTier), manager,
             h.ExpectedMonthlyCredits, h.ExpectedMonthlyCredits <= headroom, headroom, h.ContractorRole,
-            h.RaisedByUserId is null ? "runner" : "person", h.RaisedByRunId, decision, h.EmployeeId, h.CreatedAt, IsWithdrawn(h.Status, h.DecidedVia, h.DecidedBy));
+            h.RaisedByUserId is null ? "runner" : "person", h.RaisedByRunId, decision, h.EmployeeId, h.CreatedAt, IsWithdrawn(h.Status, h.DecidedVia, h.DecidedBy),
+            h.Status == HireStatuses.Proposed && Holds(h.Trigger) && h.NeedKey is not null && h.RaisedByUserId is null ? WorkforceLimits.DeclinedHireHoldDays : null,
+            ProposedAgainFrom(h.Status, h.Trigger, h.NeedKey, h.RaisedByUserId, h.DecidedVia, h.DecidedBy, h.DecidedAt));
     }
 }

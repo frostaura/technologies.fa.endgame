@@ -182,6 +182,10 @@ internal static class InternalEndpoints
         })
         .WithName("GetContext").WithSummary("The resolved cascade for a scope: context, rule sets, budgets, settings, secret names and roles, each with the level that set it; and needsYou, what waits on a person there and beneath it (as home shows it).").Produces<ContextView>();
 
+        group.MapGet("/contents", async (string? scope, ScopeResolver scopes, ReadModels reads, CancellationToken ct) =>
+            Results.Ok(await reads.ContentsAsync(await scopes.RequireAsync(scope, ct), ct)))
+        .WithName("GetContents").WithSummary("Everything at a scope and beneath it — divisions, projects and apps, each app with its state in words — and their counts, from the same tree document home counts; at the organisation, home's own summary line.").Produces<ScopeContentsView>();
+
         group.MapPost("/approvals", async (RaiseApprovalRequest request, ApprovalService approvals, CancellationToken ct) =>
             Results.Created("/internal/approvals", await approvals.RaiseAsync(request.RunId, request.Title ?? "", request.Detail, ct, request.OnDecline, request.Technical)))
         .WithName("RaiseApproval").WithSummary("Raises a checkpoint; the run waits until someone with rights answers it.").Produces<ApprovalView>(201);

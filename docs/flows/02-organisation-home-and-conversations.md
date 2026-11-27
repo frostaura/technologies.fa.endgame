@@ -786,7 +786,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - One conversation exists per scope plus employee, and every new message continues the latest one, whoever sends it. Every message says who sent it, by name.
 - Before a message is sent, the dock shows what it can cost at most (`POST /api/conversations/estimate`); the same estimate opens the turn's run.
 - The reply is written by Endgame's assistant (system prompt `Runner/Prompts/conversation.md`) or, with an employee, **by that employee** (TALK-05). It remembers the last 6 turns and has five tools:
-  - `read_organisation`, which reads "overview", "workforce", "tasks", "runs" or "credits" at the scope or beneath it;
+  - `read_organisation`, which reads "contents", "overview", "workforce", "tasks", "runs" or "credits" at the scope or beneath it. "Contents" is every division, project and app there, each app with its state (live, sleeping, building, never built, paused, down, archived) and the counts home shows, so "how many apps do we run?" is answered as home counts — "3 apps: 2 live, 1 never finished building" — never from the recent runs; the overview leads with it;
   - `start_idea`, a checkpoint (asks first);
   - `change_app`, a checkpoint: asks the factory to change a built app (CHG-02);
   - `try_again`, a checkpoint: starts stopped research, a build or a change again (TALK-18);
