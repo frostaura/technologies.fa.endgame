@@ -64,12 +64,12 @@ describe("asking about an app", () => {
     fireEvent.change(await screen.findByLabelText("Ask about this app"), { target: { value: "Which days are busiest?" } });
     expect(screen.queryByRole("button", { name: "Ask it" })).toBeNull();
     fireEvent.click(within(askPanel()).getByRole("button", { name: "See what it costs" }));
-    expect(await screen.findByText("At most 0.4 credits.")).toBeTruthy();
+    expect(await screen.findByText("At most 0.42 credits.")).toBeTruthy();
     expect(api.calls.some((c) => c.path === "/api/apps/a1/ask")).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Ask it" }));
     expect(await screen.findByText("Tuesday and Thursday are the busiest days.")).toBeTruthy();
     expect(screen.getByRole("img", { name: /visits: Mon 52, Tue 96, Thu 88/ })).toBeTruthy();
-    expect(screen.getByText("Cost 0.1 credits of at most 0.4 credits")).toBeTruthy();
+    expect(screen.getByText("Cost 0.11 credits of at most 0.42 credits")).toBeTruthy();
     expect(screen.queryByText("The query")).toBeNull();
   });
 

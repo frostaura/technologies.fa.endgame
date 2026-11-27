@@ -256,7 +256,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
      - an app paused behind Edge's holding page (health `paused`) shows "Paused" in place of its health, with the reason beneath it ("Paused: a monthly budget above it is spent. …");
      - an access chip: "Public", "Shared with {n}", "Shared" or "Private";
      - "{n} visits today" (or "{time ago} last visit", or "Not measured yet" when nothing has been measured);
-     - "{n} credits this month" — a headline figure, so an amount that rounds below 0.1 reads "0" ("less than 0.01" is kept for sentences and cost detail lines).
+     - "{n} credits this month" — written by the one precision rule (ARCH-011): whole from 10, up to two decimals below, "<0.01" for an amount under a hundredth.
   2. Selecting the name opens `/apps/{id}` (APP-01).
 - **You know it worked when:** the app page opens.
 - **Variations and refusals:** an app paused by overdraft or an exhausted budget shows "Paused" and "Health unknown". An archived app shows the single chip "Archived" (TREE-08).

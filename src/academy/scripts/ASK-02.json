@@ -45,7 +45,7 @@
       "step": 3,
       "kind": "demo",
       "highlight": {
-        "text": "Cost 0.1 credits of at most 0.4 credits",
+        "text": "Cost 0.13 credits of at most 0.42 credits",
         "note": "Charged at the real cost, against the most it could have cost; then the answer and its chart, here bars."
       }
     },
