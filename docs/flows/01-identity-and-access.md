@@ -170,7 +170,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **Learn first:** ID-02
 - **What you learn:** one account can hold several passkeys, so losing one device never locks you out.
 - **Steps:**
-  1. "Your passkeys" reads "<n> passkeys can sign you in. Add one on each device you use, so losing one never locks you out."
+  1. "Your passkeys" (its own row: why a passkey, on the left; the passkeys themselves on the right) reads "<n> passkeys can sign you in." and "Add one from each phone and computer you use, so losing one never locks you out."
   2. Press **"Add another passkey"**; it reads "Waiting for your device…". Approve on the device.
   3. "The new passkey is saved. Either one signs you in now." (with three or more: "Any of them signs you in now.") The count goes up.
 - **You know it worked when:** the count is one higher and the saved message shows.
@@ -191,7 +191,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **Learn first:** ID-02
 - **What you learn:** your roles are grants at places in the tree, possibly in more than one organisation, and the console works in one of them at a time.
 - **Steps:**
-  1. The page shows your avatar, name, e-mail and, for an operator, "FrostAura operator"; then three figures — Passkeys, Organisations and Roles — and your passkeys (ID-08) beside your roles.
+  1. The page shows your avatar, name, e-mail and, for an operator, "FrostAura operator"; then three figures — Passkeys, Organisations and Roles — and, as rows of a settings page (what each part is on the left, the part itself on the right, one under the other on a phone), your passkeys (ID-08) and then your roles.
   2. "Your roles" lists each organisation as a card, with "Working in it now" on the active one, and each grant: "<Role> of the whole organisation" or "<Role> of a division, <path>", with what that role may do. An Admin or Owner sees "People in <Org>".
   3. In more than one organisation: "You belong to <n> organisations. The console shows one at a time." and **"Working in"** (the header carries the same drop-down on every screen). Choosing another opens its org chart; every screen then reads that organisation. The choice is kept on this device.
 - **You know it worked when:** "Working in it now" moves to the organisation chosen.

@@ -45,6 +45,9 @@ describe("Your account", () => {
     expect(roles.textContent).toContain("Owner of the whole organisation");
     expect(roles.textContent).toContain("Builder of a division, labs");
     expect(within(roles).getByText("Working in it now")).toBeTruthy();
+    // Each part is a settings row: what it is and why, then the part itself (console-desktop 45).
+    expect(screen.getByRole("heading", { name: "Your passkeys" }).closest("section")?.textContent).toContain("there is no password to steal");
+    expect(screen.getByRole("heading", { name: "Your roles" }).closest("section")?.textContent).toContain("A role holds where it was granted");
   });
 
   it("adds another passkey with this device, and says when the device said no", async () => {
