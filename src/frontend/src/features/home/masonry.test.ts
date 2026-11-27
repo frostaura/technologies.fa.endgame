@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { balancedLayout, placeInColumns, raggedness } from "./masonry";
+import { balancedLayout, placeInColumns, raggedness, stack } from "./masonry";
 
 describe("placeInColumns", () => {
   it("puts each item under the shortest column so far, so a short division leaves no hole", () => {
@@ -40,5 +40,16 @@ describe("balancedLayout", () => {
   it("measures raggedness as the tallest foot above the mean", () => {
     expect(raggedness([300, 880, 560])).toBeCloseTo(300);
     expect(raggedness([])).toBe(0);
+  });
+});
+
+describe("stack", () => {
+  it("gives each item its column and a top under the one before, gap between", () => {
+    const h: Record<string, number> = { a: 100, b: 50, c: 30 };
+    expect(stack([["a", "c"], ["b"]], (k) => h[k] ?? 0, 24)).toEqual([
+      { item: "a", column: 0, top: 0, height: 100 },
+      { item: "c", column: 0, top: 124, height: 30 },
+      { item: "b", column: 1, top: 0, height: 50 },
+    ]);
   });
 });

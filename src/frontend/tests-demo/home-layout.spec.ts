@@ -69,16 +69,27 @@ for (const [width, height] of [
       const chart = page.getByRole("region", { name: "Organisation chart" });
       await expect(chart).toBeVisible();
       // The columns settle once every division is measured (and a live build may grow one): wait for them to start level.
-      const tops = () => chart.locator("[data-chart-column] > div:first-child").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
-      await expect.poll(async () => new Set(await tops()).size, { message: "column tops differ" }).toBe(1);
+      const layout = () =>
+        chart.locator("[data-chart-item]").evaluateAll((els) => {
+          const cols = new Map<string, { top: number; bottom: number }[]>();
+          for (const e of els) {
+            const r = e.getBoundingClientRect();
+            const c = e.getAttribute("data-column") ?? "0";
+            cols.set(c, [...(cols.get(c) ?? []), { top: r.top, bottom: r.bottom }].sort((a, b) => a.top - b.top));
+          }
+          return [...cols.values()];
+        });
+      await expect.poll(async () => new Set((await layout()).map((c) => Math.round(c[0]?.top ?? 0))).size, { message: "column tops differ" }).toBe(1);
       // Masonry: when a column's last division was placed, that column was the shortest, so it starts no lower than any other column ends.
-      const columns = await chart.locator("[data-chart-column]").evaluateAll((cols) => cols.map((c) => [...c.children].map((d) => ({ top: d.getBoundingClientRect().top, bottom: d.getBoundingClientRect().bottom }))));
+      const columns = await layout();
       for (const [i, col] of columns.entries()) {
         const last = col[col.length - 1];
         if (col.length < 2 || !last) continue;
         const others = columns.filter((_, k) => k !== i).map((c) => c[c.length - 1]?.bottom ?? 0);
         expect(last.top - 24, "a division waited under a column that was not the shortest").toBeLessThanOrEqual(Math.min(...others) + 1);
       }
+      // No two divisions overlap.
+      for (const col of columns) for (let k = 1; k < col.length; k++) expect((col[k]?.top ?? 0) + 1, "two divisions overlap").toBeGreaterThanOrEqual(col[k - 1]?.bottom ?? 0);
       // Each division's wire: one node per branch, and the last branch's wire ends at its node.
       for (const list of await chart.locator("ol[aria-label^='In ']").all()) {
         const nodes = await list.locator(":scope > li > [data-node]").count();
@@ -132,7 +143,11 @@ for (const [width, height] of [
       for (const scenario of ["quiet", "messy-tree", "budget-spent"]) {
         await open(page, scenario, "/");
         const feet = async () =>
-          page.locator("section[aria-label='Organisation chart'] [data-chart-column]").evaluateAll((cols) => cols.map((c) => Math.round(c.getBoundingClientRect().bottom)));
+          page.locator("section[aria-label='Organisation chart'] [data-chart-item]").evaluateAll((els) => {
+            const bottom = new Map<string, number>();
+            for (const e of els) bottom.set(e.getAttribute("data-column") ?? "0", Math.max(bottom.get(e.getAttribute("data-column") ?? "0") ?? 0, Math.round(e.getBoundingClientRect().bottom)));
+            return [...bottom.values()];
+          });
         await expect
           .poll(async () => {
             const f = await feet();

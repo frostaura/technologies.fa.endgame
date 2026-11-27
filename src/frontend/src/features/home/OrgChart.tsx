@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import type { Tree, TreeApp, TreeDivision, TreeProject, Worker } from "@/store/types";
 import type { Selection } from "@/store/uiSlice";
 import { isArchived } from "../tree/treeManage";
-import { useMasonry } from "./masonry";
+import { stack, useMasonry } from "./masonry";
 import { activityLine, appChips, appNote, contractorsLabel, progressLine, saysSame, splitWorkers, stageChip, type Chip, workerLabel } from "./treeModel";
 
 /**
@@ -72,19 +72,19 @@ export function OrgChart({ tree, selection, onSelect }: Props) {
   const live = tree.divisions.filter((d) => !isArchived(d));
   const archived = tree.divisions.filter((d) => isArchived(d));
   if (!org) return null;
-  const draw = (division: TreeDivision, i: number, lone = false, still = false) => (
-    <DivisionColumn key={division.id} division={division} orgSlug={org.slug} orgName={org.name} index={i} wide={lone} still={still} selection={selection} onSelect={onSelect} manage={manage} />
+  const draw = (division: TreeDivision, i: number, lone = false) => (
+    <DivisionColumn key={division.id} division={division} orgSlug={org.slug} orgName={org.name} index={i} wide={lone} selection={selection} onSelect={onSelect} manage={manage} />
   );
   return (
     <div className="flex flex-col gap-6">
       <section aria-label="Organisation chart">
         {/* A lone division takes the whole width, its projects side by side, rather than leaving the rest of the page empty. */}
-        {live.length === 1 && live[0] ? draw(live[0], 0, true) : <Masonry divisions={live} draw={(d, i, still) => draw(d, i, false, still)} />}
+        {live.length === 1 && live[0] ? draw(live[0], 0, true) : <Masonry divisions={live} draw={draw} />}
       </section>
       {archived.length > 0 && (
         <Disclosure title={`Archived (${archived.length})`} summary={archived.map((d) => d.name).join(", ")}>
           <section aria-label="Archived divisions">
-            <Masonry divisions={archived} draw={(d, i, still) => draw(d, live.length + i, false, still)} />
+            <Masonry divisions={archived} draw={(d, i) => draw(d, live.length + i)} />
           </section>
         </Disclosure>
       )}
@@ -92,29 +92,43 @@ export function OrgChart({ tree, selection, onSelect }: Props) {
   );
 }
 
-/** Divisions as columns: each stacks under whichever column is shortest, so no column leaves a hole and none runs on alone. */
-function Masonry({ divisions, draw }: { divisions: TreeDivision[]; draw: (d: TreeDivision, i: number, still: boolean) => ReactNode }) {
+/**
+ * Divisions as columns: each stacks under whichever column is shortest, so no column leaves a hole and none runs on alone.
+ * One grid, every division a direct child in reading order (a screen reader reads them as listed), placed into its column
+ * and row; moving one between columns moves it rather than drawing it again.
+ */
+function Masonry({ divisions, draw }: { divisions: TreeDivision[]; draw: (d: TreeDivision, i: number) => ReactNode }) {
   const viewport = useViewport();
-  // A division already on screen that the balancing moves to another column is drawn anew there: it appears in place,
-  // without rising in again as if it had just arrived.
-  const [seen, setSeen] = useState<ReadonlySet<string>>(() => new Set());
-  const ids = divisions.map((d) => d.id).join(",");
-  useEffect(() => {
-    const t = window.setTimeout(() => setSeen(new Set(ids.split(","))), 1000);
-    return () => window.clearTimeout(t);
-  }, [ids]);
-  const { container, columns, measure } = useMasonry(divisions, (d) => d.id, estimate, { min: viewport === "desktop" ? COLUMN.min : COLUMN.tablet, gap: COLUMN.gap, max: viewport === "phone" ? 1 : COLUMN.max });
+  const { container, columns, measure, heightOf } = useMasonry(divisions, (d) => d.id, estimate, {
+    min: viewport === "desktop" ? COLUMN.min : COLUMN.tablet,
+    gap: COLUMN.gap,
+    max: viewport === "phone" ? 1 : COLUMN.max,
+    // What makes a division a different height for good: its projects and apps coming or going, not a line of live work.
+    shape: (d) => `${d.workers.length}/${d.projects.map((p) => `${p.apps.length}${p.progress ? "w" : ""}`).join(".")}`,
+  });
+  const placed = new Map(stack(columns, heightOf, COLUMN.gap).map((p) => [p.item.id, p] as const));
   return (
-    <div ref={container} data-columns={columns.length} className="flex items-start gap-6">
-      {columns.map((column, c) => (
-        <div key={c} data-chart-column="" className="flex min-w-0 flex-1 flex-col gap-6">
-          {column.map((d) => (
-            <div key={d.id} ref={measure(d.id)} className="min-w-0">
-              {draw(d, divisions.indexOf(d), seen.has(d.id))}
-            </div>
-          ))}
-        </div>
-      ))}
+    <div
+      ref={container}
+      data-columns={columns.length}
+      className="grid items-start gap-x-6"
+      style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`, gridAutoRows: "1px" }}
+    >
+      {divisions.map((d, i) => {
+        const at = placed.get(d.id);
+        return (
+          <div
+            key={d.id}
+            ref={measure(d.id)}
+            data-chart-item=""
+            data-column={at?.column ?? 0}
+            className="min-w-0 self-start"
+            style={at ? { gridColumn: at.column + 1, gridRow: `${at.top + 1} / span ${at.height}` } : undefined}
+          >
+            {draw(d, i)}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -125,14 +139,12 @@ function DivisionColumn({
   orgName,
   index,
   wide,
-  still,
   selection,
   onSelect,
   manage,
 }: {
   manage: (scope: string) => string;
   wide: boolean;
-  still: boolean;
   division: TreeDivision;
   orgSlug: string;
   orgName: string;
@@ -163,7 +175,7 @@ function DivisionColumn({
   const { shown, control } = useShowAll(projects, PROJECTS_SHOWN, "projects");
   const hasWorkers = division.workers.length > 0;
   return (
-    <div className={cn("flex min-w-0 flex-col", !still && RISE, !still && stagger(index + 2))}>
+    <div className={cn("flex min-w-0 flex-col", RISE, stagger(index + 2))}>
       <div
         data-archived={archived || undefined}
         data-division-header=""

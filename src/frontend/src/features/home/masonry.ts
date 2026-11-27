@@ -8,15 +8,22 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
  * Heights are measured once drawn (an item's height does not depend on which column it is in, since
  * every column is as wide as the others); until then `estimate` stands in, so the first frame is
  * already close to the last. Once every item is measured, the count and order are those whose columns end most nearly
- * level ({@link balancedLayout}): fewer columns, or the tallest placed first, when that closes a hole under one.
+ * level ({@link balancedLayout}): fewer columns, or the tallest placed first, when that closes a hole under one. That
+ * layout then holds until the number of columns that fit, or the items or their `shape`, change — never because a
+ * height drifted — so nothing moves under someone about to press it.
  */
-export function useMasonry<T>(items: readonly T[], key: (item: T) => string, estimate: (item: T) => number, { min, gap, max }: { min: number; gap: number; max: number }) {
+export function useMasonry<T>(
+  items: readonly T[],
+  key: (item: T) => string,
+  estimate: (item: T) => number,
+  { min, gap, max, shape = () => "" }: { min: number; gap: number; max: number; shape?: (item: T) => string },
+) {
   const container = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
   const [heights, setHeights] = useState<Record<string, number>>({});
   const observed = useRef(new Map<string, HTMLElement>());
   const observer = useRef<ResizeObserver | null>(null);
-  const [floor, setFloor] = useState<{ signature: string; count: number } | null>(null);
+  const [layout, setLayout] = useState<{ signature: string; count: number; tallFirst: boolean; used: Record<string, number> } | null>(null);
 
   useLayoutEffect(() => {
     const el = container.current;
@@ -63,19 +70,48 @@ export function useMasonry<T>(items: readonly T[], key: (item: T) => string, est
   const fit = width > 0 ? Math.floor((width + gap) / (min + gap)) : 1;
   const most = Math.max(1, Math.min(max, items.length, fit));
   const height = (item: T) => heights[key(item)] ?? estimate(item);
-  // Balance only on measured heights: an estimate is close enough to draw the first frame, not to give up a column.
-  const measured = items.every((item) => heights[key(item)] !== undefined);
-  const best = measured ? balancedLayout(items, most, height, gap) : { count: most, tallFirst: false };
-  // Fewer, wider columns draw each division shorter, which could argue for more columns again: for one width and one set
-  // of items the count only ever falls, so the layout settles instead of flipping between two answers.
-  const signature = `${width}|${items.map(key).join(",")}`;
-  const count = floor && floor.signature === signature ? Math.min(floor.count, best.count) : best.count;
-  // Kept from render to render (React's "information from previous renders"): set only when it changes, so it settles.
-  if (!floor || floor.signature !== signature || floor.count !== count) setFloor({ signature, count });
-  const tallFirst = count === best.count ? best.tallFirst : false;
-  const columns = placeInColumns(tallFirst ? byHeight(items, height) : items, count, height, gap);
-  return { container, columns, measure };
+  // What the layout is decided for: how many columns fit, and the items and their shape.
+  const signature = `${most}|${items.map((item) => `${key(item)}:${shape(item)}`).join(",")}`;
+  const same = layout !== null && layout.signature === signature;
+  let columns: T[][];
+  let heightOf = height;
+  if (items.every((item) => heights[key(item)] !== undefined)) {
+    // Every item measured. The layout is decided again only when what it was decided for changed, or an item's height
+    // moved by more than a line (a project came or went) — never for a drift, so a division does not jump column under the
+    // reader's pointer. Within one signature the count only ever falls: fewer, wider columns draw each division shorter,
+    // which must not argue for more columns again.
+    const moved = !same || items.some((item) => Math.abs((layout.used[key(item)] ?? -1e6) - height(item)) > MATERIAL);
+    const decided = moved ? { ...balancedLayout(items, same ? layout.count : most, height, gap), used: { ...heights } } : layout;
+    if (moved) setLayout({ signature, ...decided });
+    const used = (item: T) => decided.used[key(item)] ?? height(item);
+    columns = placeInColumns(decided.tallFirst ? byHeight(items, used) : items, decided.count, used, gap);
+    heightOf = height;
+  } else {
+    // The first frame, on estimates: every column that fits, in reading order.
+    columns = placeInColumns(items, same ? layout.count : most, height, gap);
+  }
+  return { container, columns, measure, heightOf };
 }
+
+/**
+ * Where each item sits: its column and its top, each column's items stacked with `gap` between them. Drawn as one grid of
+ * 1 px rows with every item a direct child, so an item that changes column is moved, never drawn anew — nothing someone
+ * is about to press is swapped for a copy, and nothing rises in twice.
+ */
+export function stack<T>(columns: T[][], height: (item: T) => number, gap: number): { item: T; column: number; top: number; height: number }[] {
+  return columns.flatMap((column, c) => {
+    let top = 0;
+    return column.map((item) => {
+      const h = Math.max(1, Math.round(height(item)));
+      const at = { item, column: c, top, height: h };
+      top += h + gap;
+      return at;
+    });
+  });
+}
+
+/** A change in an item's height worth laying the columns out again for: more than a line or two of text. */
+const MATERIAL = 48;
 
 /** The tallest first, ties in their own order. */
 function byHeight<T>(items: readonly T[], height: (item: T) => number): T[] {
