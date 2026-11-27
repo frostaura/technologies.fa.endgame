@@ -419,8 +419,8 @@ public sealed class IdeaService(EndgameDbContext db, TenantSession session, Scop
 
     private static string Title(string text)
     {
-        var line = text.Split('\n', 2)[0].Trim();
-        return line.Length <= 120 ? line : line[..117] + "...";
+        // Cut at a word, never mid-word: this is the title the owner reads on cards, approvals and work (#40).
+        return Endgame.Domain.Words.Clamp(text.Split('\n', 2)[0], 120);
     }
 
     private static IdeaView View(IdeaRecord i, string scope) => new(

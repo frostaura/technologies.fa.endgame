@@ -34,7 +34,10 @@ public sealed class ConversationWorkflow : IWorkflow
         var noWebSearch = Json.Bool(narrow, "noWebSearch") == true;
         var earlier = await EarlierTurnsAsync(run, cancellationToken);
         var scope = run.Run.Scope;
-        var places = PlaceNames.Of(run);
+        // Every place it can name, by its own name — the levels down to the scope and everything beneath it (C-1).
+        var places = answerOnly ? PlaceNames.Of(run) : PlaceNames.Of(run).With(await ContentsAsync(run, scope, cancellationToken));
+        // The owner's own words this turn, which every approval quotes; none when they sent files alone.
+        var ownerWords = Json.Str(owner, "text") is { Length: > 0 } ownText ? ownText : null;
         WorkStarted started = (id, kind, title, ct) => run.AppendAsync(HarnessEvents.Message, new JsonObject
         {
             ["kind"] = ConversationMessageKinds.WorkStarted,
@@ -48,8 +51,8 @@ public sealed class ConversationWorkflow : IWorkflow
             :
             [
                 new ReadOrganisationTool(run.ControlPlane, scope),
-                new StartIdeaTool(run.ControlPlane, scope, started),
-                new ChangeAppTool(run.ControlPlane, scope, places, started),
+                new StartIdeaTool(run.ControlPlane, scope, started, ownerWords),
+                new ChangeAppTool(run.ControlPlane, scope, places, started, ownerWords),
                 new TryAgainTool(run.ControlPlane, scope, started),
                 new AdjustSettingTool(run.ControlPlane, scope, places),
             ];
@@ -183,6 +186,20 @@ public sealed class ConversationWorkflow : IWorkflow
 
         var fence = new string('`', Math.Max(3, longest + 1));
         return $"Attached file: {name} ({what}{cut}):\n{fence}\n{text}\n{fence}";
+    }
+
+    /// <summary>What is at the scope and beneath it, read once a turn for its names; null when it cannot be read (names then fall back to the cascade's).</summary>
+    private static async Task<JsonObject?> ContentsAsync(RunContext run, string scope, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await run.ControlPlane.Http.GetAsync($"/internal/contents?scope={Uri.EscapeDataString(scope)}", cancellationToken);
+            return response.IsSuccessStatusCode ? Json.ParseTolerant(await response.Content.ReadAsStringAsync(cancellationToken)) as JsonObject : null;
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
     }
 
     public const string UnreachableAnswer = "I could not reach Endgame's AI models, so I could not answer that, and nothing was charged. Please ask again; if it keeps happening, tell FrostAura.";

@@ -91,6 +91,17 @@ public sealed class FakeControlPlane : HttpMessageHandler
     /// <summary>The logs of earlier runs, read by id (a retry carries on from one).</summary>
     public Dictionary<Guid, List<(long Seq, string Type, JsonObject Payload)>> EarlierRuns { get; } = [];
 
+    /// <summary>Stopped work <c>GET /internal/runs/{id}</c> answers with, by id (what "Try again" names).</summary>
+    public Dictionary<Guid, JsonObject> StoppedRuns { get; } = [];
+
+    /// <summary>A stopped run of this kind and title, for "Try again"; returns its id.</summary>
+    public Guid Stopped(string kind, string title)
+    {
+        var id = Guid.NewGuid();
+        StoppedRuns[id] = new JsonObject { ["id"] = id.ToString(), ["scope"] = Run["scope"]?.DeepClone(), ["kind"] = kind, ["status"] = "failed", ["title"] = title, ["lastSeq"] = 40, ["budgetExhausted"] = false };
+        return id;
+    }
+
     /// <summary>What <c>GET /internal/employees/{id}</c> answers, by id.</summary>
     public Dictionary<Guid, JsonObject> EmployeeDetails { get; } = [];
 
@@ -229,6 +240,9 @@ public sealed class FakeControlPlane : HttpMessageHandler
                 ("GET", var p) when p == run + "/suggestion-context" => SuggestionContext is { } sc ? Json(sc) : Problem(HttpStatusCode.Conflict, "conflict", "That run does not suggest ideas."),
                 ("POST", var p) when p == run + "/suggestions" => RecordSuggestions(body!.AsObject()),
                 ("GET", var p) when p == run + "/attachments" => RunAttachments(query["taskType"]),
+                // A stopped piece of work the conversation can try again, as GET /internal/runs/{id} answers it.
+                ("GET", var p) when p.StartsWith("/internal/runs/", StringComparison.Ordinal) && Guid.TryParse(p[15..], out var stopped) && StoppedRuns.TryGetValue(stopped, out var stoppedRun) =>
+                    Json(stoppedRun.DeepClone()),
                 // An earlier run (a conversation's previous turn): finished, with no parent of its own.
                 ("GET", var p) when p.StartsWith("/internal/runs/", StringComparison.Ordinal) && Guid.TryParse(p[15..], out var before) && EarlierRuns.ContainsKey(before) =>
                     Json(new JsonObject { ["id"] = before.ToString(), ["scope"] = Run["scope"]?.DeepClone(), ["kind"] = Run["kind"]?.DeepClone(), ["status"] = "succeeded", ["title"] = "Earlier", ["lastSeq"] = EarlierRuns[before].Count, ["budgetExhausted"] = false }),
@@ -337,7 +351,10 @@ public sealed class FakeControlPlane : HttpMessageHandler
         task["holderRunId"] = body["runId"]?.ToString();
         task["holderEmployeeId"] = body["employeeId"]?.ToString();
         task["employeeId"] = body["employeeId"]?.ToString();
-        Append("task.claimed", new JsonObject { ["taskId"] = task["id"]!.ToString(), ["employeeId"] = task["employeeId"]?.ToString(), ["previousHolder"] = holder });
+        // As the control plane names the holder: the employee's name, else the title of whoever does the work.
+        var employee = task["employeeId"]?.ToString();
+        var named = employee is null ? null : Hires.Values.FirstOrDefault(h => h["employeeId"]?.ToString() == employee)?["name"]?.ToString() ?? (employee == Reviewer.ToString() ? "Vigil" : null);
+        Append("task.claimed", new JsonObject { ["taskId"] = task["id"]!.ToString(), ["employeeId"] = employee, ["holder"] = named ?? body["holderTitle"]?.ToString(), ["previousHolder"] = holder });
         return Json(task.DeepClone());
     }
 

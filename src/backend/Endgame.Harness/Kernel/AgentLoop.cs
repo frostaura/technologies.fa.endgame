@@ -557,7 +557,7 @@ public sealed class AgentLoop
             // Who refused it: the owner, answering no to the question they were asked, or a rule that never asked (R6-1).
             var byOwner = ApprovalDetail.DeclinedByOwner(decision.Rule);
             verdict["by"] = byOwner ? "owner" : "rule";
-            verdict["declined"] = byOwner ? ApprovalDetail.Declined(ApprovalTitle(name, tool, arguments!)) : null;
+            verdict["declined"] = byOwner ? ApprovalDetail.Declined(await ApprovalTitleAsync(name, tool, arguments!, cancellationToken)) : null;
         }
 
         await events.WriteAsync(decision.Verdict == PermissionVerdict.Allow ? HarnessEvents.ToolPermitted : HarnessEvents.ToolDenied, verdict, cancellationToken);
@@ -606,10 +606,10 @@ public sealed class AgentLoop
         }
 
         var what = targets.Command ?? string.Join(", ", targets.Paths.Select(p => p.Relative));
-        var title = ApprovalTitle(name, tool, arguments);
+        var title = await ApprovalTitleAsync(name, tool, arguments, cancellationToken);
         var answer = await services.Approvals.AskAsync(
-            OutputText.Truncate($"{title.TrimEnd('.', '?')}?", 300),
-            ApprovalDetail.For(asked),
+            Question(title),
+            (tool as IApprovalTitle)?.ApprovalDetail(arguments) is { Length: > 0 } does ? does : ApprovalDetail.For(asked),
             ApprovalConsequence.Continues,
             OutputText.Truncate($"{name}{(what.Length > 0 ? $": {what}" : "")}. {asked.Reason} Checkpoint: {asked.Checkpoint}.", 2000),
             cancellationToken);
@@ -620,10 +620,23 @@ public sealed class AgentLoop
     }
 
     /// <summary>
+    /// The title as the question the owner answers: a "?" at its end, except after the owner's own words in quotes
+    /// (<c>Change Club Reading List: “add a waiting list”</c>), which a question mark would put words in their mouth; at most
+    /// 300 characters, cut at a word.
+    /// </summary>
+    public static string Question(string title)
+    {
+        ArgumentNullException.ThrowIfNull(title);
+        var text = title.Trim();
+        var asked = text.EndsWith('”') ? text : $"{text.TrimEnd('.', '?')}?";
+        return Endgame.Domain.Words.Clamp(asked, 300);
+    }
+
+    /// <summary>
     /// The approval's title is for the owner (ARCH-004): what will happen if they approve, in words; the tool, its command or
     /// its files are technical detail, kept for the detail line technical mode shows. A tool that knows its own plain words says them.
     /// </summary>
-    private static string ApprovalTitle(string name, ITool tool, JsonObject arguments) => tool is IApprovalTitle plain ? plain.ApprovalTitle(arguments) : name switch
+    private static async Task<string> ApprovalTitleAsync(string name, ITool tool, JsonObject arguments, CancellationToken cancellationToken) => tool is IApprovalTitle plain ? await plain.ApprovalTitleAsync(arguments, cancellationToken) : name switch
     {
         "edit_file" or "write_file" => "Let the agent change part of the app",
         "run" => "Let the agent run a check on the app",
