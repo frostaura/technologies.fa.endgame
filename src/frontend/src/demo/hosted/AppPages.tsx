@@ -140,9 +140,9 @@ function CourtBookingPage({ me }: AppPageProps) {
                   return (
                     <td key={start} className="px-1 py-2 text-center">
                       {mine.includes(key) ? (
-                        <Badge tone="primary">Yours</Badge>
+                        <Badge tone="info">Yours</Badge>
                       ) : league(court, start) ? (
-                        <Badge tone="attention">League</Badge>
+                        <Badge tone="warn">League</Badge>
                       ) : BOOKED.has(key) ? (
                         <span className="text-xs text-ink-muted">Booked</span>
                       ) : me ? (
@@ -150,7 +150,7 @@ function CourtBookingPage({ me }: AppPageProps) {
                           Book
                         </KitButton>
                       ) : (
-                        <Badge tone="success">Free</Badge>
+                        <Badge tone="good">Free</Badge>
                       )}
                     </td>
                   );
@@ -198,7 +198,7 @@ function CourseNotesPage() {
                         <p className="text-sm font-semibold">
                           Session {note.session}: {note.title}
                         </p>
-                        {note.day > 0 ? <Badge tone="primary">Next</Badge> : null}
+                        {note.day > 0 ? <Badge tone="info">Next</Badge> : null}
                       </div>
                       <p className="text-xs text-ink-muted">{relativeDay(note.day, today)}</p>
                       <p className="text-sm text-ink">{note.text}</p>
@@ -253,7 +253,7 @@ function TutorMatchPage() {
               <CardContent className="flex flex-1 flex-col gap-3">
                 <div className="flex flex-wrap gap-2">
                   {t.subjects.map((s) => (
-                    <Badge key={s} tone="primary">
+                    <Badge key={s} tone="info">
                       {s}
                     </Badge>
                   ))}
@@ -301,7 +301,7 @@ function StockCounterPage() {
                   {s.counted} {s.unit}
                 </td>
                 <td className="px-4 py-3 text-ink-muted">{s.par}</td>
-                <td className="px-4 py-3">{s.counted < s.par ? <Badge tone="attention">Below par</Badge> : <Badge tone="success">Enough</Badge>}</td>
+                <td className="px-4 py-3">{s.counted < s.par ? <Badge tone="warn">Below par</Badge> : <Badge tone="good">Enough</Badge>}</td>
                 <td className="px-4 py-3 text-xs text-ink-muted">
                   {s.countedBy} · {ago(s.hoursAgo)}
                 </td>
@@ -354,7 +354,7 @@ function ShiftRotaPage({ me }: AppPageProps) {
                       <span className={me?.displayName === who ? "font-semibold text-primary" : "text-ink"}>{who}</span>
                       {SWAPS.has(`${s} ${d}`) ? (
                         <span className="mt-1 block">
-                          <Badge tone="attention">Swap asked</Badge>
+                          <Badge tone="warn">Swap asked</Badge>
                         </span>
                       ) : null}
                     </td>
