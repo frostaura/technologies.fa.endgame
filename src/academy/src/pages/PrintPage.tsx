@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import { CLIENT_LEVELS, type Level } from "../content/types.ts";
 import { flow, printFor, scripts, shotFor, site, track } from "../lib/data.ts";
 import { Blocks } from "../components/Blocks.tsx";
@@ -46,6 +46,22 @@ function Shot({ pic, alt }: { pic: Paper; alt: string }) {
 const beside = (pic: Paper) => (printedMm(pic) ?? Infinity) <= PRINT_SHOT.besideMm;
 /** The step's number column (2.25 rem, about 9.5 mm): a picture under the words sits in from it when it still fits the column. */
 const indented = (pic: Paper) => (printedMm(pic) ?? 0) <= PRINT_SHOT.columnMm - 9.5;
+
+/**
+ * A heading's words with spaces the PDF's bookmarks keep. Chromium builds each bookmark from the
+ * heading's painted text, and a space where a variable font's line wraps is never painted, so
+ * "switch organisation" became "switchorganisation". A space set in the (static) monospace face,
+ * at the size of a word space, and kept at the line's end (the heading is pre-wrap), is painted.
+ */
+function Spaced({ text }: { text: string }) {
+  const words = text.split(" ");
+  return words.map((w, i) => (
+    <Fragment key={i}>
+      {w}
+      {i < words.length - 1 && <span className="font-mono" style={{ fontSize: "0.42em" }}> </span>}
+    </Fragment>
+  ));
+}
 
 const json = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v, null, 2));
 
@@ -96,7 +112,7 @@ export function PrintPage({ operator }: { operator: boolean }) {
         <Mark className="h-14 w-14" />
         <div className="self-center">
           <p className="text-eyebrow font-semibold uppercase text-primary">{operator ? "FrostAura only" : "Endgame"}</p>
-          <h1 className="mt-3 font-display text-cover font-bold">{operator ? "The operator handbook" : "The Endgame Academy"}</h1>
+          <h1 className="mt-3 whitespace-pre-wrap font-display text-cover font-bold"><Spaced text={operator ? "The operator handbook" : "The Endgame Academy"} /></h1>
           <p className="mt-6 max-w-read text-lead text-ink-body">
             {operator ? "God mode and running the platform, every flow step by step." : "Every flow in Endgame, step by step."}
           </p>
@@ -136,7 +152,7 @@ export function PrintPage({ operator }: { operator: boolean }) {
       {sections.map((s) => (
         <section key={s.level} className="px-12">
           {/* Each path starts a page, so its title is never at the foot of one. */}
-          <h2 className="print-break pt-4 font-display text-title font-bold">{s.title}</h2>
+          <h2 className="print-break whitespace-pre-wrap pt-4 font-display text-title font-bold"><Spaced text={s.title} /></h2>
           {s.flows.map((f, n) => {
             const steps = f.steps.map((st, i) => {
               const sc = stepOf(scripts[f.id], st.n);
@@ -205,7 +221,7 @@ export function PrintPage({ operator }: { operator: boolean }) {
               <article key={f.id} id={`flow-${f.id}`} className={`${n ? "mt-10 border-t pt-6" : "mt-6"}`}>
                 <div className="break-inside-avoid">
                   <p className="font-mono text-xs font-semibold text-primary-link">{f.id}</p>
-                  <h3 className="mt-1 font-display text-2xl font-semibold">{f.title}</h3>
+                  <h3 className="mt-1 whitespace-pre-wrap font-display text-2xl font-semibold"><Spaced text={f.title} /></h3>
                   {f.whatYouLearn && <p className="mt-2 text-base text-ink-body"><Inline text={sentence(f.whatYouLearn)} plainIds /></p>}
                   {f.who && <p className="mt-2 text-xs text-ink-muted">Who: <Inline text={f.who} plainIds /> · Starts at: <Inline text={f.startsAt} plainIds /></p>}
                   {first && <ol className="mt-4">{first.words ?? first.item}</ol>}

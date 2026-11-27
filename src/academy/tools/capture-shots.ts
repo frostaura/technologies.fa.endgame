@@ -44,12 +44,12 @@ const NOW = new Date("2026-11-25T10:00:00Z");
 /**
  * Print copies: JPEG quality, and how many pixels the smallest text in each gets. The screen is
  * captured at twice its pixels and drawn down so its smallest text is `PRINT_TEXT_PX` pixels high
- * (never more than one pixel per CSS pixel, never under 0.7): 12 px console text keeps 10.5 px, as
- * crisp as it reads on a screen, and a crop whose smallest text is 14 px is drawn at three
- * quarters. That is what keeps academy.pdf a download rather than a payload.
+ * (never more than one pixel per CSS pixel, never under 0.7): 12 px console text keeps 10 px, still
+ * crisp, and a crop whose smallest text is 14 px is drawn at 0.71. Together with the quality that
+ * is what keeps academy.pdf a download (under 15 MB) rather than a payload.
  */
-const PRINT_QUALITY = Number(process.env.PRINT_QUALITY ?? 0.5);
-const PRINT_TEXT_PX = Number(process.env.PRINT_TEXT_PX ?? 10.5);
+const PRINT_QUALITY = Number(process.env.PRINT_QUALITY ?? 0.45);
+const PRINT_TEXT_PX = Number(process.env.PRINT_TEXT_PX ?? 10);
 export const printScale = (font: number) => (font > 0 ? Math.min(1, Math.max(0.7, PRINT_TEXT_PX / font)) : 0.8);
 /**
  * The print copies' shape: the crop rules, the print scale and the encoding. When any of them
