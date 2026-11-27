@@ -17,7 +17,7 @@ export const primitives = {
   white: "#FFFFFF",
   ground: "#F5F6FB",
   ink: { 900: "#0B1020", 700: "#3B4350", 600: "#535B70", 500: "#434A5E" },
-  line: { DEFAULT: "#E4E7F2", strong: "#C9CEDF" },
+  line: { DEFAULT: "#E4E7F2", strong: "#C9CEDF", field: "#868DA3" },
   slate: { 100: "#EEF0F7" },
   navy: "#141B4D",
   blue: { 50: "#EEF2FF", 100: "#DCE4FF", 200: "#C6D2FF", 300: "#A9B8FF", 500: "#2F5BFF", 600: "#2447D6", 700: "#1E3FCC" },
@@ -28,6 +28,7 @@ export const primitives = {
   coral: { 50: "#FFF1EC", 100: "#FFE3DC", 200: "#FFC9BA", 300: "#FFB6A3", 25: "#FFF8F5", 500: "#D9432B", 900: "#5C2A1F" },
   red: { 50: "#FFF1EC", 700: "#B42318", 800: "#8A1C0F" },
   orange: { 700: "#C2410C" },
+  amber: { 50: "#FFF4E0", 500: "#D98A00", 800: "#8A4B00" },
   magenta: { 600: "#B4237A" },
 } as const;
 
@@ -38,7 +39,8 @@ export const roles = {
   ground: p.ground,
   surface: p.white,
   ink: { DEFAULT: p.ink[900], body: p.ink[700], muted: p.ink[600] },
-  border: { DEFAULT: p.line.DEFAULT, strong: p.line.strong },
+  /** `field`: the edge of a text box, a select or a check box — 3:1 against both surfaces (WCAG 1.4.11). */
+  border: { DEFAULT: p.line.DEFAULT, strong: p.line.strong, field: p.line.field },
   /** The quiet chip and track: sleeping, private, unknown. */
   quiet: { DEFAULT: p.slate[100], text: p.ink[500] },
   primary: {
@@ -52,13 +54,21 @@ export const roles = {
     /** Secondary text set on the primary band. */
     "ink-soft": p.blue[100],
   },
-  /** People: employees and contractors. */
+  /**
+   * People and the factory once had hues of their own. The house look is black on white with one accent,
+   * so these two are kept only for the organisation graph's node kinds and the avatar fills; a tag, a
+   * card, a band or an icon never uses them (`design.test.ts` holds their use from growing).
+   */
   violet: { DEFAULT: p.violet[500], text: p.violet[600], deep: p.violet[800], line: p.violet[200], dash: p.violet[400], tint: p.violet[50] },
-  /** The factory: research, plan, build, evaluate, publish. */
   teal: { DEFAULT: p.teal[600], text: p.teal[700], tint: p.teal[50] },
   /** Money and health. */
   success: { DEFAULT: p.green[500], text: p.green[800], tint: p.green[50] },
-  /** Anything that needs the owner. */
+  /**
+   * The status palette is closed: neutral (`quiet`), info (`primary`), good (`success`), warn and bad
+   * (`attention`). `warn` is something that waits on a person or is held; it is never a failure.
+   */
+  warn: { DEFAULT: p.amber[500], text: p.amber[800], tint: p.amber[50] },
+  /** Anything that failed or is refused: the "bad" status. */
   attention: {
     DEFAULT: p.coral[500],
     text: p.red[700],
@@ -177,8 +187,12 @@ export const typography = {
  * - tablet: `sm` to `lg` — the full header, two columns where a screen has them, the conversation
  *   in a side sheet.
  * - desktop: `lg` and up — the conversation and side panels beside the page.
+ *
+ * The desktop has three tiers of its own (ARCH-011): `xl` (1280) the page beside its side panel;
+ * `3xl` (1600) the page may set independent sections two across and the side panel widens; `4xl`
+ * (2000) the same, with the whole console capped at `layout.width.frame` and centred.
  */
-export const breakpoints = { sm: 640, md: 768, lg: 1024, xl: 1280, "2xl": 1536, short: 500 } as const;
+export const breakpoints = { sm: 640, md: 768, lg: 1024, xl: 1280, "2xl": 1536, "3xl": 1600, "4xl": 2000, short: 500 } as const;
 
 /** Tailwind's `screens`, from {@link breakpoints}. Plain widths only, so `max-sm:` and friends exist. */
 export const screens = {
@@ -187,6 +201,8 @@ export const screens = {
   lg: `${breakpoints.lg}px`,
   xl: `${breakpoints.xl}px`,
   "2xl": `${breakpoints["2xl"]}px`,
+  "3xl": `${breakpoints["3xl"]}px`,
+  "4xl": `${breakpoints["4xl"]}px`,
 } as const;
 
 /** The `short:` variant: a phone on its side. */
@@ -198,9 +214,9 @@ export const viewportQueries = {
   desktop: `(min-width: ${breakpoints.lg}px)`,
 } as const;
 
-/** Named widths. `page` bounds the console so lines stay readable on an ultrawide. */
+/** Named widths. `frame` caps the whole console (header, page and side panel) so nothing spans an ultrawide. */
 export const layout = {
-  width: { page: "96rem", aside: "22rem", dock: "26rem", form: "40rem", prose: "45rem", aura: "20rem", bubble: "85%", reply: "92%" },
+  width: { frame: "137.5rem", page: "96rem", aside: "22rem", "aside-wide": "26rem", dock: "26rem", form: "40rem", prose: "45rem", aura: "20rem", bubble: "85%", reply: "92%" },
   /** The organisation graph's frame: tall enough to read, short enough to keep the page in view. A bottom sheet's tallest. */
   height: { graph: "40rem", sheet: "calc(var(--visible-height, 100dvh) - 2.5rem)", visible: "var(--visible-height, 100dvh)" },
   /** The smallest comfortable touch target. */
