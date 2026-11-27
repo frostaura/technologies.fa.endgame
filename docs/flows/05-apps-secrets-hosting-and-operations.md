@@ -607,7 +607,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **What you learn:** the deepest level that sets a name wins, and you can see where each one came from.
 - **You know it worked when:** each row shows "Set here" or "Inherited from <name>", with "<Level> level · set <time ago>".
 - **Steps:**
-  1. Each row shows the name, a "Set here" or "Inherited from <link>" badge, and "<Level> level · set <time ago>".
+  1. The rows sit in one list. Each shows the name, then a "Set here" tag or "Inherited from <link>", and "<Level> level · set <time ago>"; its actions end the row.
   2. A row that overrides one above adds "Replaces the one set at <names>.".
   3. "Set beneath" lists names set on lower levels, each linking to that level.
 - **Variations and refusals:**

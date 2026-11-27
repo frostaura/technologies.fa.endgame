@@ -43,8 +43,9 @@ export function PageHeader({
     <header className={cn("flex flex-wrap items-end justify-between gap-x-6 gap-y-3", className)}>
       <div className="flex min-w-0 max-w-prose flex-col gap-2">
         {eyebrow && <span className="text-eyebrow font-semibold uppercase text-ink-muted">{eyebrow}</span>}
-        <h1 id={titleId} className={cn(TITLE, "flex min-w-0 items-center gap-3 break-words")}>
-          {icon && <Icon name={icon} className="size-7 text-ink max-sm:size-6" />}
+        {/* The icon sits on the title's first line, so a title that wraps keeps it at its start, not its middle. */}
+        <h1 id={titleId} className={cn(TITLE, "flex min-w-0 items-start gap-3 break-words")}>
+          {icon && <Icon name={icon} className="mt-1 size-7 shrink-0 text-ink max-sm:mt-0.5 max-sm:size-6" />}
           <span className="min-w-0">{title}</span>
         </h1>
         {lead && <div className="text-ink-body">{lead}</div>}

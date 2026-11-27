@@ -370,9 +370,10 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
   1. A coral band "God mode" sits above the header on every screen: "You are a FrostAura operator. Entering an organisation is logged where its Owner can read it." with the link "Every organisation".
   2. Home shows the panel "God mode", "You run Endgame for FrostAura. Every organisation is one step away.", and "List them, set one up for an invited Owner, top one up or enter it. Each entry is written where that organisation’s Owner can read it."
   3. The button "Every organisation" goes to `/operator` (OP-01).
+  4. Beside it, every organisation at a glance: "Organisations", "Top-ups asked for" (with "Waiting for your answer" when any are) and "Below zero" ("—" until they are read).
 - **You know it worked when:** the coral "God mode" band is visible.
 - **Variations and refusals:** an operator who holds a role in an organisation (FrostAura's own, where top-up requests reach them) lands on that organisation's home instead, under the same band.
-- **Where:** `HomeView.tsx` (`OperatorHome`), `shell/GodModeBand.tsx`.
+- **Where:** `HomeView.tsx`, `operator/OperatorHome.tsx`, `shell/GodModeBand.tsx`.
 - **Reachable from:** UI.
 - **Covered by tests:** `breadth.spec.ts`: "is marked on every screen, lists every organisation, enters one and says it is logged".
 
@@ -1128,22 +1129,19 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Steps:**
   1. The breadcrumb reads "{organisation} / Notifications".
   2. Heading "Notifications", with: "What needs you, newest first. The urgent ones — a cap reached, credits at zero, the overdraft, an app that stopped, a security finding — are e-mailed too, when e-mail is set up."
-  3. The feed shows "Nothing unread." or "{n} unread", plus "Mark all read". On a phone it shows every unread notice and the newest ten, then **"Show older ({k} of {n})"**, which adds ten more each time.
+  3. The feed shows "Nothing unread." or "{n} unread", plus "Mark all read". At every size it shows every unread notice and the newest ten, newest first and grouped under the day they came ("Today", "Yesterday", then the date), then **"Show older ({k} of {n})"**, which adds ten more each time.
   4. Each row shows:
-     - a badge: "Verdict", "Approval", "Hire", "Budget", "Credits", "Overdraft", "App", "Security" or "Top-up request" (anything else "Update"); amber for urgent, blue otherwise;
-     - "New" when unread;
-     - how long ago;
-     - the title as a link;
-     - one line of detail — a notice raised before details were written plainly, whose detail is a raw tool line ("adjust_setting: …", "try_again: …") with no technical line beside it, shows no detail in normal mode; technical mode shows that line;
-     - "Mark read" when unread;
-     - "Answered" (green) in place of "New" and "Mark read" when what it asked is already answered — or "Closed" (grey) for an approval whose work ended before anyone answered it; its badge is quiet and its title plain;
+     - a blue dot when unread (read aloud as "Unread"), with the title in bold — the only way unread is marked; a read row has neither;
+     - the title as a link, cut at a word and never inside a quotation;
+     - one line of detail, cut the same way — a notice raised before details were written plainly, whose detail is a raw tool line ("adjust_setting: …", "try_again: …") with no technical line beside it, shows no detail in normal mode; technical mode shows that line;
+     - a tag: "Verdict", "Approval", "Hire", "Budget", "Credits", "Overdraft", "App", "Security" or "Top-up request" (anything else "Update"); amber for an urgent one not yet answered, grey otherwise;
+     - "Answered" (green) when what it asked is already answered — or "Closed" (grey) for an approval whose work ended before anyone answered it; such a row has no dot and no "Mark read", and its title is plain;
      - "Also e-mailed" when it was;
-     - in technical mode, the raw kind.
-
-     Unread urgent rows are tinted amber; other unread rows are tinted blue.
+     - in technical mode, the raw kind;
+     - at the row's end, how long ago, and "Mark read" when unread (on a phone, at the end of the tag line).
   5. An aside "What you are told about" (on a phone a folded row, "Verdicts, approvals, hires, budgets, credits, apps and security") lists: "A verdict waiting for your call", "An approval the work is waiting on", "A hire proposed", "A budget at 80% and at its cap", "Credits at zero, halfway to the overdraft limit, and at it", "An app that stopped working", "A security review that found a problem", "For FrostAura’s operators: an Owner asking for a top-up". It adds: "Owners and Admins are told about what their grant covers; others see an empty feed."
 - **You know it worked when:** the page lists your notices, newest first.
-- **Variations and refusals:** the UI asks for at most 50. A verdict, approval or hire that has been answered (by anyone) comes back resolved and read, its title saying what happened — "You approved “Accept this plan?”", "Theo was hired as Software engineer", "Dean chose to build: …", "Auto-mode chose to build: …" (a verdict auto-mode acted on) — and it no longer counts as unread. An approval whose run ended before anyone answered it is closed with the run (expired, never "declined") and reads "No longer waiting: “{question}” — the work ended before it was answered"; it is not on the "Needs you" strip, and its row reads "Closed" rather than "Answered". Such a row has no "New" and no "Mark read", here and in the bell's popover.
+- **Variations and refusals:** the UI asks for at most 50. A verdict, approval or hire that has been answered (by anyone) comes back resolved and read, its title saying what happened — "You approved “Accept this plan?”", "Theo was hired as Software engineer", "Dean chose to build: …", "Auto-mode chose to build: …" (a verdict auto-mode acted on) — and it no longer counts as unread. An approval whose run ended before anyone answered it is closed with the run (expired, never "declined") and reads "No longer waiting: “{question}” — the work ended before it was answered"; it is not on the "Needs you" strip, and its row reads "Closed" rather than "Answered". Such a row has no unread dot and no "Mark read", here and in the bell's popover.
 - **Where:** `notifications/NotificationsView.tsx`, `NotificationFeed.tsx`, `notificationModel.ts`; `NotificationService.FeedAsync` (`resolved`).
 - **Reachable from:** UI.
 - **Covered by tests:** `Notifications.test.tsx`: "lists each with a short title, one line and where it leads…".
@@ -1158,7 +1156,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   - otherwise, `/credits` for budget, credits or overdraft kinds;
   - otherwise, `/hires?scope=…` for a hire;
   - otherwise, `/notifications`.
-- **You know it worked when:** the subject's page opens and the row no longer shows "New".
+- **You know it worked when:** the subject's page opens and the row no longer shows the unread dot.
 - **Variations and refusals:** an employee's budget notice goes to the employee's page, not credits, because the subject wins. Every notice the control plane raises today names its subject or is a budget, credits or overdraft kind, so the last two are fallbacks.
 - **Where:** `notificationModel.ts` (`notificationHref`).
 - **Reachable from:** UI.
@@ -1171,7 +1169,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Foundation · **Learn first:** NOTE-03 · **What you learn:** read state is yours alone.
 - **Steps:**
   1. Select "Mark read". The row and the count update at once (`POST /api/notifications/{id}/read`), on the page and on the bell. The read is recorded for this person only.
-- **You know it worked when:** "New" disappears and the count drops by one.
+- **You know it worked when:** the unread dot disappears and the count drops by one.
 - **Variations and refusals:** refused: the change is rolled back and the row says "Not marked read: {reason}". A notice the person cannot see gives 404 "The notification".
 - **Where:** `NotificationFeed.tsx` (`Row`), `store/api.ts` (`markRead`); `NotificationService.MarkReadAsync`.
 - **Reachable from:** UI; API. **MCP has no tool for this.**
@@ -1286,12 +1284,12 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Advanced · **Learn first:** SYS-01 · **What you learn:** each service is asked directly, and the whole is healthy only if every part is.
 - **Steps:**
   1. Heading "System status", with "Every service, asked directly whether it is healthy." and a "Check again" button. On first load: "Checking every service…".
-  2. A summary card shows "All services healthy" (green) or "{n} of {m} services unhealthy" (amber), and "Checked at {hh:mm:ss}".
-  3. One card per configured service, in this order: "Control plane", "Edge", "Runner", "Dock", "Database", "Console", "Cloudflare and backups", "Telemetry collector", then any extras. Each shows its latency ("{n} ms" or "{n.n} s"), a "Healthy" / "Unhealthy" badge, and any detail.
+  2. A white summary card across the page shows "All services healthy" with a green tick and the tag "Healthy", or "{n} of {m} services unhealthy" with a warning sign and the tag "Needs attention", and "Checked at {hh:mm:ss}".
+  3. Beneath it, one card per configured service (two, three or four across as the screen widens), in this order: "Control plane", "Edge", "Runner", "Dock", "Database", "Console", "Cloudflare and backups", "Telemetry collector", then any extras. Each shows its latency ("{n} ms" or "{n.n} s"), a "Healthy" / "Unhealthy" badge, and any detail.
   4. The page re-checks every 10 seconds while focused. "Check again" forces a check, spinning while it runs.
 - **You know it worked when:** "All services healthy" with one card per service.
 - **Variations and refusals:**
-  - An unhealthy service turns the summary amber and its card says why, in its probe's own words, for example "No answer within 2000 ms." or "Unreachable: {reason}".
+  - An unhealthy service changes the summary and its card says why, in its probe's own words, for example "No answer within 2000 ms." or "Unreachable: {reason}".
   - A service whose address is not configured is not probed or listed.
   - A probe that throws still yields a row, marked unhealthy, with the error.
 - **Where:** `features/status/SystemStatusView.tsx`, `statusModel.ts`; `GET /api/system/status` (`Program.cs`, `Application/Status/GetSystemStatus.cs`, `Infrastructure/Health/StatusOptions.cs`, `HttpHealthProbe.cs`, `DatabaseHealthProbe.cs`).

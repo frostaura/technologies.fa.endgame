@@ -84,7 +84,7 @@ describe("CreditsView", () => {
     expect(screen.getByText("On hosting").nextSibling?.textContent).toBe("100");
     const budgets = screen.getByRole("list", { name: "Budgets" });
     expect(within(budgets).getAllByRole("listitem")).toHaveLength(3);
-    expect(within(budgets).getByText("No cap here; the cap on Acme, 1,000 credits, holds")).toBeTruthy();
+    expect(within(budgets).getByLabelText("No cap here; the cap on Acme, 1,000 credits, holds")).toBeTruthy();
     expect(within(budgets).getByRole("link", { name: "Ledger web" }).getAttribute("href")).toBe("/apps/a1");
     expect(screen.getByText(/Usually 13% under the estimate/)).toBeTruthy();
     expect(screen.getByText("42 credits")).toBeTruthy();

@@ -22,6 +22,7 @@ import { useAppDispatch, useAppSelector } from "@/store";
 import { useGetIdeaQuery, useGetMeQuery } from "@/store/api";
 import type { NeedsYou, Tree } from "@/store/types";
 import { selected, type Selection } from "@/store/uiSlice";
+import { OperatorHome } from "../operator/OperatorHome";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { ConversationDock } from "./ConversationDock";
 import { AddDivision, OrgChart } from "./OrgChart";
@@ -414,23 +415,6 @@ function ChartViews({ tree, selection, onSelect }: { tree: Tree; selection: Sele
         </ErrorBoundary>
       </div>
     </div>
-  );
-}
-
-/** An operator with no organisation of their own starts in God mode. */
-function OperatorHome() {
-  return (
-    <section aria-label="God mode" className={cn("flex flex-col items-start gap-4 rounded-lg border-2 border-attention-text bg-surface px-6 py-8 sm:px-10", RISE)}>
-      <span className="flex items-center gap-2 font-semibold uppercase tracking-wide text-attention-text">
-        <Icon name="god-mode" />
-        God mode
-      </span>
-      <h1 className={cn(TITLE, "max-w-prose")}>You run Endgame for FrostAura. Every organisation is one step away.</h1>
-      <p className="max-w-prose text-ink-body">List them, set one up for an invited Owner, top one up or enter it. Each entry is written where that organisation&rsquo;s Owner can read it.</p>
-      <Link href={paths.operator()} className={buttonVariants({ size: "lg" })}>
-        Every organisation
-      </Link>
-    </section>
   );
 }
 

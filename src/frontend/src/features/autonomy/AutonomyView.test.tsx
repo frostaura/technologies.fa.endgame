@@ -47,6 +47,14 @@ describe("AutonomyView", () => {
     expect(within(document.querySelector('[data-stage="research"]') as HTMLElement).getByText("No rules set for this stage")).toBeTruthy();
   });
 
+  it("lists two rules for one tool on one line, so a stage never says the same words twice", async () => {
+    stub(json(autonomyFixture({ ruleSets: [{ stage: "all", deny: ["run(rm -rf *)", "run(git push*)"], ask: [], allow: [], checkpoints: [], setAtPath: "acme", overrides: [] }] })));
+    renderWithStore(<AutonomyView />);
+    const all = (await screen.findByRole("list", { name: "Rules for each stage" })).querySelector('[data-stage="all"]') as HTMLElement;
+    expect(within(all).getAllByText("Run commands and tests, limited")).toHaveLength(1);
+    expect(document.body.textContent).not.toContain("git push");
+  });
+
   it("technical mode shows the rules as the harness reads them", async () => {
     stub(json(autonomyFixture()));
     const { store } = renderWithStore(<AutonomyView />);

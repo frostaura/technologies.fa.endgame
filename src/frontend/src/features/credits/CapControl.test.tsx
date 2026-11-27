@@ -52,7 +52,10 @@ describe("caps on the Credits screen", () => {
   it("names the cap that holds a row with none, and says when none does", async () => {
     stub();
     renderWithStore(<CreditsView />);
-    expect((await budgets()).getByText("No cap here; the cap on Acme, 1,000 credits, holds")).toBeTruthy();
+    const list = await budgets();
+    // Said once per row as the cell's name (the legend explains the mark), never repeated as a sentence on every row.
+    expect(list.getByLabelText("No cap here; the cap on Acme, 1,000 credits, holds")).toBeTruthy();
+    expect(list.queryByText(/No cap here/)).toBeNull();
   });
 
   it("sets a cap on a row at once, as a budget on the cascade", async () => {
@@ -72,12 +75,13 @@ describe("caps on the Credits screen", () => {
     fireEvent.change(screen.getByLabelText("Credits a month"), { target: { value: "900" } });
     fireEvent.click(screen.getByRole("button", { name: "Save the cap" }));
     expect(await screen.findByText(/The cap was not changed: This needs the admin role\. It is as it was\./)).toBeTruthy();
-    expect((await budgets()).getByText("10 of 400")).toBeTruthy();
+    expect((await budgets()).getByRole("img", { name: "10 of 400 used" })).toBeTruthy();
   });
 
   it("removes a cap and says which one holds it then", async () => {
     const api = stub({ "DELETE /api/cascade": json(null, 204) });
     renderWithStore(<CreditsView />);
+    fireEvent.click((await budgets()).getByRole("button", { name: "Change the cap on Tools" }));
     fireEvent.click((await budgets()).getByRole("button", { name: "Remove the cap on Tools" }));
     expect(await screen.findByText("Tools has no cap of its own now; the cap on Acme, 1,000 credits a month, holds it.")).toBeTruthy();
     expect(api.calls.find((c) => c.method === "DELETE")?.path).toBe("/api/cascade?scope=acme%2Ftools&kind=budget&key=monthly_credits");
@@ -88,7 +92,8 @@ describe("caps on the Credits screen", () => {
     renderWithStore(<CreditsView />);
     const list = await budgets();
     expect(list.getByRole("link", { name: "Ada" }).getAttribute("href")).toBe("/employees/e1");
-    expect(list.getByText("With the contractors it briefs")).toBeTruthy();
+    expect(screen.getByText(/An employee’s spending is with the contractors it briefs/)).toBeTruthy();
+    fireEvent.click(list.getByRole("button", { name: "Change the cap on Ada" }));
     fireEvent.click(list.getByRole("button", { name: "Remove the cap on Ada" }));
     expect(await screen.findByText("Ada has no cap of its own now; the cap on Tools, 400 credits a month, holds it.")).toBeTruthy();
     await waitFor(() => expect(api.calls.find((c) => c.method === "PATCH")?.body).toEqual({ clearMonthlyCreditLimit: true }));

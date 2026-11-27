@@ -1,10 +1,9 @@
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Fold } from "@/components/Fold";
-import { Icon } from "@/components/Icon";
+import { PageHeader } from "@/components/ui/page";
 import { Empty } from "@/components/states";
 import { RISE } from "@/lib/motion";
 import { paths } from "@/lib/router";
-import { cn } from "@/lib/utils";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { AppShell } from "../shell/AppShell";
 import { NotificationFeed } from "./NotificationFeed";
@@ -16,13 +15,12 @@ export function NotificationsView() {
   const org = active.organisation;
   return (
     <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: "Notifications" }]} aside={org ? <WhatYouAreToldAbout /> : undefined}>
-      <header className={cn("flex flex-col gap-1.5", RISE)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold max-sm:text-2xl">
-          <Icon name="notifications" tinted className="size-7" />
-          Notifications
-        </h1>
-        <p className="max-w-prose text-ink-body">What needs you, newest first. The urgent ones — a cap reached, credits at zero, the overdraft, an app that stopped, a security finding — are e-mailed too, when e-mail is set up.</p>
-      </header>
+      <PageHeader
+        className={RISE}
+        icon="notifications"
+        title="Notifications"
+        lead="What needs you, newest first. The urgent ones — a cap reached, credits at zero, the overdraft, an app that stopped, a security finding — are e-mailed too, when e-mail is set up."
+      />
       {!active.isLoading && !org ? (
         <Empty icon="organisation" title="There are no notifications until your organisation is named" />
       ) : org ? (
@@ -39,7 +37,7 @@ function WhatYouAreToldAbout() {
   return (
     <Fold title="What you are told about" summary="Verdicts, approvals, hires, budgets, credits, apps and security">
     <section aria-label="What you are told about" className="flex flex-col gap-2 text-ink-body">
-      <h2 className="text-lg font-semibold text-ink">What you are told about</h2>
+      <h2 className="text-base font-semibold text-ink">What you are told about</h2>
       <ul className="flex list-disc flex-col gap-1 pl-5">
         <li>A verdict waiting for your call</li>
         <li>An approval the work is waiting on</li>
