@@ -179,6 +179,20 @@ check such a requirement by the data call plus the screen's test named by its ti
 running on exactly this: the evaluator cited the passing test "leads with readiness, above the share link and the kit
 list" every round, and the gate, counting calls alone, refused it.
 
+**Something a person has of their own is checked by coming back later.** A built "Dive Trip Ready" asked a returning,
+signed-in diver to join again and stored a second row for the same person; every requirement had been shown once, by one
+call, and nothing came back. A requirement where a signed-in person makes or joins something of their own
+(`PlanRequirement.IsOwnRecord` — join, sign up, register, enrol, RSVP, claim, subscribe, check in, book a place, keep or
+tick off their own; present forms only, so "sees how many have joined" is not one; never in a part for people who do not
+sign in) is marked "[their own: check coming back later]" for the evaluator, who makes the call as one member, makes the
+same call again as that member (every `call_app` signs in afresh: same user id, new session), and reads it back. `call_app`
+writes what it sent on its own line (`Sent: …`), and code reads every call back in order (`CallAppTool.AttemptsIn`):
+`EvaluationGate.ComingBack` finds, among the writes the evidence names, one the same member made twice with the same body,
+and holds the second answer to the first record — the same `id` (top level, or inside the one object answered), or 409.
+A second 201 or another id is `not-met` and goes to repair with the reason ("made a second record (id m1, then id m2)");
+no repeat, or no read after it, is `unshown` and checked again. The app kit's convention it holds apps to is in the
+template's `AGENTS.md` ("A person's own record").
+
 **A refusal of how the work was shown is checked again, not sent to the builder.** When the evaluator said the item
 works (no faults of its own) or gave no verdict at all, and the only reason it failed is that code could not verify how a
 requirement was shown (`recheck` on the gated answer: every failing requirement `unshown` or `unchecked`, no missing test

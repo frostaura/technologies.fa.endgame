@@ -98,7 +98,7 @@ public sealed partial class CallAppTool(IAppCaller caller, Guid appId) : ITool
 
     public string Name => ToolName;
 
-    public string Description => "Call the running app as a SIGNED-IN test member, exactly as a person using it would: any method, a path relative to the app (for example 'api/bookings' or 'api/courts/2/bookings?date=2026-11-25'), an optional JSON body. 'as' names the test member (the same name is the same person every time, so ownership can be checked with two names); 'role' is member (an ordinary member), admin, or viewer. Use it to show each requirement working in the running app.";
+    public string Description => "Call the running app as a SIGNED-IN test member, exactly as a person using it would: any method, a path relative to the app (for example 'api/bookings' or 'api/courts/2/bookings?date=2026-11-25'), an optional JSON body. 'as' names the test member (the same name is the same person every time, so ownership can be checked with two names); 'role' is member (an ordinary member), admin, or viewer. Every call signs that member in afresh, as a person coming back later would be: the same person, a new session. Use it to show each requirement working in the running app.";
 
     public JsonObject Parameters => Schema.Object(new JsonObject
     {
@@ -123,8 +123,11 @@ public sealed partial class CallAppTool(IAppCaller caller, Guid appId) : ITool
         var platformRole = role switch { "admin" => "admin", "viewer" => "viewer", _ => "builder" };
         try
         {
-            var answer = await caller.CallAsync(appId, persona, platformRole, method, path, Json.Str(call.Arguments, "body"), cancellationToken);
-            return new ToolOutcome(string.Create(CultureInfo.InvariantCulture, $"HTTP {answer.Status} {answer.ContentType} — {method} {path} as {persona} ({role})\n\n{OutputText.Truncate(answer.Body, 8000)}"));
+            var sent = Json.Str(call.Arguments, "body");
+            var answer = await caller.CallAsync(appId, persona, platformRole, method, path, sent, cancellationToken);
+            // What was sent is kept on its own line, so the gate can tell the same call made again from a different one (R3-5).
+            var sentLine = string.IsNullOrWhiteSpace(sent) ? "" : $"\n{SentPrefix}{OutputText.Truncate(sent.ReplaceLineEndings(" "), 2000)}";
+            return new ToolOutcome(string.Create(CultureInfo.InvariantCulture, $"HTTP {answer.Status} {answer.ContentType} — {method} {path} as {persona} ({role}){sentLine}\n\n{OutputText.Truncate(answer.Body, 8000)}"));
         }
         catch (Exception e) when (e is ServiceProblemException or HttpRequestException)
         {
@@ -142,8 +145,40 @@ public sealed partial class CallAppTool(IAppCaller caller, Guid appId) : ITool
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
+    public const string SentPrefix = "Sent: ";
+
+    /// <summary>
+    /// Every signed-in call the agent made that the app answered, in the order made: method, path (query dropped), who, the
+    /// status, what was sent and what came back — read back from the run log, for the gate's check of coming back later (R3-5).
+    /// </summary>
+    public static IReadOnlyList<AppAttempt> AttemptsIn(IEnumerable<RunEvent> log, string agentId) =>
+        log.Where(e => e.Type == HarnessEvents.ToolResult && Json.Str(e.Payload, HarnessEvents.AgentField) == agentId
+                && Json.Str(e.Payload, "name") == ToolName && Json.Bool(e.Payload, "isError") != true)
+            .Select(e => Json.Str(e.Payload, "content") ?? "")
+            .Select(content => (content, head: Attempt().Match(content.Split('\n')[0])))
+            .Where(x => x.head.Success)
+            .Select(x =>
+            {
+                var split = x.content.IndexOf("\n\n", StringComparison.Ordinal);
+                var header = split < 0 ? x.content : x.content[..split];
+                var sent = header.Split('\n').Skip(1).FirstOrDefault(l => l.StartsWith(SentPrefix, StringComparison.Ordinal))?[SentPrefix.Length..];
+                return new AppAttempt(x.head.Groups[2].Value, x.head.Groups[3].Value.Split('?')[0], x.head.Groups[4].Value,
+                    int.Parse(x.head.Groups[1].Value, CultureInfo.InvariantCulture), sent, split < 0 ? "" : x.content[(split + 2)..]);
+            })
+            .ToList();
+
     [System.Text.RegularExpressions.GeneratedRegex(@"^HTTP \d{3} .*? — (GET|POST|PUT|PATCH|DELETE) (\S*) as ")]
     private static partial System.Text.RegularExpressions.Regex CallLine();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^HTTP (\d{3}) .*? — (GET|POST|PUT|PATCH|DELETE) (\S*) as (\S+) \(")]
+    private static partial System.Text.RegularExpressions.Regex Attempt();
+}
+
+/// <summary>One signed-in call to the running app, as the run log holds it: who made it, what was sent, what came back.</summary>
+public sealed record AppAttempt(string Method, string Path, string Persona, int Status, string? Sent, string Body)
+{
+    /// <summary>The call as the gate's other lists name it: <c>"POST api/trips/7/join"</c>.</summary>
+    public string Call => $"{Method} {Path}";
 }
 
 /// <summary>

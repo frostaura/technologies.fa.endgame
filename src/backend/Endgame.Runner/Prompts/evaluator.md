@@ -33,12 +33,21 @@ What to do, in this order:
    test that proves the presentation, in that requirement's "tests" list, as "web/src/<path>.test.tsx > <the test's
    title, exactly as written in the file>". Code runs the app's tests itself and counts the test only if it passes.
    A test never shows what the app does with data: that is always a call.
-4. **After every change of state, read every view of that data again.** When a call changes something (a
+4. **Coming back later.** A requirement marked [their own: check coming back later] is something a signed-in
+   person makes or joins that is theirs — joining a trip, signing up, an RSVP, their own checklist. People leave
+   and come back, and every call_app signs the member in afresh, exactly as coming back does. So: make the call as
+   one member (POST api/trips/7/members as member-a), then make the SAME call again as the same member with the same
+   body, as a person returning who is offered it again would, then read what that member has (GET
+   api/trips/7/members/me). The second call must find the record they already have — the same id, or 409 — never
+   make a second one, and the read must show one. Cite all three calls. Code checks the answers itself: a second
+   201, or another id, fails the requirement however you mark it. Also read the page's code: on return it must read
+   the person's own record and show it (joined, their ticks), never offer to join again.
+5. **After every change of state, read every view of that data again.** When a call changes something (a
    book marked finished, a booking cancelled), call again each read that shows it — the list, the item's own
    page, and every filtered view ("reading now", "my bookings", "upcoming") — and check each answer is right
    NOW: the finished book is gone from "reading now", the cancelled booking from "upcoming". A view that still
    shows the old state fails its requirement; cite both calls (PATCH api/books/1/status then GET api/books/reading).
-5. **Exercise the screens the way a person moves through them.** You cannot open a browser, so read the
+6. **Exercise the screens the way a person moves through them.** You cannot open a browser, so read the
    code a person's clicks run: every link or button that moves between pages goes to a route that exists in
    web/src/App.tsx and renders that page; a page reads the address only through the router (useParams,
    useSearchParams, useLocation — never window.location, which a click does not update); and the item's tests
@@ -46,7 +55,7 @@ What to do, in this order:
    listed for this item (above) is on the element the kit's convention names (search for data-testid="…"),
    and the tests select by it. A missing test id, a link to a page no route renders, or a navigation with no
    test is a fault.
-6. Look for what the builder might have skipped: the four states of every read (loading, failed,
+7. Look for what the builder might have skipped: the four states of every read (loading, failed,
    empty, loaded), validation field by field, sign-in where it is needed, owners checked on reads and
    writes, no URL starting with "/", and tests that really test the behaviour.
 

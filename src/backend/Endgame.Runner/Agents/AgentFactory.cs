@@ -61,7 +61,7 @@ public sealed class AgentFactory(RunnerOptions options)
         {
             ["root"] = root,
             ["item"] = $"[{item.Id}] {item.Deliverable}\nChecked by: {item.Check}" + (item.TestIds.Count == 0 ? "" : $"\nTest ids its screens must carry: {string.Join(", ", item.TestIds)}"),
-            ["requirements"] = requirements.Count == 0 ? "(none listed: judge the item as written)" : string.Join("\n", requirements.Select(r => $"- {r.Id}: {r.Text}")),
+            ["requirements"] = requirements.Count == 0 ? "(none listed: judge the item as written)" : string.Join("\n", requirements.Select(r => $"- {r.Id}: {r.Text}" + (PlanRequirement.IsOwnRecord(r.Text) ? " [their own: check coming back later]" : ""))),
         }),
         Tools = new ToolRegistry(new ITool?[]
         {

@@ -15,6 +15,10 @@ the operation ids `api.tests/AppShellTests.cs` expects. In order:
    owner as `EndgameUser.Id`, never an email. A fixed set of values is a C# `enum` stored as a string
    (`.HasConversion<string>()`); the API sends and reads it as its name (`"Finished"`), and `types.ts` mirrors it as a
    string union (`"WantToRead" | "Reading" | "Finished"`).
+   **A person's own record** — a membership, a sign-up, an RSVP, their checklist — is keyed by the signed-in person's
+   `EndgameUser.Id` with a **unique index** (`HasIndex(m => new { m.TripId, m.PersonId }).IsUnique()`), found again on
+   return and never made twice: copy the template's `NoteFollow` (`api/Notes/NoteFollow.cs`) and its `PUT …/follow`,
+   which answers the record the person already has. The factory checks it by coming back later.
 2. **DbSet** — add `public DbSet<Thing> Things => Set<Thing>();` to `api/Data/AppDb.cs`.
 3. **Migration** — load the `write-a-migration` skill and follow it.
 4. **Endpoints** — load the `add-an-endpoint` skill: list, read, create (and update or delete only if asked),
