@@ -415,7 +415,8 @@ for (const [width, height] of [
         await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
         await page.keyboard.press("Escape");
         const tops = await page.evaluate(() =>
-          [...document.querySelectorAll<HTMLElement>("header a, header button, header select")]
+          // The console's own header (the first): a docked conversation pane has a header of its own.
+          [...(document.querySelector("header")?.querySelectorAll<HTMLElement>("a, button, select") ?? [])]
             .filter((el) => el.offsetParent !== null && !el.closest("nav[aria-label='Where you are']") && !el.closest("[hidden]"))
             .map((el) => Math.round(el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2)),
         );

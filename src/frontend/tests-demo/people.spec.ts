@@ -62,7 +62,8 @@ test.describe("the people pages on a wide desktop", () => {
 
   test("hiring: every proposal a row with its state at the same place, no orphan card", async ({ page }) => {
     await open(page, "s4-hiring");
-    const tags = page.locator("section[aria-label] ul li a > span:last-child");
+    // The one table: every proposal's state in the same column.
+    const tags = page.locator("[data-table] .tbl-row > [data-kind='status']");
     await expect(tags).toHaveCount(3);
     const rights = await tags.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().right)));
     expect(new Set(rights).size).toBe(1);

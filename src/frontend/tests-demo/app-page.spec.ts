@@ -77,7 +77,8 @@ for (const size of SIZES) {
     test("every dashboard tile has \"Take off\" at its top right, and a single number is a short tile", async ({ page }) => {
       await open(page, "app-busy");
       await openFolds(page);
-      const tiles = page.getByRole("list", { name: "Kept questions" }).getByRole("listitem");
+      // The tiles themselves, not the rows of an answer's own table inside one.
+      const tiles = page.getByRole("list", { name: "Kept questions" }).locator(":scope > li");
       const n = await tiles.count();
       expect(n).toBeGreaterThan(1);
       for (let i = 0; i < n; i++) {
@@ -89,7 +90,7 @@ for (const size of SIZES) {
         expect(tile.x + tile.width - (off.x + off.width), "Take off is not at the tile's right").toBeLessThan(24);
       }
       const number = await tiles.filter({ hasText: "5,920" }).boundingBox();
-      const table = await tiles.filter({ has: page.locator("table") }).boundingBox();
+      const table = await tiles.filter({ has: page.locator("[data-table]") }).boundingBox();
       expect((number?.height ?? 0) < (table?.height ?? 0), "the number tile is stretched to the table's height").toBe(true);
       // The first row of tiles starts on one line.
       if (size.width >= 1280 && size.height >= 500) {
@@ -118,9 +119,9 @@ for (const size of SIZES) {
       await open(page, "dashboard-full");
       await openFolds(page);
       const list = page.getByRole("list", { name: "Kept questions" });
-      await expect(list.getByRole("listitem")).toHaveCount(6);
+      await expect(list.locator(":scope > li")).toHaveCount(6);
       await page.getByRole("button", { name: /^Show all \d+ questions$/ }).click();
-      await expect(list.getByRole("listitem")).toHaveCount(30);
+      await expect(list.locator(":scope > li")).toHaveCount(30);
       await noSideways(page);
     });
 
