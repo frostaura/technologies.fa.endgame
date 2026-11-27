@@ -22,7 +22,7 @@ export function PdfLinks({ className = "" }: { className?: string }) {
   return (
     <p className={`flex flex-wrap gap-2 ${className}`}>
       <a className={ui.small} href="./academy.pdf" download><PdfIcon />The academy (PDF)</a>
-      <a className={ui.small} href="./operator-handbook.pdf" download><PdfIcon />Operator handbook, FrostAura (PDF)</a>
+      <a className={ui.small} href="./operator-handbook.pdf" download><PdfIcon />Operator handbook (PDF)</a>
     </p>
   );
 }
