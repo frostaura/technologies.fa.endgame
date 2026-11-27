@@ -89,7 +89,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Needs:** an organisation exists and the person holds a role in it.
 - **Level:** Foundation · **Learn first:** ORG-02 · **What you learn:** the band totals the whole organisation and is live.
 - **Steps:**
-  1. The header is one bar that never wraps (SHL-03). It shows:
+  1. The header shows:
      - the mark ("Endgame" beside it from 1,280 px wide);
      - the breadcrumb "{organisation} / Whole organisation", in the bar from 1,280 px wide and on its own row beneath it below that;
      - the "Normal" / "Technical" switch, from 1,100 px wide;
@@ -99,7 +99,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
      - in technical mode, from 1,100 px wide, **"System"**, an icon link to system status;
      - "Your account" (a person icon, ID-09) and "Sign out" from 1,100 px wide; below that one account menu, **"Your account, the mode and signing out"**, holds your account, the mode, System status (technical mode) and Sign out.
 
-     There is also a hidden "Skip to the content" link for keyboard users.
+     The bar never wraps (SHL-03). There is also a hidden "Skip to the content" link for keyboard users.
   2. The band shows:
      - the eyebrow "Organisation";
      - the organisation's name as a large button (selects the whole organisation, ORG-07);
