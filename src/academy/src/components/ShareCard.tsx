@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { site } from "../lib/data.ts";
 import { Qr } from "./Qr.tsx";
 import { ui } from "./ui.ts";
+import { Breakable } from "./Breakable.tsx";
 
 /**
  * The academy's address to hand on: on a computer, a card with its QR code to scan with a phone and a
@@ -20,18 +21,18 @@ export function ShareCard({ className = "", children, size = "sm" }: { className
     if (typeof navigator.share === "function") void navigator.share({ title: "The Endgame Academy", url }).catch(() => undefined);
     else copy();
   };
-  // The address breaks, if it must, only after the host: never inside a word or mid-path.
+  // The address breaks after the host first; only a card too narrow for the path breaks it again, at a dot or a slash.
   const shown = url.replace(/^https?:\/\//, "");
   const cut = shown.indexOf("/") + 1;
   const [host, rest] = cut > 0 ? [shown.slice(0, cut), shown.slice(cut)] : [shown, ""];
   return (
-    <section aria-label="Share the academy" className={`${ui.card} p-5 sm:p-6 ${className}`} data-testid="share-card">
-      <div className="flex items-start gap-5">
+    <section aria-label="Share the academy" className={`${ui.card} min-w-0 p-5 sm:p-6 ${className}`} data-testid="share-card">
+      <div className="flex flex-wrap items-start gap-5">
         <Qr size={size} className="hidden mouse:flex" />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-56">
           <p className={`${ui.eyebrow} text-primary`}>Share it</p>
           <p className="mt-1.5 text-balance font-display text-lg font-semibold text-ink"><span className="hidden mouse:inline">Scan to follow along on your phone</span><span className="mouse:hidden">Send the academy to someone</span></p>
-          <p className="mt-2 font-mono text-xs text-ink-muted"><span className="whitespace-nowrap">{host}</span>{rest && <wbr />}<span className="whitespace-nowrap">{rest}</span></p>
+          <p className="mt-2 font-mono text-xs text-ink-muted"><span className="whitespace-nowrap">{host}</span>{rest && <wbr />}<Breakable text={rest} /></p>
           <div className="mt-4 flex flex-wrap gap-2">
             <button type="button" onClick={share} className={`${ui.quiet} mouse:hidden`}>Share</button>
             <button type="button" onClick={copy} className={ui.quiet} aria-live="polite">{copied ? "Link copied" : "Copy link"}</button>

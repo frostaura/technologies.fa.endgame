@@ -10,6 +10,7 @@ import { ShareCard } from "../components/ShareCard.tsx";
 import { ResumeCard } from "../components/ResumeCard.tsx";
 import { Medal, ProgressRing } from "../components/ProgressMarks.tsx";
 import { ui } from "../components/ui.ts";
+import { useMedia } from "../lib/media.ts";
 
 const PdfIcon = () => (
   <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" aria-hidden="true"><path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" /></svg>
@@ -47,6 +48,7 @@ export function Figures({ className = "" }: { className?: string }) {
 }
 
 export function Cover() {
+  const wide = useMedia("(min-width: 1024px)", true);
   return (
     // Two columns on a wide screen: on the left the introduction, the way in, and the card to hand the
     // academy on (its QR code and address); on the right the four paths, the figures and the PDFs. Each column ends where its content does, so nothing hangs between anchors.
@@ -63,7 +65,7 @@ export function Cover() {
           <a href={href("/learn")} className={`${ui.primary} px-6 text-base`}>Start learning</a>
           <a href={href("/demo")} className={`${ui.outline} px-6 text-base`}>Open the live demo</a>
         </div>
-        <ShareCard className="mt-10 hidden w-fit max-w-read lg:block" />
+        {wide && <ShareCard className="mt-10 w-fit max-w-read" />}
       </div>
       <div className="min-w-0 lg:col-span-5 lg:col-start-8">
         <h2 className="font-display text-xl font-semibold text-ink">Four paths, in order</h2>
@@ -72,8 +74,8 @@ export function Cover() {
         <Figures className="mt-8" />
         <PdfLinks className="mt-8" />
       </div>
-      {/* Below a wide screen the card to take away comes after the paths. */}
-      <ShareCard className="lg:hidden" />
+      {/* Below a wide screen the card to hand the academy on comes after the paths: one card, in one place. */}
+      {!wide && <ShareCard />}
     </section>
     <StartHere />
     </>

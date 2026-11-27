@@ -662,3 +662,53 @@ test("on a phone, a long console address never widens the page (A18)", async ({ 
   expect(await fitsWidth(page)).toBe(true);
   await context.close();
 });
+
+/* ------------------------------------------------------------------ list pages (academy-pages lane) */
+
+test("each path card names its own next flow, not one prerequisite shared by every card", async ({ page }) => {
+  await page.goto("./#/learn");
+  const nexts = await page.locator("#main ol > li").evaluateAll((cards) => cards.map((c) => /Next:\s*([A-Z]+-\d+)/.exec(c.textContent ?? "")?.[1] ?? ""));
+  expect(nexts).toHaveLength(4);
+  expect(new Set(nexts).size).toBe(4);
+});
+
+test("a list page carries a named trail back to Browse, and the operator handbook filters its list in place", async ({ page }) => {
+  await page.goto("./#/area/03");
+  const trail = page.getByRole("navigation", { name: "Breadcrumb" });
+  await expect(trail).toContainText("Browse");
+  await expect(trail).toContainText("By area");
+  await expect(page.getByRole("heading", { level: 1 })).not.toContainText(/Area \d/);
+  await page.goto("./#/operator");
+  const rows = page.locator("#main ol > li");
+  const all = await rows.count();
+  await page.getByRole("button", { name: /^Command line/ }).click();
+  await expect(page.getByRole("button", { name: /^Command line/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page).toHaveURL(/#\/operator$/);
+  expect(await rows.count()).toBeLessThan(all);
+});
+
+test("on a phone, an area keeps a row of section chips in reach as the list scrolls", async ({ browser }) => {
+  const { page, context } = await phone(browser);
+  await page.goto("./#/area/03");
+  const chips = page.getByRole("navigation", { name: "Sections, small screens" });
+  await expect(chips).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 4000));
+  await page.waitForTimeout(300);
+  const box = await chips.boundingBox();
+  expect(box && box.y >= 0 && box.y < 120).toBe(true);
+  for (const b of await chips.getByRole("button").all()) expect((await b.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await context.close();
+});
+
+test("search results mark the words searched for, and the live-demo bar on a phone is one short line", async ({ browser, page }) => {
+  await page.goto("./");
+  await page.getByRole("combobox", { name: "Search the academy" }).fill("passkey");
+  await expect(page.getByRole("option").first().locator("mark").first()).toHaveText(/passkey/i);
+  const { page: p, context } = await phone(browser);
+  await p.goto("./#/demo");
+  const back = p.getByRole("link", { name: "Back to the academy" });
+  await expect(back).toHaveText(/Academy/);
+  expect((await back.boundingBox())?.height ?? 0).toBeLessThanOrEqual(48);
+  await expect(p.getByText("Sample data", { exact: true })).toBeVisible();
+  await context.close();
+});
