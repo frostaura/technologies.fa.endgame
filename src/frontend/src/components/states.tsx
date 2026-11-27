@@ -5,6 +5,7 @@ import { paths } from "@/lib/router";
 import { Button, buttonVariants } from "./ui/button";
 import { Link } from "./Link";
 import { Icon } from "./Icon";
+import { METER_FILL } from "./ui/stat";
 import type { IconName } from "./iconNames";
 
 /** A grey placeholder the shape of what is loading, so nothing moves when it arrives. */
@@ -161,13 +162,16 @@ export function NotFoundPage({ title, children, links }: { title: string; childr
   );
 }
 
-/** A bar that grows in when it first appears. */
+/**
+ * A bar, drawn at its real width from the first frame and easing to a new width when its value changes; `live` work also
+ * carries the moving stripe. Never a grow-in from zero: a page seen in its first frames would show an empty bar.
+ */
 export function Bar({ value, label, tone = "primary", live = false, className }: { value: number; label: string; tone?: "primary" | "soft" | "ink" | "success" | "attention"; live?: boolean; className?: string }) {
   const fill = { primary: "bg-primary", soft: "bg-primary-soft", ink: "bg-ink", success: "bg-success", attention: "bg-attention-text" }[tone];
   return (
     <div role="img" aria-label={label} className={cn("h-2 w-full overflow-hidden rounded-full bg-border", className)}>
       <div
-        className={`h-full origin-left rounded-full motion-reduce:animate-none ${fill} ${live ? "animate-live bg-stripe" : "animate-grow"}`}
+        className={cn(METER_FILL, "h-full motion-reduce:animate-none", fill, live && "animate-sheen bg-stripe")}
         style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
       />
     </div>

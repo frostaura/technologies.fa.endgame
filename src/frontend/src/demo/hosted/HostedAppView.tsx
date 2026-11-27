@@ -258,7 +258,8 @@ export function HostedAppView({ ctx }: { ctx: HostedContext }): JSX.Element {
         </div>
       </div>
       <div className="h-0.5 bg-surface" aria-hidden>
-        {waking ? <div className="h-full origin-left animate-grow bg-primary" /> : null}
+        {/* Waking: the whole line, drawn from the first frame, breathing quietly until the app answers. */}
+        {waking ? <div data-waking-bar="" className="h-full w-full animate-pulse bg-primary motion-reduce:animate-none" /> : null}
       </div>
       <div className="flex flex-1 flex-col">{body}</div>
     </div>
