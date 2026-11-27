@@ -18,6 +18,8 @@ export interface TimelineStep extends TraceStep {
   part?: string;
   /** How many identical lines in a row this one stands for (shown "×n"). */
   repeat?: number;
+  /** A progress report the harness writes every few actions ("Still building… 40 actions so far"): a run of them is one line. */
+  progress?: boolean;
   /** The tasks this one line made, when several were made at once. */
   tasks?: string[];
 }
@@ -37,7 +39,10 @@ export interface TimelineGroup {
   /** One line: what it came back with. */
   outcome: string | null;
   status: "working" | "done" | "stopped";
+  /** Credits charged for its calls. */
   credits: number;
+  /** Credits its calls used that were never billed: repairs of the work's own mistakes. */
+  freeCredits: number;
   /** Web searches it made. */
   searches: number;
   items: TimelineItem[];
@@ -56,6 +61,11 @@ export interface Timeline {
   denials: number;
   /** Declined by the owner at an approval. */
   declined: number;
+  /**
+   * What each part of the plan cost, from each model call's own settlement as the ledger counts it: `charged` adds up to the
+   * run's spent figure, and `free` (repairs, never billed) to its "not charged" one.
+   */
+  partCredits: Map<string, { charged: number; free: number }>;
 }
 
 const TOP = "\u0000top";
@@ -323,6 +333,11 @@ function activitySummary(a: Activity): string {
   return parts.join(" · ") || "Worked on it";
 }
 
+/** A run of actions in which tests failed is marked as a failure is, so "1 of 11 failed" is not lost among routine lines. */
+function activityTone(a: Activity): StepTone {
+  return a.tests.failed > 0 ? "attention" : "structure";
+}
+
 function newActivity(e: RunEvent): Activity {
   return {
     step: { kind: "step", key: `activity-${e.seq}`, seq: e.seq, at: e.at, tone: "structure", icon: "build", title: "", detail: null, credits: null, raw: null },
@@ -473,7 +488,7 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
   function ensureGroup(agent: string, parent: string, p: Record<string, unknown>, e: RunEvent | null) {
     const existing = groups.get(agent);
     if (existing) return existing;
-    const group: TimelineGroup = { kind: "group", key: `group-${agent}`, agent, seq: e?.seq ?? 0, at: e?.at ?? "", title: groupTitle(agent, p), outcome: null, status: "working", credits: 0, searches: 0, items: [], part };
+    const group: TimelineGroup = { kind: "group", key: `group-${agent}`, agent, seq: e?.seq ?? 0, at: e?.at ?? "", title: groupTitle(agent, p), outcome: null, status: "working", credits: 0, freeCredits: 0, searches: 0, items: [], part };
     const entry = { group, container: { items: group.items, activity: null } };
     groups.set(agent, entry);
     const host = parent === agent ? top : containerOf(parent);
@@ -506,12 +521,19 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
     return c.activity;
   };
 
+  // Whether the model call just settled was billed: a tool call's accounting repeats that call's cost, so it is charged or not
+  // as the call was (a repair of the work's own mistake is not).
+  let lastBillable = true;
+  const partCredits = new Map<string, { charged: number; free: number }>();
   const addCredits = (owner: string, p: Record<string, unknown>) => {
     if (owner === TOP) return;
     const accounting = p.accounting && typeof p.accounting === "object" ? (p.accounting as Record<string, unknown>) : null;
     const credits = accounting ? num(accounting, "settledCredits") : null;
     const g = groups.get(owner)?.group;
-    if (g && credits) g.credits += credits;
+    if (g && credits) {
+      if (lastBillable) g.credits += credits;
+      else g.freeCredits += credits;
+    }
   };
 
   for (const e of events) {
@@ -526,7 +548,15 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
     }
 
     // Counts first: accurate whatever is drawn.
-    if (e.type === "model.replied") modelCalls += 1;
+    if (e.type === "model.replied") {
+      modelCalls += 1;
+      lastBillable = p.billable !== false;
+      const settled = num(p, "settledCredits") ?? 0;
+      const sum = partCredits.get(part) ?? { charged: 0, free: 0 };
+      if (lastBillable) sum.charged += settled;
+      else sum.free += settled;
+      partCredits.set(part, sum);
+    }
     if (e.type === "tool.requested") toolCalls += 1;
     // Refused by a rule without asking, or declined by the owner at an approval: counted apart (R6-1).
     if (e.type === "tool.denied") {
@@ -551,7 +581,10 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
         const stop = str(p, "stopReason");
         g.status = stop && !/^completed/.test(stop) ? "stopped" : "done";
         const credits = num(p, "credits");
-        if (credits !== null) g.credits = credits;
+        if (credits !== null) {
+          // The sub-agent's own total: what of it was not billed is what its calls settled unbilled.
+          g.credits = Math.max(0, credits - g.freeCredits);
+        }
         const searches = num(p, "searches");
         if (searches !== null) g.searches = searches;
       }
@@ -641,6 +674,8 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
         }
         const text = str(p, "text");
         if (!text || said.has(text)) continue;
+        // A progress report ("Still building… 40 actions so far") is news only as the latest of its run: gathered below.
+        const progress = num(p, "progress") !== null;
         // A milestone (verdict, placed, published) is said once per run.
         const mark = str(p, "milestone");
         if (mark && milestones.has(`milestone:${mark}`)) continue;
@@ -648,7 +683,7 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
         said.add(text);
         const from = str(p, "from");
         const title = str(p, "title");
-        push(owner, { seq: e.seq, at: e.at, tone: from === "owner" ? "structure" : "people", icon: "employee", title: title ? `${speaker(from)} · ${title}` : speaker(from), detail: text, credits: null, raw: null });
+        push(owner, { seq: e.seq, at: e.at, tone: from === "owner" ? "structure" : "people", icon: "employee", title: title ? `${speaker(from)} · ${title}` : speaker(from), detail: text, credits: null, raw: null, ...(progress ? { progress: true } : {}) });
         continue;
       }
       default:
@@ -665,7 +700,10 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
   }
 
   // Activities are summarised once the whole log is read, so a line reads "Read 4 files", not "Read 1 file" four times.
-  for (const a of opened) a.step.title = activitySummary(a);
+  for (const a of opened) {
+    a.step.title = activitySummary(a);
+    a.step.tone = activityTone(a);
+  }
   // Once the run has ended nothing in it is still working: a piece that never reported back stopped with it (D59).
   const finished = [...events].reverse().find((e) => e.type === "run.finished");
   if (finished) {
@@ -685,13 +723,13 @@ export function buildTimeline(events: readonly RunEvent[], mode: Mode, planItem:
   }
 
   if (!technical) {
-    top.items = gatherRepeats(top.items);
-    for (const { group } of groups.values()) group.items.splice(0, group.items.length, ...gatherRepeats(group.items));
+    top.items = gatherRepeats(latestProgress(top.items));
+    for (const { group } of groups.values()) group.items.splice(0, group.items.length, ...gatherRepeats(latestProgress(group.items)));
   }
 
   // Older research runs wrote their strands as workflow agents, never as `subagent.started`: each counts as one.
   const briefed = subagents > 0 ? subagents : [...groups.values()].length;
-  return { items: top.items, actions: toolCalls + briefed, modelCalls: modelCalls > 0 ? modelCalls : replies, toolCalls, denials, declined };
+  return { items: top.items, actions: toolCalls + briefed, modelCalls: modelCalls > 0 ? modelCalls : replies, toolCalls, denials, declined, partCredits };
 }
 
 /**
@@ -725,6 +763,30 @@ export function gatherRepeats(items: TimelineItem[]): TimelineItem[] {
 }
 
 const NEW_TASK = "New task: ";
+
+/**
+ * A long build reports its progress every few actions ("Still building… 40 actions so far"), dozens of times in one part.
+ * Within a part only the latest report from each speaker is kept, where it was said, counted with the ones before it; the
+ * milestones between them are what a person scans for.
+ */
+export function latestProgress(items: TimelineItem[]): TimelineItem[] {
+  const count = new Map<string, number>();
+  const last = new Map<string, number>();
+  items.forEach((item, i) => {
+    if (item.kind !== "step" || !item.progress) return;
+    const k = `${item.part ?? ""}\u0000${item.title}`;
+    count.set(k, (count.get(k) ?? 0) + 1);
+    last.set(k, i);
+  });
+  if (count.size === 0) return items;
+  return items.flatMap((item, i) => {
+    if (item.kind !== "step" || !item.progress) return [item];
+    const k = `${item.part ?? ""}\u0000${item.title}`;
+    if (last.get(k) !== i) return [];
+    const n = count.get(k) ?? 1;
+    return [n > 1 ? { ...item, repeat: n } : item];
+  });
+}
 
 /**
  * The actions a run took, when it took any: a conversation that only talked has steps but no actions (D15). What a rule

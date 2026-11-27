@@ -1,4 +1,4 @@
-import type { RunEvent } from "@/store/types";
+import type { Run, RunEvent } from "@/store/types";
 import { str } from "./runModel";
 
 /**
@@ -45,7 +45,27 @@ export function fullRequest(title: string, events: readonly RunEvent[]): string 
   return same(request) === same(name) ? null : request;
 }
 
-/** A quoted phrase in straight single quotes ('like this') set in typographic quotes (“like this”). */
+/** A quoted phrase in straight quotes ('like this', "like this") set in typographic quotes (“like this”). */
 export function curlyQuotes(text: string): string {
-  return text.replace(/(^|[\s(])'([^'\n]+)'(?=$|[\s.,:;!?)])/g, "$1“$2”");
+  return text.replace(/(^|[\s(])'([^'\n]+)'(?=$|[\s.,:;!?)…])/g, "$1“$2”").replace(/(^|[\s(])"([^"\n]+)"(?=$|[\s.,:;!?)…])/g, "$1“$2”");
+}
+
+/** What the work is, said beside its status when its name does not already say it. */
+const KIND: Record<Run["kind"], string> = {
+  research: "Research",
+  build: "Build",
+  // The control plane reads a change and a memory review alike as "factory": its name says which.
+  factory: "Work",
+  task: "Work on an app",
+  conversation: "Conversation",
+  review: "Review",
+  suggest: "Suggestions",
+};
+
+/**
+ * The kind beside the status, or null when the heading already opens with it ("Build: …", "Memory review: Kasper"): the
+ * status, the kind and the live mark were three signals saying one thing.
+ */
+export function kindWord(run: Pick<Run, "kind" | "title">): string | null {
+  return /^[A-Z][\w ]{1,24}: /.test(run.title.trim()) ? null : KIND[run.kind];
 }
