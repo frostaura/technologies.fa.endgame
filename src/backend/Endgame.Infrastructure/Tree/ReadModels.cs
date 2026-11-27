@@ -906,15 +906,19 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
 
     public const int MaxConversationMessages = 200;
 
+    /// <summary>The turns a history lists, at most: the runs of the conversation, newest kept.</summary>
+    public const int MaxConversationTurns = 200;
+
     public async Task<ConversationHistoryView> ConversationAsync(ResolvedScope scope, Guid? employeeId, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(scope);
+        session.UseOrganisation(scope.OrganisationId);
         var conversation = await db.Conversations.AsNoTracking()
             .Where(c => c.OrganisationId == scope.OrganisationId && c.DivisionId == scope.DivisionId && c.ProjectId == scope.ProjectId && c.AppId == scope.AppId && c.EmployeeId == employeeId)
             .OrderByDescending(c => c.CreatedAt).FirstOrDefaultAsync(cancellationToken);
         if (conversation is null)
         {
-            return new ConversationHistoryView(scope.Path.ToString(), null, employeeId, []);
+            return new ConversationHistoryView(scope.Path.ToString(), null, employeeId, [], []);
         }
 
         var rows = await (from e in db.RunEvents.AsNoTracking()
@@ -922,22 +926,64 @@ public sealed class ReadModels(EndgameDbContext db, TenantSession session, Scope
                           where e.OrganisationId == scope.OrganisationId && r.ConversationId == conversation.Id && e.Type == RunEventTypes.Message
                           orderby e.At descending, e.Seq descending
                           select new { e.RunId, e.Seq, e.At, e.PayloadJson }).Take(MaxConversationMessages).ToListAsync(cancellationToken);
-        var parsed = rows.AsEnumerable().Reverse().Select(m => (m.RunId, m.Seq, m.At, Payload: JsonNode.Parse(m.PayloadJson) as JsonObject))
-            // Bookkeeping (a workflow's journal, an agent's start) is not something anyone said.
-            .Where(m => Text(m.Payload?["kind"]) is null && !string.IsNullOrEmpty(Text(m.Payload?["text"])))
+        var all = rows.AsEnumerable().Reverse().Select(m => (m.RunId, m.Seq, m.At, Payload: JsonNode.Parse(m.PayloadJson) as JsonObject)).ToList();
+        var parsed = all
+            // Bookkeeping (a workflow's journal, an agent's start, work it started) is not something anyone said; a message of
+            // files alone is.
+            .Where(m => Text(m.Payload?["kind"]) is null && (!string.IsNullOrEmpty(Text(m.Payload?["text"])) || m.Payload?["attachments"] is JsonArray { Count: > 0 }))
             .ToList();
         // A conversation at a level is shared by everyone there, so each message says who sent it (TALK-11).
         var senders = parsed.Select(m => Guid.TryParse(Text(m.Payload?["userId"]), out var u) ? u : (Guid?)null).OfType<Guid>().Distinct().ToList();
         var names = await db.Users.AsNoTracking().Where(u => senders.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayName, cancellationToken);
+        var files = await db.ConversationAttachments.AsNoTracking()
+            .Where(a => a.OrganisationId == scope.OrganisationId && a.ConversationId == conversation.Id && a.RunId != null)
+            .OrderBy(a => a.CreatedAt).ThenBy(a => a.Id)
+            .Select(a => new Work.ConversationAttachmentView(a.Id, a.Name, a.ContentType, a.Kind, a.Bytes, a.Pages, a.Characters, a.RunId))
+            .ToListAsync(cancellationToken);
+        var byRun = files.GroupBy(f => f.RunId!.Value).ToDictionary(g => g.Key, g => g.ToList());
         var messages = parsed.Select(m =>
         {
             var from = Text(m.Payload?["from"]) ?? "employee";
             var by = from == "owner"
                 ? Guid.TryParse(Text(m.Payload?["userId"]), out var user) && names.TryGetValue(user, out var name) ? name : null
                 : Text(m.Payload?["by"]);
-            return new ConversationMessageView(m.RunId, m.Seq, m.At, from, Text(m.Payload?["text"]) ?? "", by, Text(m.Payload?["code"]));
+            IReadOnlyList<Work.ConversationAttachmentView> attached = from == "owner" && byRun.TryGetValue(m.RunId, out var list) ? list : [];
+            return new ConversationMessageView(m.RunId, m.Seq, m.At, from, Text(m.Payload?["text"]) ?? "", by, Text(m.Payload?["code"]), attached);
         }).ToList();
-        return new ConversationHistoryView(scope.Path.ToString(), conversation.Id, employeeId, messages);
+        return new ConversationHistoryView(scope.Path.ToString(), conversation.Id, employeeId, messages, await TurnsAsync(scope.OrganisationId, conversation.Id, cancellationToken));
+    }
+
+    private static readonly string WorkStartedShape = new JsonObject { ["kind"] = ConversationMessageKinds.WorkStarted }.ToJsonString();
+
+    /// <summary>Each run of a conversation, oldest first: its status, the tools it asked for, and the work it started.</summary>
+    private async Task<IReadOnlyList<ConversationTurnView>> TurnsAsync(Guid organisationId, Guid conversationId, CancellationToken cancellationToken)
+    {
+        var runs = await db.Runs.AsNoTracking()
+            .Where(r => r.OrganisationId == organisationId && r.ConversationId == conversationId)
+            .OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id)
+            .Select(r => new { r.Id, r.Status, r.CreatedAt }).Take(MaxConversationTurns).ToListAsync(cancellationToken);
+        if (runs.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = runs.Select(r => r.Id).ToList();
+        var tools = await db.RunEvents.AsNoTracking()
+            .Where(e => e.OrganisationId == organisationId && ids.Contains(e.RunId) && e.Type == "tool.requested")
+            .GroupBy(e => e.RunId).Select(g => new { RunId = g.Key, Count = g.Count() }).ToDictionaryAsync(g => g.RunId, g => g.Count, cancellationToken);
+        // Only the messages that can be a work.started one are read: the payload is filtered in the database.
+        var startedRows = await db.RunEvents.AsNoTracking()
+            .Where(e => e.OrganisationId == organisationId && ids.Contains(e.RunId) && e.Type == RunEventTypes.Message && EF.Functions.JsonContains(e.PayloadJson, WorkStartedShape))
+            .OrderBy(e => e.RunId).ThenBy(e => e.Seq)
+            .Select(e => new { e.RunId, e.PayloadJson }).ToListAsync(cancellationToken);
+        var started = startedRows
+            .Select(e => (e.RunId, Payload: JsonNode.Parse(e.PayloadJson) as JsonObject))
+            .Where(e => Text(e.Payload?["kind"]) == ConversationMessageKinds.WorkStarted && Guid.TryParse(Text(e.Payload?["runId"]), out _))
+            .GroupBy(e => e.RunId)
+            .ToDictionary(g => g.Key, g => g.Select(e => new ConversationStartedView(Guid.Parse(Text(e.Payload!["runId"])!), Text(e.Payload!["workKind"]) ?? "work", Text(e.Payload!["title"]) ?? "")).ToList());
+        return runs.AsEnumerable().Reverse()
+            .Select(r => new ConversationTurnView(r.Id, RunStatus(r.Status), tools.GetValueOrDefault(r.Id), started.TryGetValue(r.Id, out var list) ? list : []))
+            .ToList();
     }
 
     private static string? Text(JsonNode? node) => node is JsonValue v && v.GetValueKind() == JsonValueKind.String ? v.GetValue<string>() : null;

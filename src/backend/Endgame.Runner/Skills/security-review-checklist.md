@@ -1,6 +1,7 @@
 ---
 name: security-review-checklist
 trigger: Reviewing an app before it is published, for misuse of the platform's services.
+used-by: security review
 ---
 # Security review checklist
 

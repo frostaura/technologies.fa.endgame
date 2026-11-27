@@ -39,6 +39,19 @@ public sealed partial class ModelGatewayOptions
 
     public static readonly IReadOnlyList<string> SortOrders = ["price", "throughput", "latency"];
 
+    /// <summary>What a model may be given, as OpenRouter's <c>architecture.input_modalities</c> names it, of the kinds Endgame sends.</summary>
+    public static readonly IReadOnlyList<string> Modalities = ["text", "image"];
+
+    /// <summary>Whether a route takes images: only when every model on it does, since any of them may serve the call.</summary>
+    public bool AcceptsImages(ModelRoute route)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        return route.Models.Count > 0 && route.Models.All(m => Models.TryGetValue(m, out var model) && model.Accepts("image"));
+    }
+
+    /// <summary>Whether the route for a task type takes images; false for a task type with no route.</summary>
+    public bool AcceptsImages(string? taskType) => taskType is not null && Routes.TryGetValue(taskType, out var route) && AcceptsImages(route);
+
     /// <summary>Every rule a routing table must satisfy, as a list of faults. Empty when it is valid.</summary>
     public IReadOnlyList<string> Validate()
     {
@@ -63,6 +76,11 @@ public sealed partial class ModelGatewayOptions
             if (model.SupportedParameters.Count == 0)
             {
                 faults.Add($"Model '{id}' must list its SupportedParameters (OpenRouter's supported_parameters): only those are ever sent.");
+            }
+
+            if ((model.InputModalities.Count > 0 && !model.InputModalities.Contains("text", StringComparer.Ordinal)) || model.InputModalities.Any(m => !Modalities.Contains(m, StringComparer.Ordinal)))
+            {
+                faults.Add($"Model '{id}': InputModalities lists what it accepts from {string.Join(", ", Modalities)}, and always text.");
             }
         }
 
@@ -147,6 +165,15 @@ public sealed class ModelEntry
     public List<string> SupportedParameters { get; set; } = [];
 
     public bool Supports(string parameter) => SupportedParameters.Contains(parameter, StringComparer.Ordinal);
+
+    /// <summary>
+    /// OpenRouter's <c>architecture.input_modalities</c> for the model, of the kinds Endgame sends: <c>text</c>, and
+    /// <c>image</c> only where every provider of it reads images. Left empty it is text only (the configuration binder adds
+    /// to a list it is given, so the default is the empty list, read as <c>["text"]</c>).
+    /// </summary>
+    public List<string> InputModalities { get; set; } = [];
+
+    public bool Accepts(string modality) => modality == "text" || InputModalities.Contains(modality, StringComparer.Ordinal);
 }
 
 public sealed class ModelRoute

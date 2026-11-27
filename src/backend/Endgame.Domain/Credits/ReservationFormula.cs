@@ -14,6 +14,14 @@ public static class ReservationFormula
     public const int TokensPerMessage = 16;
     public const int TokensPerCall = 64;
 
+    /// <summary>
+    /// What one image in a prompt is reserved at, in prompt tokens, whatever its size in bytes: an image is billed by its
+    /// pixels, never by the length of its base64 text, so its bytes are left out of the byte count. This is the most any
+    /// vision model in the catalogue bills one image at — Qwen's dynamic resolution stops at 16,384 visual tokens, and
+    /// Claude and DeepSeek resize to well under that — so the reservation is never below the image's real cost.
+    /// </summary>
+    public const int ImageTokens = 16_384;
+
     public static long EstimatePromptTokens(long promptBytes, int messageCount)
     {
         if (promptBytes < 0 || messageCount < 0)

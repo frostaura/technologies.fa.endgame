@@ -16,7 +16,9 @@ using Endgame.Infrastructure.Platform;
 using Endgame.Infrastructure.Runs;
 using Endgame.Infrastructure.Tree;
 using Endgame.Infrastructure.Work;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
 namespace Endgame.ControlPlane.Endpoints;
@@ -33,7 +35,8 @@ public sealed record DecisionRequest(string? Choice, string? Note, bool? ApplyCh
 /// <param name="Request">The change, in the person's own words.</param>
 public sealed record ChangeRequest(string? Request);
 
-public sealed record ConversationEstimateRequest(string? Scope, Guid? EmployeeId);
+/// <param name="AttachmentIds">Files uploaded for the message, so the estimate counts reading them.</param>
+public sealed record ConversationEstimateRequest(string? Scope, Guid? EmployeeId, IReadOnlyList<Guid>? AttachmentIds = null);
 
 /// <summary>What one conversation turn is expected to cost, and the most it can (every call reserved at its worst case).</summary>
 public sealed record ConversationEstimateView(decimal Credits, decimal? Ceiling, string Basis);
@@ -47,7 +50,9 @@ public sealed record AnswerRequest(string? Decision, string? Note);
 /// <param name="IdleMinutes">Optional: minutes idle before the app sleeps (1-1440).</param>
 public sealed record AppSettingsRequest(string? Running, string? Access, int? IdleMinutes);
 
-public sealed record ConversationRequest(string? Scope, string? Message, Guid? EmployeeId, Guid? ConversationId);
+/// <param name="AttachmentIds">Files uploaded with <c>POST /api/conversations/attachments</c>, sent with this message (ARCH-011).</param>
+/// <param name="Narrow">What this one message asks not to be done; never a widening. Enforced by the Runner.</param>
+public sealed record ConversationRequest(string? Scope, string? Message, Guid? EmployeeId, Guid? ConversationId, IReadOnlyList<Guid>? AttachmentIds = null, MessageNarrowing? Narrow = null);
 
 public sealed class RunStreamOptions
 {
@@ -262,28 +267,154 @@ internal static class WorkEndpoints
         .WithName("UpdateAppSettings").WithSummary("Changes how the app runs (sleeps when idle, or always on) and who may open it (private, shared, public) on the app itself; both otherwise inherit down the cascade.").Produces<PublicAppView>();
 
         var conversations = api.MapGroup("/conversations").WithTags("Conversation");
-        conversations.MapPost("/estimate", async (ConversationEstimateRequest request, ClaimsPrincipal principal, AccessService access, FactoryEstimates estimates, EmployeeService employees, CancellationToken ct) =>
+        conversations.MapPost("/estimate", async (ConversationEstimateRequest request, ClaimsPrincipal principal, AccessService access, FactoryEstimates estimates, EmployeeService employees,
+            ConversationAttachmentService attachments, ModelGatewayOptions gateway, FactoryEstimateOptions factory, CancellationToken ct) =>
         {
             var (scope, _) = await access.RequireAsync(principal.Id(), request.Scope, MemberRole.Viewer, ct);
-            var estimate = await estimates.ConversationAsync(scope.OrganisationId, await TierAsync(employees, scope.OrganisationId, request.EmployeeId, ct), ct);
+            var tier = await TierAsync(employees, scope.OrganisationId, request.EmployeeId, ct);
+            var files = await attachments.ForSendAsync(scope, request.EmployeeId, principal.Id(), request.AttachmentIds, AcceptsImages(gateway, factory, tier), ct);
+            var estimate = await estimates.ConversationAsync(scope.OrganisationId, tier, ct, ConversationAttachmentService.Load(files));
             return Results.Ok(new ConversationEstimateView(estimate.Credits, estimate.Ceiling, estimate.Basis));
         })
-        .WithName("EstimateMessage").WithSummary("What one message in the conversation at a scope (or with one employee) is expected to cost, and the most it can. Free.").Produces<ConversationEstimateView>();
-        conversations.MapPost("", async (ConversationRequest request, ClaimsPrincipal principal, AccessService access, ConversationService service, FactoryEstimates estimates, EmployeeService employees, ReadModels reads, CancellationToken ct) =>
+        .WithName("EstimateMessage").WithSummary("What one message in the conversation at a scope (or with one employee) is expected to cost, and the most it can, counting the files it will carry (attachmentIds). Free.").Produces<ConversationEstimateView>();
+        conversations.MapPost("", async (ConversationRequest request, ClaimsPrincipal principal, AccessService access, ConversationService service, FactoryEstimates estimates, EmployeeService employees,
+            ConversationAttachmentService attachments, ModelGatewayOptions gateway, FactoryEstimateOptions factory, ReadModels reads, CancellationToken ct) =>
         {
             var (scope, _) = await access.RequireAsync(principal.Id(), request.Scope, MemberRole.Builder, ct);
-            var estimate = await estimates.ConversationAsync(scope.OrganisationId, await TierAsync(employees, scope.OrganisationId, request.EmployeeId, ct), ct);
-            var turn = await service.PostAsync(scope, request.Message ?? "", request.ConversationId, request.EmployeeId, principal.Id(), ct, estimate);
+            var tier = await TierAsync(employees, scope.OrganisationId, request.EmployeeId, ct);
+            var files = await attachments.ForSendAsync(scope, request.EmployeeId, principal.Id(), request.AttachmentIds, AcceptsImages(gateway, factory, tier), ct);
+            var estimate = await estimates.ConversationAsync(scope.OrganisationId, tier, ct, ConversationAttachmentService.Load(files));
+            var turn = await service.PostAsync(scope, request.Message ?? "", request.ConversationId, request.EmployeeId, principal.Id(), ct, estimate, files, request.Narrow);
             return Results.Created($"/api/runs/{turn.Run.Id}", await reads.RunAsync(scope.OrganisationId, turn.Run.Id, ct));
         })
         .WithName("PostMessage")
-        .WithSummary("Sends a message in the conversation docked at a scope (or with one employee); returns the run whose events carry the reply.").Produces<PublicRunView>(201);
+        .WithSummary("Sends a message in the conversation docked at a scope (or with one employee), with the files uploaded for it (attachmentIds) and what it asks not to be done (narrow: noWebSearch, answerOnly); returns the run whose events carry the reply.").Produces<PublicRunView>(201);
         conversations.MapGet("", async (string? scope, Guid? employeeId, ClaimsPrincipal principal, AccessService access, ReadModels reads, CancellationToken ct) =>
         {
             var (resolved, _) = await access.RequireAsync(principal.Id(), scope, MemberRole.Viewer, ct);
             return Results.Ok(await reads.ConversationAsync(resolved, employeeId, ct));
         })
-        .WithName("GetConversation").WithSummary("The conversation docked at a scope (or with one employee): its messages, oldest first, at most the last 200.").Produces<ConversationHistoryView>();
+        .WithName("GetConversation").WithSummary("The conversation docked at a scope (or with one employee): its messages, oldest first, at most the last 200, each owner message with its files; and each of its runs (turns) with its tool count and the work it started.").Produces<ConversationHistoryView>();
+        conversations.MapGet("/capabilities", async (string? scope, Guid? employeeId, ClaimsPrincipal principal, AccessService access, ConversationCapabilitiesService capabilities, CancellationToken ct) =>
+        {
+            var (resolved, _) = await access.RequireAsync(principal.Id(), scope, MemberRole.Viewer, ct);
+            return Results.Ok(await capabilities.ForAsync(resolved, employeeId, ct));
+        })
+        .WithName("GetConversationCapabilities")
+        .WithSummary("What whoever answers the conversation at a scope (or one employee) can use there: who answers and its tier, its tools and which ask first, the work it can start, skills, platform services, web search under the rules, the organisation's assistant keys, the narrowings a message may ask for, and the file limits.")
+        .Produces<ConversationCapabilitiesView>();
+
+        conversations.MapPost("/attachments", async (HttpRequest http, ClaimsPrincipal principal, AccessService access, ConversationAttachmentService attachments, CancellationToken ct) =>
+        {
+            RequireSameOrigin(http);
+            if (http.ContentLength is > ConversationAttachments.MaxUploadRequestBytes)
+            {
+                throw new EndgameProblem(413, "attachment_too_large", "That file is too large", $"A file can be at most {ConversationAttachments.MaxFileBytes / (1024 * 1024)} MB.");
+            }
+
+            if (!http.HasFormContentType)
+            {
+                throw new EndgameProblem(415, "multipart_required", "Send the file as a form", "Upload one file as multipart/form-data, with the fields scope, file and, for an employee, employeeId.");
+            }
+
+            var form = await http.ReadFormAsync(new FormOptions { MultipartBodyLengthLimit = ConversationAttachments.MaxUploadRequestBytes, ValueCountLimit = 10 }, ct);
+            if (form.Files.Count != 1 || form.Files.GetFile("file") is not { } file)
+            {
+                throw EndgameProblem.Invalid("Upload exactly one file, in the field 'file'.");
+            }
+
+            Guid? employeeId = form["employeeId"].ToString() is { Length: > 0 } raw
+                ? Guid.TryParse(raw, out var parsed) ? parsed : throw EndgameProblem.Invalid("employeeId is the id of an employee.")
+                : null;
+            var (scope, _) = await access.RequireAsync(principal.Id(), form["scope"].ToString(), MemberRole.Builder, ct);
+            if (file.Length > ConversationAttachments.MaxFileBytes)
+            {
+                throw new EndgameProblem(413, "attachment_too_large", "That file is too large",
+                    $"{ConversationAttachments.CleanName(file.FileName)} is larger than {ConversationAttachments.MaxFileBytes / (1024 * 1024)} MB, the most a file can be.");
+            }
+
+            var bytes = new byte[file.Length];
+            await using (var stream = file.OpenReadStream())
+            {
+                await stream.ReadExactlyAsync(bytes, ct);
+            }
+
+            var view = await attachments.UploadAsync(scope, employeeId, principal.Id(), file.FileName, bytes, ct);
+            return Results.Created($"/api/conversations/attachments/{view.Id}/content", view);
+        })
+        // The browser posts a form here, which needs no preflight: the request's own Origin is checked instead (RequireSameOrigin).
+        .DisableAntiforgery()
+        .WithMetadata(new RequestSizeLimitAttribute(ConversationAttachments.MaxUploadRequestBytes))
+        .Accepts<IFormFile>("multipart/form-data")
+        .WithName("UploadConversationAttachment")
+        .WithSummary("Attaches one file to the next message at a scope (multipart: scope, file, employeeId for an employee): an image (PNG, JPEG, WebP, GIF), a PDF or a text file, checked by its bytes. It is yours alone until it is sent, and cleared after a day if it never is. 413 too large, 415 not a kind that can be attached.")
+        .Produces<ConversationAttachmentView>(201);
+
+        conversations.MapGet("/attachments/{id:guid}/content", async (Guid id, HttpContext http, ClaimsPrincipal principal, AccessService access, ConversationAttachmentService attachments, CancellationToken ct) =>
+        {
+            var me = principal.Id();
+            var located = await attachments.LocateAsync(id, ct) ?? throw EndgameProblem.NotFound("The file");
+            await access.RequireAsync(me, located.Scope, MemberRole.Viewer, ct);
+            // Until it is sent, a file is its uploader's alone.
+            if (located.ConversationId is null && located.UploadedBy != me)
+            {
+                throw EndgameProblem.NotFound("The file");
+            }
+
+            var content = await attachments.ContentAsync(located.OrganisationId, id, ct);
+            var disposition = new System.Net.Http.Headers.ContentDispositionHeaderValue(content.Kind == ConversationAttachments.Text ? "attachment" : "inline")
+            {
+                FileName = "\"" + new string(content.Name.Select(c => c is >= ' ' and < (char)127 and not ('"' or '\\') ? c : '_').ToArray()) + "\"",
+                FileNameStar = content.Name,
+            };
+            var headers = http.Response.Headers;
+            headers.ContentDisposition = disposition.ToString();
+            headers.XContentTypeOptions = "nosniff";
+            headers.ContentSecurityPolicy = "sandbox; default-src 'none'";
+            headers.CacheControl = "private, max-age=3600";
+            return Results.Bytes(content.Content, content.ContentType);
+        })
+        .WithName("GetConversationAttachment")
+        .WithSummary("A file attached to a conversation, served as the type it was checked to be, never run: inline for images and PDFs, as a download for text. Viewer at its scope; a file not sent yet only to whoever uploaded it.")
+        .Produces(200, contentType: "application/octet-stream");
+
+        conversations.MapDelete("/attachments/{id:guid}", async (Guid id, ClaimsPrincipal principal, AccessService access, ConversationAttachmentService attachments, CancellationToken ct) =>
+        {
+            var me = principal.Id();
+            var located = await attachments.LocateAsync(id, ct) ?? throw EndgameProblem.NotFound("The file");
+            await access.RequireAsync(me, located.Scope, MemberRole.Viewer, ct);
+            if (located.UploadedBy != me)
+            {
+                throw EndgameProblem.NotFound("The file");
+            }
+
+            await attachments.DeleteUnsentAsync(located.OrganisationId, id, ct);
+            return Results.NoContent();
+        })
+        .WithName("DeleteConversationAttachment")
+        .WithSummary("Removes a file you attached that is not sent yet. 409 attachment_sent once it was sent: then it stays with its conversation.")
+        .Produces(204);
+    }
+
+    /// <summary>Whether whoever answers with this tier (null: Endgame's own assistant) can look at images.</summary>
+    internal static bool AcceptsImages(ModelGatewayOptions gateway, FactoryEstimateOptions factory, string? tier) =>
+        gateway.AcceptsImages(tier is { Length: > 0 } t && gateway.Routes.ContainsKey(t) ? t : factory.ConversationTaskType);
+
+    /// <summary>
+    /// A form post is a request a browser sends cross-site without asking first, so an upload is accepted only from the
+    /// console's own origin: a browser's <c>Sec-Fetch-Site</c>, when sent, is <c>same-origin</c> (or <c>none</c>, typed by the
+    /// person), and its <c>Origin</c>, when sent, is this host. A client that is not a browser sends neither.
+    /// </summary>
+    internal static void RequireSameOrigin(HttpRequest http)
+    {
+        var site = http.Headers["Sec-Fetch-Site"].ToString();
+        var origin = http.Headers.Origin.ToString();
+        var sameSite = site.Length == 0 || site is "same-origin" or "none";
+        var sameOrigin = origin.Length == 0 || (Uri.TryCreate(origin, UriKind.Absolute, out var o) && string.Equals(o.Authority, http.Host.Value, StringComparison.OrdinalIgnoreCase));
+        if (!sameSite || !sameOrigin)
+        {
+            throw EndgameProblem.Forbidden("Files can only be attached from Endgame's own pages.");
+        }
     }
 
     /// <summary>The thinking power an employee answers with (its model tier), or null for Endgame's own assistant.</summary>

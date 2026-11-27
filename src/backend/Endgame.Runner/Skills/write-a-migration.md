@@ -1,6 +1,7 @@
 ---
 name: write-a-migration
 trigger: Changing an app's database schema: a new entity, column, index or constraint.
+used-by: builders
 ---
 # Writing a migration
 

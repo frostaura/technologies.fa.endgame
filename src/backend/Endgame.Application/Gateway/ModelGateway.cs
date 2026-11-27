@@ -210,8 +210,16 @@ public sealed class ModelGateway(
             searchFeesUsd = results * search.FeePerResultUsd;
         }
 
-        var promptBytes = Encoding.UTF8.GetByteCount(messages.ToJsonString()) + (request.Tools is null ? 0 : Encoding.UTF8.GetByteCount(request.Tools.ToJsonString()));
-        var promptTokens = ReservationFormula.EstimatePromptTokens(promptBytes, messages.Count);
+        // An image is billed by its pixels, never by its base64 text: its bytes are left out and it is reserved at a fixed figure.
+        var (messageBytes, images) = PromptMeasure.Of(messages);
+        if (images > 0 && !options.AcceptsImages(route))
+        {
+            throw new EndgameProblem(422, "images_not_accepted", "This task type cannot look at images",
+                "Not every model on this route accepts images (ModelEntry.InputModalities), so a call carrying one is refused before it is sent. Send the text only.");
+        }
+
+        var promptBytes = messageBytes + (request.Tools is null ? 0 : Encoding.UTF8.GetByteCount(request.Tools.ToJsonString()));
+        var promptTokens = ReservationFormula.EstimatePromptTokens(promptBytes, messages.Count) + ((long)images * ReservationFormula.ImageTokens);
         var ceiling = new PriceCeiling(route.MaxPromptPerMillionUsd, route.MaxCompletionPerMillionUsd, route.MaxRequestUsd);
         var worstUsd = ReservationFormula.WorstCaseUsd(promptTokens, maxTokens, ceiling, searchFeesUsd, searchFees);
 
@@ -584,6 +592,35 @@ public sealed class ModelGateway(
         private static decimal? Number(JsonNode? node) =>
             node is JsonValue v && v.GetValueKind() == JsonValueKind.Number && v.TryGetValue<decimal>(out var d) ? d : null;
     }
+}
+
+/// <summary>
+/// The size of a prompt as the reservation counts it: the UTF-8 bytes of its messages with every image part's data left out,
+/// and how many image parts there are (each reserved at <see cref="ReservationFormula.ImageTokens"/>). An image part is a
+/// content part of type <c>image_url</c>; its data URL is never copied to be measured.
+/// </summary>
+public static class PromptMeasure
+{
+    public static (long Bytes, int Images) Of(JsonArray messages)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        var images = messages.Sum(m => m is JsonObject o && o["content"] is JsonArray parts ? parts.Count(IsImage) : 0);
+        if (images == 0)
+        {
+            return (Encoding.UTF8.GetByteCount(messages.ToJsonString()), 0);
+        }
+
+        // Everything but the image data, measured exactly as a prompt without images is.
+        var stripped = new JsonArray(messages.Select(m => m is JsonObject o && o["content"] is JsonArray parts && parts.Any(IsImage)
+            ? new JsonObject(o.Select(kv => KeyValuePair.Create(kv.Key, kv.Key == "content"
+                ? new JsonArray(parts.Select(p => IsImage(p) ? new JsonObject { ["type"] = "image_url" } : p?.DeepClone()).ToArray())
+                : kv.Value?.DeepClone())))
+            : m?.DeepClone()).ToArray());
+        return (Encoding.UTF8.GetByteCount(stripped.ToJsonString()), images);
+    }
+
+    public static bool IsImage(JsonNode? part) =>
+        part is JsonObject p && p["type"] is JsonValue t && t.GetValueKind() == JsonValueKind.String && t.GetValue<string>() == "image_url";
 }
 
 /// <summary>A call ready to send: the upstream body and what was reserved for it.</summary>

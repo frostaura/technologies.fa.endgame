@@ -32,6 +32,13 @@ public static class RunKinds
     public static readonly IReadOnlyList<string> All = [Research, Conversation, Build, Task, Review, Suggest];
 }
 
+/// <summary>The <c>kind</c>s of a conversation run's own <c>message</c> events that the console and the history read (ARCH-011).</summary>
+public static class ConversationMessageKinds
+{
+    /// <summary>The turn started work — an idea's research, a change, a try again: <c>{ kind, runId, workKind, title }</c>.</summary>
+    public const string WorkStarted = "work.started";
+}
+
 /// <summary>The run log's event types (ARCH-004, <i>Run log</i>).</summary>
 public static class RunEventTypes
 {

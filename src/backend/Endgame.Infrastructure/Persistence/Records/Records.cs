@@ -321,6 +321,58 @@ public sealed class ConversationRecord : IScopedRecord
 }
 
 /// <summary>
+/// A file a person attached to a conversation message (ARCH-011): uploaded before the message is sent, at the scope (and
+/// with the employee) of the conversation it will be sent in, then linked to that conversation and its run. Its bytes are
+/// kept here, in the database, because the control plane has no file store and backups already cover the database.
+/// Always read through a projection: <see cref="Content"/> is loaded only when the file itself is asked for.
+/// </summary>
+public sealed class ConversationAttachmentRecord : IScopedRecord
+{
+    public Guid OrganisationId { get; set; }
+
+    public Guid Id { get; set; }
+
+    public Guid? DivisionId { get; set; }
+
+    public Guid? ProjectId { get; set; }
+
+    public Guid? AppId { get; set; }
+
+    /// <summary>The employee the conversation is with, or null for Endgame's own assistant.</summary>
+    public Guid? EmployeeId { get; set; }
+
+    /// <summary>Null until the message it was attached to is sent.</summary>
+    public Guid? ConversationId { get; set; }
+
+    /// <summary>The run (the conversation turn) it was sent with; null until then.</summary>
+    public Guid? RunId { get; set; }
+
+    public Guid UploadedBy { get; set; }
+
+    public string Name { get; set; } = "";
+
+    public string ContentType { get; set; } = "";
+
+    /// <summary><c>image</c>, <c>pdf</c> or <c>text</c>.</summary>
+    public string Kind { get; set; } = "";
+
+    public long Bytes { get; set; }
+
+    /// <summary>A PDF's page count.</summary>
+    public int? Pages { get; set; }
+
+    /// <summary>Characters of text read from a PDF or a text file.</summary>
+    public int? Characters { get; set; }
+
+    /// <summary>The text read from a PDF or a text file, bounded by <c>ConversationAttachments.MaxTextCharacters</c>.</summary>
+    public string? ExtractedText { get; set; }
+
+    public byte[] Content { get; set; } = [];
+
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+/// <summary>
 /// One line of the one ledger. Append-only by database grant and trigger. A settlement or release
 /// names the reservation it closes and copies its attribution, so every roll-up is a filter, not a join.
 /// </summary>

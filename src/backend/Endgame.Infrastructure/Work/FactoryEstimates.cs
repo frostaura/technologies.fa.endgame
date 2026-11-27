@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using Endgame.Application.Common;
 using Endgame.Application.Gateway;
+using Endgame.Domain.Credits;
 
 namespace Endgame.Infrastructure.Work;
 
@@ -30,6 +31,12 @@ public sealed class FactoryEstimateOptions
 
     public string ConversationTaskType { get; set; } = "chat";
 
+    /// <summary>
+    /// How many of a turn's calls an attached file is expected to be read in: the first answer, and the one after the read it
+    /// usually makes. Every call carries the files (the ceiling counts all <see cref="ConversationCalls"/> of them).
+    /// </summary>
+    public int AttachmentReadsExpected { get; set; } = 2;
+
     public int MinimumSamples { get; set; } = 3;
 }
 
@@ -48,8 +55,13 @@ public sealed class FactoryEstimates(FactoryEstimateOptions factory, ModelGatewa
     public Task<Estimate> ChangeAsync(Guid organisationId, int remaining, int items, CancellationToken cancellationToken) =>
         LearnedAsync(organisationId, "task", "change", factory.ChangeStartingCredits, remaining, items, cancellationToken);
 
-    /// <summary>One conversation turn: what it is expected to cost, and the most it can cost — every call is reserved at its worst case.</summary>
-    public async Task<Estimate> ConversationAsync(Guid organisationId, string? taskType, CancellationToken cancellationToken)
+    /// <summary>
+    /// One conversation turn: what it is expected to cost, and the most it can cost — every call is reserved at its worst case.
+    /// The files a message carries are read in every call: each image at <see cref="ReservationFormula.ImageTokens"/>, text at
+    /// its length, exactly as the gateway will reserve them. A message whose files would make one call dearer than the route
+    /// allows is refused here, before it is sent, rather than failing once it is running.
+    /// </summary>
+    public async Task<Estimate> ConversationAsync(Guid organisationId, string? taskType, CancellationToken cancellationToken, AttachmentLoad? attachments = null)
     {
         var type = string.IsNullOrWhiteSpace(taskType) ? factory.ConversationTaskType : taskType;
         if (!gateway.Routes.TryGetValue(type, out var route) && !gateway.Routes.TryGetValue(factory.ConversationTaskType, out route))
@@ -57,17 +69,47 @@ public sealed class FactoryEstimates(FactoryEstimateOptions factory, ModelGatewa
             throw new EndgameProblem(503, "estimate_unavailable", "The estimate cannot be worked out", $"There is no '{type}' route to price the conversation against.");
         }
 
+        var files = attachments ?? AttachmentLoad.None;
+        if (files.Images > 0 && !gateway.AcceptsImages(route))
+        {
+            throw new EndgameProblem(422, "images_not_accepted", "Whoever answers here cannot look at images",
+                "Whoever answers here reads text only, so a message with an image cannot be sent here. Remove the image, or describe what it shows in words.");
+        }
+
+        var prompt = new string('x', (int)Math.Min(int.MaxValue / 2, factory.ConversationPromptCharacters + files.Characters));
+        JsonNode content = files.Images == 0
+            ? JsonValue.Create(prompt)
+            : new JsonArray([new JsonObject { ["type"] = "text", ["text"] = prompt }, .. Enumerable.Range(0, files.Images).Select(_ => (JsonNode)new JsonObject { ["type"] = "image_url", ["image_url"] = new JsonObject { ["url"] = "data:image/png;base64," } })]);
         var request = new ChatRequest
         {
             TaskType = type,
-            Messages = [new JsonObject { ["role"] = "user", ["content"] = new string('x', factory.ConversationPromptCharacters) }],
+            Messages = [new JsonObject { ["role"] = "user", ["content"] = content }],
             Limits = new ChatLimits { MaxTokens = factory.ConversationOutputTokens },
         };
-        var perCall = ModelGateway.Prepare(gateway, credits, request, route, stream: false).ReservedCredits;
+        var prepared = ModelGateway.Prepare(gateway, credits, request, route, stream: false);
+        if (files.Files > 0 && prepared.WorstCaseUsd > route.MaxCallUsd)
+        {
+            throw new EndgameProblem(413, "attachments_too_much", "These files are more than can be read in one message",
+                "Together the files hold more than whoever answers here can read in one message. Attach fewer, or shorter ones, or only the part that matters.");
+        }
+
+        var perCall = prepared.ReservedCredits;
         var most = Math.Ceiling(perCall * factory.ConversationCalls * 100m) / 100m;
         var expected = await ExpectedAsync(organisationId, "conversation", factory.ConversationStartingCredits, cancellationToken);
-        return new Estimate(Math.Min(most, expected.Credits),
-            $"{expected.Basis} It can never cost more than {most.ToString("0.##", CultureInfo.InvariantCulture)} credits: up to {factory.ConversationCalls.ToString(CultureInfo.InvariantCulture)} steps, each priced at the most it could cost, and it is charged at what it actually costs.",
+        var credited = expected.Credits;
+        var reading = "";
+        if (files.Files > 0)
+        {
+            // Text at a token for every four characters, each image at its fixed figure, read in the calls a turn usually makes.
+            var tokens = (files.Characters / 4) + ((long)files.Images * ReservationFormula.ImageTokens);
+            var usd = tokens * route.MaxPromptPerMillionUsd / 1_000_000m * Math.Max(1, factory.AttachmentReadsExpected);
+            credited += credits.ToCreditsCeiling(usd);
+            credited = Math.Ceiling(credited * 100m) / 100m;
+            reading = $" It adds reading the {files.Files.ToString(CultureInfo.InvariantCulture)} attached file{(files.Files == 1 ? "" : "s")} (about {tokens.ToString("N0", CultureInfo.InvariantCulture)} tokens: text at one for every four characters{(files.Images > 0 ? $", each image at {ReservationFormula.ImageTokens.ToString("N0", CultureInfo.InvariantCulture)}" : "")}) in each of the {Math.Max(1, factory.AttachmentReadsExpected).ToString(CultureInfo.InvariantCulture)} steps a turn usually takes.";
+        }
+
+        return new Estimate(Math.Min(most, credited),
+            $"{expected.Basis}{reading} It can never cost more than {most.ToString("0.##", CultureInfo.InvariantCulture)} credits: up to {factory.ConversationCalls.ToString(CultureInfo.InvariantCulture)} steps, each priced at the most it could cost{(files.Files > 0 ? " with the files read in every one" : "")}, and it is charged at what it actually costs.",
             most);
     }
 

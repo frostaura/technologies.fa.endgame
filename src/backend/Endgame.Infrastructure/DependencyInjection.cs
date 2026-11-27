@@ -84,6 +84,8 @@ public static class DependencyInjection
         services.AddScoped<ApprovalService>();
         services.AddScoped<IdeaService>();
         services.AddScoped<ConversationService>();
+        services.AddScoped<ConversationAttachmentService>();
+        services.AddScoped<ConversationCapabilitiesService>();
         services.AddScoped<EmployeeService>();
         services.AddScoped<MemoryService>();
         services.AddScoped<HireService>();
