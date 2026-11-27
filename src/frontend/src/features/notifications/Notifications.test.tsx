@@ -243,3 +243,29 @@ describe("a notice's words, cut for the feed (real-stack 23)", () => {
     expect(groups[0]?.items[0]?.createdAt).toBe("2026-11-27T14:00:00");
   });
 });
+
+describe("a long feed (real-stack 21: thirty notices, long titles)", () => {
+  it("opens on the unread and the newest ten, by day, and shows older ones ten at a time", async () => {
+    const base = NOTIFICATIONS.notifications[0] as NotificationItem;
+    const feed = Array.from({ length: 30 }, (_, i) => ({
+      ...base,
+      id: `x${i}`,
+      title: `Long notice ${i}: the research on the reading list's “definition of success for a small club” ran far past what one line holds...`,
+      createdAt: new Date(Date.UTC(2026, 10, 25 - Math.floor(i / 4), 12 - (i % 4))).toISOString(),
+      read: i !== 25,
+      resolved: false,
+    }));
+    stub(json({ organisation: "acme", unread: 1, notifications: feed }));
+    renderWithStore(<NotificationsView />);
+    const list = await within(await screen.findByRole("main")).findByRole("list", { name: "Notifications" });
+    expect(list.querySelectorAll("li[data-notification]")).toHaveLength(11);
+    expect(list.querySelector('[data-notification="x25"]')).toBeTruthy();
+    expect(within(list).getAllByRole("heading").length).toBeGreaterThan(2);
+    for (const link of within(list).getAllByRole("link")) {
+      expect(link.textContent).toMatch(/…$/);
+      expect(link.textContent).not.toMatch(/“[^”]*…$/);
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Show older (10 of 19)" }));
+    expect(list.querySelectorAll("li[data-notification]")).toHaveLength(21);
+  });
+});
