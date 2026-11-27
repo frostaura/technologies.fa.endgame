@@ -8,7 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Chip } from "@/components/ui/chip";
 import { PageHeader } from "@/components/ui/page";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/field";
+import { Field, Select } from "@/components/ui/field";
+import { Alert } from "@/components/ui/alert";
+import { ConfirmCard } from "@/components/ui/confirm";
+import { LINK } from "@/components/ui/layout";
 import { formatCredits, timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
@@ -76,11 +79,7 @@ export function SuggestionsView() {
             </Loading>
           )}
           {view.kind === "failed" && <Failed title="The suggested ideas could not be loaded" reason={view.reason} status={view.status} onRetry={() => void query.refetch()} />}
-          {pageProblem && (
-            <p role="alert" data-state="failed" className="rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
-              {pageProblem}
-            </p>
-          )}
+          {pageProblem && <Alert tone="bad" title={pageProblem} />}
           {view.kind === "loaded" && (
             <>
               {view.stale && <Stale reason={view.stale.reason} />}
@@ -90,7 +89,7 @@ export function SuggestionsView() {
                   title={suggesting?.title ?? "No suggestions waiting"}
                   action={
                     suggesting && started ? (
-                      <Link href={paths.run(started.id)} className="rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+                      <Link href={paths.run(started.id)} className={LINK}>
                         {suggesting.link}
                       </Link>
                     ) : undefined
@@ -109,12 +108,12 @@ export function SuggestionsView() {
               )}
               {closed.length > 0 && (
                 <Disclosure title={`Taken or set aside (${closed.length})`}>
-                  <ul aria-label="Taken or set aside" className="flex flex-col divide-y rounded-md border bg-surface px-5 py-1 shadow-card">
+                  <ul aria-label="Taken or set aside" className="flex flex-col divide-y">
                     {closed.map((x) => (
                       <li key={x.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3">
                         <span className="min-w-0 break-words">{x.title}</span>
                         {x.status === "taken" && x.ideaId ? (
-                          <Link href={paths.idea(x.ideaId)} className="flex items-center rounded-xs font-semibold text-primary-link hover:text-primary-hover touch:min-h-touch">
+                          <Link href={paths.idea(x.ideaId)} className={cn(LINK, "flex items-center touch:min-h-touch")}>
                             Taken — see its research
                           </Link>
                         ) : (
@@ -139,18 +138,15 @@ function DivisionPicker({ scope }: { scope: string }) {
   const options = placements(tree.data).filter((o) => o.depth <= 1);
   if (options.length <= 1) return null;
   return (
-    <div className="flex w-full min-w-0 flex-col gap-1 sm:w-80">
-      <label htmlFor={id} className="text-sm text-ink-muted">
-        Suggest for
-      </label>
-      <Select id={id} value={scope} onChange={(e) => navigate(paths.suggestions(e.target.value))} className="w-full min-w-0 truncate">
+    <Field id={id} label="Suggest for" className="w-full sm:w-80">
+      <Select id={id} value={scope} onChange={(e) => navigate(paths.suggestions(e.target.value))}>
         {options.map((o) => (
           <option key={o.scope} value={o.scope}>
             {o.depth === 0 ? `The whole of ${o.label}` : o.label}
           </option>
         ))}
       </Select>
-    </div>
+    </Field>
   );
 }
 
@@ -189,24 +185,22 @@ function AskForIdeas({ scope, here, canAsk, started, suggesting, onStarted }: { 
         <div role="status" className="flex flex-col gap-2 rounded-sm border bg-ground px-4 py-3">
           <span className="font-semibold">{suggesting.title}.</span>
           <span className="text-ink-body">{suggesting.text}</span>
-          <Link href={paths.run(started.id)} className="self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+          <Link href={paths.run(started.id)} className={cn(LINK, "self-start")}>
             {suggesting.link}
           </Link>
         </div>
       ) : cost ? (
-        <div role="status" className="flex flex-col gap-3 rounded-sm border bg-ground px-4 py-3">
-          <p>
-            <span className="font-semibold">About {formatCredits(cost.credits)}.</span> <span className="text-ink-body">{cost.basis}</span>
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void go()} disabled={starting.isLoading}>
-              {starting.isLoading ? "Starting…" : "Suggest ideas"}
-            </Button>
-            <Button variant="quiet" onClick={() => setCost(null)}>
-              Not now
-            </Button>
-          </div>
-        </div>
+        <ConfirmCard
+          label="What asking for ideas costs"
+          question={`About ${formatCredits(cost.credits)}.`}
+          detail={cost.basis || undefined}
+          confirm={starting.isLoading ? "Starting…" : "Suggest ideas"}
+          cancel="Not now"
+          destructive={false}
+          busy={starting.isLoading}
+          onConfirm={() => void go()}
+          onCancel={() => setCost(null)}
+        />
       ) : canAsk ? (
         <Button variant="secondary" className="self-start phone:self-stretch" onClick={() => void see()} disabled={estimating.isLoading}>
           {estimating.isLoading ? (
@@ -219,11 +213,7 @@ function AskForIdeas({ scope, here, canAsk, started, suggesting, onStarted }: { 
       ) : (
         <p className="text-sm text-ink-muted">Asking for ideas spends credits, so it needs the Builder role here.</p>
       )}
-      {problem && (
-        <p role="alert" data-state="failed" className="rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
-          {problem}
-        </p>
-      )}
+      {problem && <Alert tone="bad" title={problem} />}
     </section>
   );
 }
@@ -302,19 +292,17 @@ function SuggestionCard({ suggestion, scope, index, canAct, onRefused }: { sugge
       <div className="flex flex-col gap-3">
         {canAct &&
           (cost ? (
-            <div role="status" className="flex flex-col gap-3 rounded-sm border bg-ground px-4 py-3">
-              <p>
-                <span className="font-semibold">Researching it costs about {formatCredits(cost.credits)}.</span> <span className="text-ink-body">{cost.basis}</span>
-              </p>
-              <div className="flex flex-wrap gap-2 phone:flex-col phone:items-stretch">
-                <Button onClick={() => void confirm()} disabled={taking.isLoading}>
-                  {taking.isLoading ? "Starting…" : "Research this idea"}
-                </Button>
-                <Button variant="quiet" onClick={() => setCost(null)}>
-                  Not now
-                </Button>
-              </div>
-            </div>
+            <ConfirmCard
+              label="What researching it costs"
+              question={`Researching it costs about ${formatCredits(cost.credits)}.`}
+              detail={cost.basis || undefined}
+              confirm={taking.isLoading ? "Starting…" : "Research this idea"}
+              cancel="Not now"
+              destructive={false}
+              busy={taking.isLoading}
+              onConfirm={() => void confirm()}
+              onCancel={() => setCost(null)}
+            />
           ) : (
             <div className="flex flex-wrap gap-2 phone:flex-col phone:items-stretch">
               <Button onClick={() => void price()} disabled={estimating.isLoading}>
@@ -327,16 +315,12 @@ function SuggestionCard({ suggestion, scope, index, canAct, onRefused }: { sugge
                   "Take this idea"
                 )}
               </Button>
-              <Button variant="quiet" onClick={() => void setAside()}>
+              <Button variant="secondary" onClick={() => void setAside()}>
                 Set it aside
               </Button>
             </div>
           ))}
-        {problem && (
-          <p role="alert" className="rounded-xs border border-attention-line bg-attention-tint px-3 py-2 text-sm text-attention-text">
-            {problem}
-          </p>
-        )}
+        {problem && <Alert tone="bad" title={problem} />}
         {!canAct && <p className="text-sm text-ink-muted">Taking an idea starts research, which spends credits, so it needs the Builder role here.</p>}
       </div>
     </li>
