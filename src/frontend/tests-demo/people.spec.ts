@@ -46,11 +46,15 @@ test.describe("the people pages on a wide desktop", () => {
     expect(job?.height ?? 0).toBeLessThan(700);
     // The actions are one row, and opening one never moves it.
     const group = page.getByRole("group", { name: "Actions" });
-    const before = await group.boundingBox();
+    const place = () => group.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.left), y: Math.round(r.top + window.scrollY), w: Math.round(r.width), h: Math.round(r.height) };
+    });
+    const before = await place();
     await group.getByRole("button", { name: "Edit the job" }).click();
     await expect(page.getByRole("form", { name: "Edit Kasper's job" })).toBeVisible();
-    expect(await group.boundingBox()).toEqual(before);
-    expect(before?.height ?? 0).toBeLessThanOrEqual(48);
+    expect(await place()).toEqual(before);
+    expect(before.h).toBeLessThanOrEqual(48);
     expect(problems).toEqual([]);
   });
 
@@ -65,7 +69,7 @@ test.describe("the people pages on a wide desktop", () => {
   test("People: a table whose headings sit over their columns, dates on one line", async ({ page }) => {
     await open(page, "default", "/people?scope=northwind");
     const list = page.getByRole("list", { name: "People" });
-    await expect(list.locator("li[data-member]")).toHaveCount(5);
+    await expect(list.locator("li[data-member]")).toHaveCount(6);
     const heading = await page.getByText("Where it was set", { exact: true }).first().boundingBox();
     const cell = await list.locator("li[data-member='ada@northwind.example']").getByText("Set here", { exact: true }).boundingBox();
     expect(Math.abs((heading?.x ?? 0) - (cell?.x ?? 99))).toBeLessThanOrEqual(1);
