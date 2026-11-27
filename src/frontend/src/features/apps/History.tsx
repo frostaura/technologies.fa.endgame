@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { ConfirmCard } from "@/components/ui/confirm";
-import { cn } from "@/lib/utils";
-import { TAP } from "@/lib/touch";
 import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LINK } from "@/components/ui/layout";
+import { SECTION } from "@/components/ui/page";
 import { formatDate, formatNumber, timeAgo } from "@/lib/format";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
@@ -20,7 +20,7 @@ const PAGE = 10;
 function Author({ v }: { v: AppVersion }) {
   if (v.author.kind === "employee" && v.author.id) {
     return (
-      <Link href={paths.employee(v.author.id)} className={cn("rounded-xs text-primary-link hover:text-primary-hover", TAP)}>
+      <Link href={paths.employee(v.author.id)} className={LINK}>
         {v.author.name}
       </Link>
     );
@@ -57,7 +57,7 @@ export function History({ app, canRestore }: { app: AppDetail; canRestore: boole
   return (
     <section aria-labelledby="history-title" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="history-title" className="text-lg font-semibold">
+        <h2 id="history-title" className={SECTION}>
           History
         </h2>
         <span className="text-sm text-ink-muted">Any version can be brought back.</span>
@@ -98,14 +98,15 @@ export function History({ app, canRestore }: { app: AppDetail; canRestore: boole
                       {live && <Badge tone="good">Live now</Badge>}
                       {technical && <code className="font-mono text-xs">{v.commit.slice(0, 12)}</code>}
                       {canRestore && !v.live && !live && confirm?.commit !== v.commit && (
-                        <Button size="sm" variant="quiet" className="min-h-touch px-2 text-primary-link" disabled={restoring.isLoading} onClick={() => setConfirm(v)} aria-label={`Bring back “${title}” from ${timeAgo(v.at)}`}>
+                        <Button size="sm" variant="quiet" disabled={restoring.isLoading} onClick={() => setConfirm(v)} aria-label={`Bring back “${title}” from ${timeAgo(v.at)}`}>
                           Bring back
                         </Button>
                       )}
                     </span>
                   </div>
-                  {technical && v.message.includes("\n") && <p className="whitespace-pre-line break-words text-sm text-ink-body">{v.message.split("\n").slice(1).join("\n").trim()}</p>}
+                  {/* The confirmation opens directly under the row that holds "Bring back". */}
                   {confirm?.commit === v.commit && <ConfirmRestore app={app} onConfirm={() => void bringBack(v)} onCancel={() => setConfirm(null)} />}
+                  {technical && v.message.includes("\n") && <p className="whitespace-pre-line break-words text-sm text-ink-body">{v.message.split("\n").slice(1).join("\n").trim()}</p>}
                 </li>
               ))}
             </ol>
