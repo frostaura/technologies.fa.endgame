@@ -28,8 +28,12 @@ import { suggestingState } from "./suggestionsModel";
 
 const POLL_WHILE_SUGGESTING_MS = 10_000;
 
-/** The cards: one column, two from 1280, three from 1600; every card the same shape, ending with its content. */
-const CARDS = "grid grid-cols-1 items-start gap-5 xl:grid-cols-2 3xl:grid-cols-3";
+/**
+ * The cards: one under another, each the page's width and ending with its content — so cards of different heights
+ * leave no holes and a lone card is never half a page. From 1280 each card is two columns inside: the idea and
+ * its choices beside why it is suggested.
+ */
+const CARDS = "grid grid-cols-1 items-start gap-5";
 
 /**
  * Ideas from your portfolio (UC-120): ask for suggestions — the most it can cost first — read each
@@ -256,16 +260,58 @@ function SuggestionCard({ suggestion, scope, index, canAct, onRefused }: { sugge
   // A product reused twice is one chip.
   const reuses = [...new Set(suggestion.reuses.map((r) => (technical ? r : reuseLabel(r))))];
   return (
-    <li data-suggestion={suggestion.id} className={cn("flex min-w-0 flex-col gap-4 rounded-md border bg-surface p-5 shadow-card", RISE, stagger(index))}>
-      <div className="flex min-w-0 flex-col gap-1">
-        <h2 className="line-clamp-2 break-words font-display text-lg font-semibold" title={suggestion.title}>
-          {suggestion.title}
-        </h2>
-        <span className="text-sm text-ink-muted">Suggested {timeAgo(suggestion.createdAt)}</span>
+    <li data-suggestion={suggestion.id} className={cn("flex min-w-0 flex-col gap-4 rounded-md border bg-surface p-5 shadow-card sm:p-6 xl:grid xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] xl:items-start xl:gap-x-10", RISE, stagger(index))}>
+      {/* Below 1280 one column, the choices last; from 1280 the idea and its choices beside why it is suggested. */}
+      <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h2 className="line-clamp-2 break-words font-display text-lg font-semibold" title={suggestion.title}>
+            {suggestion.title}
+          </h2>
+          <span className="text-sm text-ink-muted">Suggested {timeAgo(suggestion.createdAt)}</span>
+        </div>
+        <p className="text-ink-body">{suggestion.idea}</p>
+        {technical && (
+          <code className="break-all font-mono text-xs text-ink-muted">
+            {suggestion.id} · run {suggestion.runId}
+          </code>
+        )}
+        <div className="order-last flex flex-col gap-3 xl:order-none">
+          {canAct &&
+            (cost ? (
+              <ConfirmCard
+                label="What researching it costs"
+                question={`Researching it costs about ${formatCredits(cost.credits)}.`}
+                detail={cost.basis || undefined}
+                confirm={taking.isLoading ? "Starting…" : "Research this idea"}
+                cancel="Not now"
+                destructive={false}
+                busy={taking.isLoading}
+                onConfirm={() => void confirm()}
+                onCancel={() => setCost(null)}
+              />
+            ) : (
+              <div className="flex flex-wrap gap-2 phone:flex-col phone:items-stretch">
+                <Button onClick={() => void price()} disabled={estimating.isLoading}>
+                  {estimating.isLoading ? (
+                    <>
+                      <Spinner inherit />
+                      Working it out…
+                    </>
+                  ) : (
+                    "Take this idea"
+                  )}
+                </Button>
+                <Button variant="secondary" onClick={() => void setAside()}>
+                  Set it aside
+                </Button>
+              </div>
+            ))}
+          {problem && <Alert tone="bad" title={problem} />}
+          {!canAct && <p className="text-sm text-ink-muted">Taking an idea starts research, which spends credits, so it needs the Builder role here.</p>}
+        </div>
       </div>
-      <p className="text-ink-body">{suggestion.idea}</p>
-      <dl className="flex flex-col divide-y border-y">
-        <div className="flex flex-col gap-0.5 py-3">
+      <dl className="flex min-w-0 flex-col divide-y border-y xl:border-y-0">
+        <div className="flex flex-col gap-0.5 py-3 xl:pt-0">
           <dt className="text-sm font-semibold">The gap it fills</dt>
           <dd className="m-0 text-ink-body">{suggestion.gap}</dd>
         </div>
@@ -284,45 +330,6 @@ function SuggestionCard({ suggestion, scope, index, canAct, onRefused }: { sugge
           </div>
         )}
       </dl>
-      {technical && (
-        <code className="break-all font-mono text-xs text-ink-muted">
-          {suggestion.id} · run {suggestion.runId}
-        </code>
-      )}
-      <div className="flex flex-col gap-3">
-        {canAct &&
-          (cost ? (
-            <ConfirmCard
-              label="What researching it costs"
-              question={`Researching it costs about ${formatCredits(cost.credits)}.`}
-              detail={cost.basis || undefined}
-              confirm={taking.isLoading ? "Starting…" : "Research this idea"}
-              cancel="Not now"
-              destructive={false}
-              busy={taking.isLoading}
-              onConfirm={() => void confirm()}
-              onCancel={() => setCost(null)}
-            />
-          ) : (
-            <div className="flex flex-wrap gap-2 phone:flex-col phone:items-stretch">
-              <Button onClick={() => void price()} disabled={estimating.isLoading}>
-                {estimating.isLoading ? (
-                  <>
-                    <Spinner inherit />
-                    Working it out…
-                  </>
-                ) : (
-                  "Take this idea"
-                )}
-              </Button>
-              <Button variant="secondary" onClick={() => void setAside()}>
-                Set it aside
-              </Button>
-            </div>
-          ))}
-        {problem && <Alert tone="bad" title={problem} />}
-        {!canAct && <p className="text-sm text-ink-muted">Taking an idea starts research, which spends credits, so it needs the Builder role here.</p>}
-      </div>
     </li>
   );
 }
