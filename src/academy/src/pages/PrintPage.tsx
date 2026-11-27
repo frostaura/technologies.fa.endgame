@@ -135,82 +135,102 @@ export function PrintPage({ operator }: { operator: boolean }) {
       </section>
       {sections.map((s) => (
         <section key={s.level} className="px-12">
-          <h2 className="print-break pt-4 font-display text-title font-bold keep-next">{s.title}</h2>
-          {s.flows.map((f, n) => (
-            <article key={f.id} id={`flow-${f.id}`} className={`${n ? "mt-10 border-t pt-6" : "mt-6"}`}>
-              <div className="break-inside-avoid keep-next">
-                <p className="font-mono text-xs font-semibold text-primary-link">{f.id}</p>
-                <h3 className="mt-1 font-display text-2xl font-semibold">{f.title}</h3>
-                {f.whatYouLearn && <p className="mt-2 text-base text-ink-body"><Inline text={sentence(f.whatYouLearn)} plainIds /></p>}
-                {f.who && <p className="mt-2 text-xs text-ink-muted">Who: <Inline text={f.who} plainIds /> · Starts at: <Inline text={f.startsAt} plainIds /></p>}
-              </div>
-              <ol className="mt-4 space-y-4">
-                {f.steps.map((st, i) => {
-                  const sc = stepOf(scripts[f.id], st.n);
-                  const found = sc?.kind === "image" ? paperImage(f.id, st.n, sc.file) : sc?.kind === "demo" ? paperImage(f.id, st.n, sc.shot?.file) : undefined;
-                  // A step that leaves the screen as the step before it did prints no second copy of the picture.
-                  const prev = i > 0 ? f.steps[i - 1] : undefined;
-                  const prevSc = prev ? stepOf(scripts[f.id], prev.n) : undefined;
-                  const prevPic = prev && prevSc?.kind === "demo" ? paperImage(f.id, prev.n, prevSc.shot?.file) : undefined;
-                  const pic = found && prevPic?.file === found.file ? undefined : found;
-                  const alt = sc?.kind === "image" ? sc.alt : sc?.kind === "demo" ? (sc.shot?.alt ?? sc.highlight?.note ?? sc.note ?? f.title) : "";
-                  const caption = sc && "note" in sc ? (sc.note ?? (sc.kind === "demo" ? sc.highlight?.note : undefined)) : undefined;
-                  const words = (
-                    <div className="flex min-w-0 gap-3">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-quiet text-xs font-semibold">{st.n}</span>
-                      <div className="min-w-0 flex-1 text-sm">
-                        <Inline text={st.text} plainIds />
-                        {st.children.length > 0 && <Blocks blocks={st.children} />}
-                        {caption && found && <p className="mt-2 text-xs text-ink-muted"><Inline text={caption} plainIds /></p>}
-                        {sc && !found && <PrintMedia step={sc} />}
-                      </div>
-                    </div>
-                  );
-                  if (!pic) return <li key={st.n} className="break-inside-avoid">{words}</li>;
-                  // A narrow picture sits beside its step; a wide one goes under it.
-                  return beside(pic) ? (
+          {/* Each path starts a page, so its title is never at the foot of one. */}
+          <h2 className="print-break pt-4 font-display text-title font-bold">{s.title}</h2>
+          {s.flows.map((f, n) => {
+            const steps = f.steps.map((st, i) => {
+              const sc = stepOf(scripts[f.id], st.n);
+              const found = sc?.kind === "image" ? paperImage(f.id, st.n, sc.file) : sc?.kind === "demo" ? paperImage(f.id, st.n, sc.shot?.file) : undefined;
+              // A step that leaves the screen as the step before it did prints no second copy of the picture.
+              const prev = i > 0 ? f.steps[i - 1] : undefined;
+              const prevSc = prev ? stepOf(scripts[f.id], prev.n) : undefined;
+              const prevPic = prev && prevSc?.kind === "demo" ? paperImage(f.id, prev.n, prevSc.shot?.file) : undefined;
+              const pic = found && prevPic?.file === found.file ? undefined : found;
+              const alt = sc?.kind === "image" ? sc.alt : sc?.kind === "demo" ? (sc.shot?.alt ?? sc.highlight?.note ?? sc.note ?? f.title) : "";
+              const caption = sc && "note" in sc ? (sc.note ?? (sc.kind === "demo" ? sc.highlight?.note : undefined)) : undefined;
+              const words = (
+                <div className="flex min-w-0 gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-quiet text-xs font-semibold">{st.n}</span>
+                  <div className="min-w-0 flex-1 text-sm">
+                    <Inline text={st.text} plainIds />
+                    {st.children.length > 0 && <Blocks blocks={st.children} />}
+                    {caption && found && <p className="mt-2 text-xs text-ink-muted"><Inline text={caption} plainIds /></p>}
+                    {sc && !found && <PrintMedia step={sc} />}
+                  </div>
+                </div>
+              );
+              if (!pic) return { item: <li key={st.n} className="break-inside-avoid">{words}</li> };
+              // A narrow picture sits beside its step; a wide one goes under it.
+              if (beside(pic))
+                return {
+                  item: (
                     <li key={st.n} className="grid break-inside-avoid grid-cols-print-step items-start gap-5">
                       {words}
                       <Shot pic={pic} alt={alt} />
                     </li>
-                  ) : (
-                    <li key={st.n} className="break-inside-avoid space-y-2">
-                      {words}
-                      <div className={indented(pic) ? "pl-9" : ""}><Shot pic={pic} alt={alt} /></div>
-                    </li>
-                  );
-                })}
-              </ol>
-              {(scripts[f.id]?.variations ?? []).length > 0 && (
-                <div className="mt-6">
-                  <p className="text-eyebrow font-semibold uppercase text-ink-muted keep-next">What else can happen, shown live in the academy</p>
-                  <ul className="mt-2 space-y-3">
-                    {(scripts[f.id]?.variations ?? []).map((v, i) => {
-                      const pic = paperImage(f.id, `v${i + 1}`);
-                      const last = v.steps[v.steps.length - 1];
-                      const words = last ? (last.note ?? (last.kind === "demo" ? last.highlight?.note : undefined)) : undefined;
-                      return (
-                        <li key={v.title} className={`break-inside-avoid ${pic && beside(pic) ? "grid grid-cols-print-step items-start gap-5" : "space-y-2"}`}>
-                          <div className="min-w-0 text-sm">
-                            <p className="font-semibold text-ink">{v.title}</p>
-                            {words && <p className="mt-1 text-xs text-ink-muted"><Inline text={words} plainIds /></p>}
-                          </div>
-                          {pic && <Shot pic={pic} alt={words ?? v.title} />}
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  ),
+                };
+              const under = <div className={indented(pic) ? "pl-9" : ""}><Shot pic={pic} alt={alt} /></div>;
+              return {
+                item: (
+                  <li key={st.n} className="break-inside-avoid space-y-2">
+                    {words}
+                    {under}
+                  </li>
+                ),
+                // The first step's words can travel with the flow's heading while its picture starts the next page.
+                words: <li key={st.n}>{words}</li>,
+                under,
+              };
+            });
+            const variations = (scripts[f.id]?.variations ?? []).map((v, i) => {
+              const pic = paperImage(f.id, `v${i + 1}`);
+              const last = v.steps[v.steps.length - 1];
+              const words = last ? (last.note ?? (last.kind === "demo" ? last.highlight?.note : undefined)) : undefined;
+              return (
+                <li key={v.title} className={`break-inside-avoid ${pic && beside(pic) ? "grid grid-cols-print-step items-start gap-5" : "space-y-2"}`}>
+                  <div className="min-w-0 text-sm">
+                    <p className="font-semibold text-ink">{v.title}</p>
+                    {words && <p className="mt-1 text-xs text-ink-muted"><Inline text={words} plainIds /></p>}
+                  </div>
+                  {pic && <Shot pic={pic} alt={words ?? v.title} />}
+                </li>
+              );
+            });
+            // A heading travels with what follows it by sharing one unbreakable block with its first
+            // item: Chromium honours "break-after: avoid" by pushing whole runs of blocks to the next
+            // page, which left pages half empty; this keeps the pair together and nothing more.
+            const first = steps[0];
+            return (
+              <article key={f.id} id={`flow-${f.id}`} className={`${n ? "mt-10 border-t pt-6" : "mt-6"}`}>
+                <div className="break-inside-avoid">
+                  <p className="font-mono text-xs font-semibold text-primary-link">{f.id}</p>
+                  <h3 className="mt-1 font-display text-2xl font-semibold">{f.title}</h3>
+                  {f.whatYouLearn && <p className="mt-2 text-base text-ink-body"><Inline text={sentence(f.whatYouLearn)} plainIds /></p>}
+                  {f.who && <p className="mt-2 text-xs text-ink-muted">Who: <Inline text={f.who} plainIds /> · Starts at: <Inline text={f.startsAt} plainIds /></p>}
+                  {first && <ol className="mt-4">{first.words ?? first.item}</ol>}
                 </div>
-              )}
-              {/* As on the site: a light card, a hairline, the one accent for its eyebrow; never alone at the top of a page. */}
-              {f.workedWhen && (
-                <div className="mt-5 break-before-avoid break-inside-avoid rounded-md border bg-surface p-4">
-                  <p className="text-eyebrow font-semibold uppercase text-primary">You know it worked when</p>
-                  <p className="mt-1 text-sm text-ink-body"><Inline text={f.workedWhen} plainIds /></p>
-                </div>
-              )}
-            </article>
-          ))}
+                {first?.under && <div className="mt-2 break-inside-avoid">{first.under}</div>}
+                {steps.length > 1 && <ol className="mt-4 space-y-4">{steps.slice(1).map((x) => x.item)}</ol>}
+                {variations.length > 0 && (
+                  <div className="mt-6">
+                    <div className="break-inside-avoid">
+                      <p className="text-eyebrow font-semibold uppercase text-ink-muted">What else can happen, shown live in the academy</p>
+                      <ul className="mt-2">{variations[0]}</ul>
+                    </div>
+                    {variations.length > 1 && <ul className="mt-3 space-y-3">{variations.slice(1)}</ul>}
+                  </div>
+                )}
+                {/* As on the site: a light card, a hairline, the one accent for its eyebrow; never alone at the top of a page. */}
+                {f.workedWhen && (
+                  <div className="mt-5 break-before-avoid break-inside-avoid rounded-md border bg-surface p-4">
+                    <p className="text-eyebrow font-semibold uppercase text-primary">You know it worked when</p>
+                    <p className="mt-1 text-sm text-ink-body"><Inline text={f.workedWhen} plainIds /></p>
+                  </div>
+                )}
+              </article>
+            );
+          })}
         </section>
       ))}
       <section className="print-page print-break flex min-h-screen flex-col items-center justify-center gap-8 p-12 text-center">
