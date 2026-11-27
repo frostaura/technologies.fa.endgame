@@ -167,10 +167,10 @@ function inline(nodes: Inline[]): ReactNode {
             href={n.href}
             data-chip={chip.kind.toLowerCase()}
             title={chip.kind}
-            className="mx-0.5 inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full border border-primary-line bg-primary-tint py-0.5 pl-1.5 pr-2.5 align-baseline text-sm font-semibold text-primary-hover hover:bg-surface"
+            className="mx-0.5 inline rounded-full border border-primary-line bg-primary-tint py-0.5 pl-1.5 pr-2.5 text-sm font-semibold text-primary-hover box-decoration-clone hover:bg-surface"
           >
-            <Icon name={chip.icon} className="size-3.5" />
-            <span className="truncate">{inline(n.children)}</span>
+            <Icon name={chip.icon} className="mr-1 inline size-3.5 align-text-bottom" />
+            {inline(n.children)}
           </Link>
         );
       }

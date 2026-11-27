@@ -306,12 +306,19 @@ export function Composer(p: ComposerProps) {
           )}
           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
             {narrowed.map((n) => (
-              <span key={n.key} className="inline-flex items-center gap-0.5 rounded-full bg-primary-tint py-0.5 pl-2.5 pr-0.5 text-xs font-semibold text-primary-hover">
-                {n.label}
-                <button type="button" aria-label={`Turn off ${n.label.toLowerCase()}`} onClick={() => p.onNarrow({ ...p.narrow, [n.key]: false })} className="flex size-6 items-center justify-center rounded-full hover:bg-surface">
+              <button
+                key={n.key}
+                type="button"
+                aria-label={`Turn off ${n.label.toLowerCase()}`}
+                title={`Turn off ${n.label.toLowerCase()}`}
+                onClick={() => p.onNarrow({ ...p.narrow, [n.key]: false })}
+                className="inline-flex min-h-touch items-center gap-1 rounded-full px-1 text-xs font-semibold text-primary-hover"
+              >
+                <span className="inline-flex items-center gap-1 rounded-full bg-primary-tint py-1 pl-2.5 pr-1.5">
+                  {n.label}
                   <X aria-hidden className="size-3.5" />
-                </button>
-              </span>
+                </span>
+              </button>
             ))}
           </span>
           {p.live && (

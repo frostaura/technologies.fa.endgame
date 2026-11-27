@@ -180,7 +180,8 @@ export function ConversationDock({ tree, selection, fill = true, onRetarget }: {
           "relative flex min-h-0 flex-col",
           variant === "sheet" && "h-full px-4 pt-3",
           variant === "docked" && "h-full",
-          variant === "framed" && "h-pane overflow-hidden rounded-md border bg-surface shadow-card",
+          // On a tablet the side panel sets cards two by two; the conversation takes the whole row.
+          variant === "framed" && "h-pane overflow-hidden rounded-md border bg-surface shadow-card md:col-span-2",
           variant === "framed" && !fill && "w-full",
         )}
       >
@@ -214,7 +215,7 @@ export function ConversationDock({ tree, selection, fill = true, onRetarget }: {
                 The latest refresh failed: {history.stale.reason}
               </p>
             )}
-            {empty && <EmptyThread selection={selection} name={name} suggestions={suggestions} canStart={caps.kind === "loaded" && caps.data.actions.length > 0} onPick={(text) => {
+            {empty && <EmptyThread selection={selection} name={name} suggestions={suggestions} canStart={caps.kind === "loaded" && caps.data.actions.length > 0} canAddress={targets.length > 0} onPick={(text) => {
               setDraft(text);
               requestAnimationFrame(() => document.getElementById(inputId)?.focus());
             }} />}
@@ -335,8 +336,10 @@ function HeaderButton({ label, onClick, pressed, children }: { label: string; on
 }
 
 /** Nothing said here yet: who answers, what it can do at this level, and three things worth asking, from what is really here. */
-function EmptyThread({ selection, name, suggestions, canStart, onPick }: { selection: Selection; name: string; suggestions: string[]; canStart: boolean; onPick: (text: string) => void }) {
+function EmptyThread({ selection, name, suggestions, canStart, canAddress, onPick }: { selection: Selection; name: string; suggestions: string[]; canStart: boolean; canAddress: boolean; onPick: (text: string) => void }) {
   const employee = selection.kind === "employee";
+  const covers =
+    selection.kind === "app" ? `It answers about ${name}: how it is running, what it costs, who works on it and what changed.` : `It answers for ${name} and everything beneath it: what is running, what it costs, who is working on what.`;
   return (
     <div data-state="empty" className="flex flex-col gap-4 py-2">
       <div className="flex flex-col gap-1.5">
@@ -344,10 +347,10 @@ function EmptyThread({ selection, name, suggestions, canStart, onPick }: { selec
         <p className="text-sm text-ink-muted">
           {employee
             ? `${name} answers from its job and what it remembers, and can take on work you give it.`
-            : `It answers for ${name} and everything beneath it: what is running, what it costs, who is working on what.${canStart ? " It can also start an idea, change an app or try stopped work again, asking you first." : ""}`}
+            : `${covers}${canStart ? " It can also start work here, asking you first." : ""}`}
         </p>
       </div>
-      <p className="text-xs text-ink-muted">Type / for the actions here, or @ to send it to someone or an app beneath this level. Files can be attached or dropped in.</p>
+      <p className="text-xs text-ink-muted">{canAddress ? "Type / for the actions here, or @ to send it to someone or an app beneath this level." : "Type / for the actions here."} Files can be attached or dropped in.</p>
       {suggestions.length > 0 && (
         <ul aria-label="Things to ask" className="flex flex-col gap-2">
           {suggestions.map((s) => (
