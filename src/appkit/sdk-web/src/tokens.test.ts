@@ -36,4 +36,25 @@ describe("one token layer", () => {
     expect(contrastRatio(roles.ink.muted, roles.ground)).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(roles.attention.text, roles.attention.tint)).toBeGreaterThanOrEqual(4.5);
   });
+
+  it("gives every field an edge a person can see: 3:1 against both surfaces (WCAG 1.4.11)", () => {
+    expect(contrastRatio(roles.border.field, roles.surface)).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(roles.border.field, roles.ground)).toBeGreaterThanOrEqual(3);
+    // The divider is deliberately faint — which is why a field never uses it.
+    expect(contrastRatio(roles.border.DEFAULT, roles.surface)).toBeLessThan(3);
+    const field = readFileSync(join(root, "src/ui/field.tsx"), "utf8");
+    expect(field).toContain("border-border-field");
+  });
+
+  it("keeps every status tag legible: 4.5:1", () => {
+    for (const [text, tint] of [
+      [roles.quiet.text, roles.quiet.DEFAULT],
+      [roles.primary.hover, roles.primary.tint],
+      [roles.success.text, roles.success.tint],
+      [roles.warn.text, roles.warn.tint],
+      [roles.attention.text, roles.attention.tint],
+    ] as const) {
+      expect(contrastRatio(text, tint)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
 });

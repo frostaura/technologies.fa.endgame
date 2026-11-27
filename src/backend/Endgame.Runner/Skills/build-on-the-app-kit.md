@@ -28,6 +28,10 @@ this skill where they differ.
 4. Every schema change is a migration (`make migration name=AddThing`); never edit a committed one.
 5. Every read shows loading, failed, empty and loaded differently (`useApiQuery` with `LoadingState`, `FailedState`, `EmptyState`).
 
+Every page is built from the kit's page layouts (`PageHeader`, `PageLayout`, `CardGrid`, `FormCard` + `FormActions`, …) and
+follows **What good looks like** in `AGENTS.md`, with a row in `web/src/pageShapes.test.tsx` (the `write-a-screen` skill).
+The app's name is the platform's (`APP_NAME` in `web/src/appName.ts`); never write it anywhere else.
+
 Every screen carries the kit's test ids (`page-<view>`, `<entity>-item`, `new-<entity>`, `save-<entity>`, …): the
 table is in `AGENTS.md` and the `write-a-screen` skill, the plan item names the ones its screens carry, and the
 factory checks each exists in `web/src` as `data-testid="…"`.

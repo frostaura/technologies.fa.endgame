@@ -106,3 +106,19 @@ tester.run("no-unsafe-format", formatRule, {
     { code: "total.toLocaleString()", errors: [{ messageId: "locale", data: { method: "toLocaleString" } }] },
   ],
 });
+
+tester.run("use-kit-fields", plugin.rules?.["use-kit-fields"] as Parameters<RuleTester["run"]>[1], {
+  valid: [
+    '<Input name="title" />',
+    "<Textarea />",
+    "<Select><option>One</option></Select>",
+    "<Checkbox checked />",
+    '<input type="hidden" name="id" value="1" />',
+  ],
+  invalid: [
+    { code: '<input name="title" className="border" />', errors: [{ messageId: "raw", data: { tag: "input", kit: "Input" } }] },
+    { code: '<input type="checkbox" />', errors: [{ messageId: "raw", data: { tag: "input", kit: "Checkbox" } }] },
+    { code: "<textarea />", errors: [{ messageId: "raw", data: { tag: "textarea", kit: "Textarea" } }] },
+    { code: "<select />", errors: [{ messageId: "raw", data: { tag: "select", kit: "Select" } }] },
+  ],
+});

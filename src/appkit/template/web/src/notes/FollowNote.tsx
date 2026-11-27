@@ -39,8 +39,8 @@ export function FollowNote({ noteId, followers }: { noteId: string; followers: n
   if (me.status === "failed") return <FailedState error={me.error} onRetry={me.reload} />;
   if (!signedIn) {
     return (
-      <div className="flex flex-wrap items-center gap-3">
-        <Button asChild variant="outline" className="min-h-11 max-sm:w-full">
+      <div className="flex flex-col gap-3">
+        <Button asChild variant="outline" className="w-full">
           <a href={signInUrl()}>Sign in to follow</a>
         </Button>
         {count}
@@ -50,13 +50,13 @@ export function FollowNote({ noteId, followers }: { noteId: string; followers: n
   if (follow.status === "loading") return <LoadingState label="Reading whether you follow it…" />;
   if (follow.status === "failed") return <FailedState error={follow.error} onRetry={follow.reload} />;
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-col gap-3">
       {follow.data.following ? (
-        <Button variant="outline" className="min-h-11 max-sm:w-full" data-testid="set-following-false" disabled={busy} onClick={() => void set(false)}>
+        <Button variant="outline" className="w-full" data-testid="set-following-false" disabled={busy} onClick={() => void set(false)}>
           Following · stop
         </Button>
       ) : (
-        <Button className="min-h-11 max-sm:w-full" data-testid="set-following-true" disabled={busy} onClick={() => void set(true)}>
+        <Button className="w-full" data-testid="set-following-true" disabled={busy} onClick={() => void set(true)}>
           Follow
         </Button>
       )}
