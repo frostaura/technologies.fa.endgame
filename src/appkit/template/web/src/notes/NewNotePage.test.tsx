@@ -25,12 +25,23 @@ describe("NewNotePage", () => {
     expect(signIn.getAttribute("href")).toContain(new URL("_endgame/auth/sign-in?returnTo=", document.baseURI).toString());
   });
 
+  it("asks for a title before sending anything", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(json(200, { user: ada }));
+    renderPage();
+    fireEvent.change(await screen.findByTestId("note-title"), { target: { value: "   " } });
+    fireEvent.click(screen.getByTestId("save-note"));
+    expect((await screen.findByRole("alert")).textContent).toBe("Give the note a title.");
+    expect(screen.getByTestId("note-title").getAttribute("aria-invalid")).toBe("true");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the server's field errors beside the field", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(json(200, { user: ada }))
       .mockResolvedValueOnce(json(400, { title: "Validation failed", errors: { Title: ["The Title field is required."] } }));
     renderPage();
-    fireEvent.click(await screen.findByTestId("save-note"));
+    fireEvent.change(await screen.findByTestId("note-title"), { target: { value: "Hi" } });
+    fireEvent.click(screen.getByTestId("save-note"));
     expect((await screen.findByRole("alert")).textContent).toBe("The Title field is required.");
     expect(screen.getByTestId("note-title").getAttribute("aria-invalid")).toBe("true");
   });
@@ -51,7 +62,40 @@ describe("NewNotePage", () => {
     expect(await screen.findByText("opened note")).toBeTruthy();
     const [, init] = fetchMock.mock.calls[1] ?? [];
     expect(init?.method).toBe("POST");
-    expect(init?.body).toBe(JSON.stringify({ title: "Hi", body: "" }));
+    expect(init?.body).toBe(JSON.stringify({ title: "Hi", body: "", happensAt: null }));
+  });
+
+  it("survives a date the field lets through that no date can be (a six-digit year), and refuses it by the field (R7-1)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(json(200, { user: ada }));
+    renderPage();
+    fireEvent.change(await screen.findByTestId("note-title"), { target: { value: "Reef dive" } });
+    const when = screen.getByTestId("note-happens-at");
+    expect(when.getAttribute("type")).toBe("datetime-local");
+    expect([when.getAttribute("min"), when.getAttribute("max")]).toEqual(["2000-01-01T00:00", "2099-12-31T23:59"]);
+    // Typed into the year segment by keyboard: the browser keeps it, and Date cannot read it.
+    fireEvent.change(when, { target: { value: "202612-12-12T08:00" } });
+    expect(screen.getByTestId("page-new-note")).toBeTruthy();
+    expect(screen.getByLabelText("How it will read").textContent).toContain("No date yet");
+    fireEvent.click(screen.getByTestId("save-note"));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/^Enter a date between .+2000 and .+2099\.$/);
+    expect(when.getAttribute("aria-invalid")).toBe("true");
+    // Refused before it was sent.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a real date as the instant the person meant, and the preview shows it", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(json(200, { user: ada }))
+      .mockResolvedValueOnce(json(201, { id: "n9", title: "Reef dive", body: "", authorName: "ada", createdAt: "2026-11-24T10:00:00Z", followers: 0, happensAt: "2026-12-12T08:00:00Z" }));
+    renderPage();
+    fireEvent.change(await screen.findByTestId("note-title"), { target: { value: "Reef dive" } });
+    fireEvent.change(screen.getByTestId("note-happens-at"), { target: { value: "2026-12-12T08:00" } });
+    expect(screen.getByLabelText("How it will read").textContent).toContain("2026");
+    fireEvent.click(screen.getByTestId("save-note"));
+    expect(await screen.findByText("opened note")).toBeTruthy();
+    const sent = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as { happensAt: string };
+    expect(sent.happensAt).toBe(new Date(2026, 11, 12, 8, 0).toISOString());
   });
 
   it("says the save failed, distinctly from a load failure", async () => {

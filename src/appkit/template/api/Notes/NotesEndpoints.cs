@@ -9,7 +9,7 @@ namespace App.Notes;
 public sealed record NoteSummary(Guid Id, string Title, string AuthorName, DateTimeOffset CreatedAt);
 
 /// <summary>A whole note, with how many people follow it: what anyone may see is on the public resource.</summary>
-public sealed record NoteDetail(Guid Id, string Title, string Body, string AuthorName, DateTimeOffset CreatedAt, int Followers);
+public sealed record NoteDetail(Guid Id, string Title, string Body, string AuthorName, DateTimeOffset CreatedAt, int Followers, DateTimeOffset? HappensAt);
 
 /// <summary>
 /// Whether the signed-in person follows a note: their own record, read on every visit, so a person who comes back sees
@@ -21,7 +21,8 @@ public sealed record NoteFollowView(Guid? Id, bool Following, DateTimeOffset? Si
 /// <summary>What a person writes to make a note. Attributes here are checked before the handler runs.</summary>
 public sealed record NewNote(
     [property: Required, StringLength(Note.TitleMax, MinimumLength = 1)] string Title,
-    [property: StringLength(Note.BodyMax)] string? Body);
+    [property: StringLength(Note.BodyMax)] string? Body,
+    [property: Range(typeof(DateTimeOffset), Note.HappensFrom, Note.HappensUntil, ParseLimitsInInvariantCulture = true, ErrorMessage = "Enter a date between 2000 and 2099.")] DateTimeOffset? HappensAt = null);
 
 /// <summary>
 /// The notes API, mapped on the api/ group from UseEndgameApp(). Every endpoint has an operation id
@@ -47,7 +48,7 @@ public static class NotesEndpoints
             .RequireUser()
             .WithName("createNote")
             .WithSummary("Write a note")
-            .WithDescription("Saves a new note by the signed-in person and returns it. Title is required (up to 200 characters); body is optional.");
+            .WithDescription("Saves a new note by the signed-in person and returns it. Title is required (up to 200 characters); body is optional; happensAt, when what it is about happens, is optional and must fall in the years 2000 to 2099.");
 
         // A person's own record (AGENTS.md): found by their user id, made once, answered as it is every time after. Reading it
         // requires sign-in like the writes; the count anyone may see is on the note itself (getNote).
@@ -152,6 +153,7 @@ public static class NotesEndpoints
             AuthorId = user.Id,
             AuthorName = user.DisplayName,
             CreatedAt = clock.GetUtcNow(),
+            HappensAt = input.HappensAt?.ToUniversalTime(),
         };
         db.Notes.Add(note);
         await db.SaveChangesAsync(ct);
@@ -161,5 +163,5 @@ public static class NotesEndpoints
         return TypedResults.Created($"notes/{note.Id}", ToDetail(note, followers: 0));
     }
 
-    private static NoteDetail ToDetail(Note n, int followers) => new(n.Id, n.Title, n.Body, n.AuthorName, n.CreatedAt, followers);
+    private static NoteDetail ToDetail(Note n, int followers) => new(n.Id, n.Title, n.Body, n.AuthorName, n.CreatedAt, followers, n.HappensAt);
 }

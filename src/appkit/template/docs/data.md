@@ -10,6 +10,7 @@
 | `AuthorId` | text ≤ 64 | The writer's `EndgameUser.Id`. |
 | `AuthorName` | text ≤ 200 | The writer's display name when they wrote it. |
 | `CreatedAt` | timestamptz | Set by the server; indexed (lists sort by it). |
+| `HappensAt` | timestamptz, optional | When what the note is about happens. Years 2000 to 2099 only (`[Range]`): the page checks the same limits before sending, since a date field lets a six-digit year through. |
 
 Who may: anyone reads; signed-in people write. Nobody edits or deletes yet.
 
@@ -28,4 +29,4 @@ A signed-in person following a note: their own record, one per person and note.
 Unique: (`NoteId`, `PersonId`) — the database refuses a second follow by the same person. Following again answers the
 follow they have.
 
-Migrations: `InitialCreate`, `AddNoteFollows`.
+Migrations: `InitialCreate`, `AddNoteFollows`, `AddNoteHappensAt`.

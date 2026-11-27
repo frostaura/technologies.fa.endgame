@@ -78,3 +78,31 @@ tester.run("no-location-read", locationRule, {
     { code: "const host = window.location.origin;", errors: [{ messageId: "host", data: { property: "origin" } }] },
   ],
 });
+
+const formatRule = plugin.rules?.["no-unsafe-format"] as Parameters<RuleTester["run"]>[1];
+
+// R7-1: a built app formatted a date a browser let through with Intl.DateTimeFormat(...).format(new Date(value)); it threw
+// RangeError while rendering and the page went blank. Apps format through the kit's helpers, which never throw.
+tester.run("no-unsafe-format", formatRule, {
+  valid: [
+    'formatDateTime(note.createdAt)',
+    'formatDate(value, { fallback: "Pick a date" })',
+    "formatNumber(count)",
+    // Other `format` calls are not the browser's formatters.
+    'dayjs(value).format("D MMM")',
+    "formatter.format(x)",
+    'const label = value.toString();',
+  ],
+  invalid: [
+    { code: 'new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(iso))', errors: [{ messageId: "intl" }] },
+    { code: "Intl.DateTimeFormat().format(date)", errors: [{ messageId: "intl" }] },
+    { code: "new Intl.NumberFormat().format(n)", errors: [{ messageId: "intl" }] },
+    { code: "new Intl.DateTimeFormat().formatToParts(date)", errors: [{ messageId: "intl" }] },
+    { code: "new Intl.RelativeTimeFormat().format(-1, 'day')", errors: [{ messageId: "intl" }] },
+    { code: "const f = new Intl.DateTimeFormat(); f.format(d);", errors: [{ messageId: "intl" }] },
+    { code: "new Date(value).toLocaleString()", errors: [{ messageId: "locale", data: { method: "toLocaleString" } }] },
+    { code: "date.toLocaleDateString('en-GB')", errors: [{ messageId: "locale", data: { method: "toLocaleDateString" } }] },
+    { code: "date.toLocaleTimeString()", errors: [{ messageId: "locale", data: { method: "toLocaleTimeString" } }] },
+    { code: "total.toLocaleString()", errors: [{ messageId: "locale", data: { method: "toLocaleString" } }] },
+  ],
+});

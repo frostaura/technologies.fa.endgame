@@ -23,6 +23,10 @@ Copy `web/src/notes/NotesPage.tsx` and its test, and `web/src/App.test.tsx` for 
   (`bg-surface`, `text-ink-muted`, `text-primary`, `shadow-raised`). No hex colours, no arbitrary values such as
   `p-[13px]`, no fonts or scripts from other hosts.
 - No URL starts with `/` except router paths in `<Link to>` and `<Route path>`; the router adds the base.
+- Dates and numbers only through `formatDate`, `formatDateTime` and `formatNumber` from `@endgame/appkit`, which never throw
+  (ESLint `endgame/no-unsafe-format` fails `toLocaleString` and `Intl.DateTimeFormat(…).format`): the browser's formatters throw
+  on a date a field lets through — a six-digit year — and a throw blanks the page. Every date or number input carries `min` and
+  `max`, and the form checks what was typed on submit (`checkDateInput`, `checkNumberInput`) with the error beside the field.
 - Use the width on large screens: grids such as `sm:grid-cols-2 xl:grid-cols-3`, never one narrow column.
 - Pages other than the first are `lazy()` in `App.tsx`.
 

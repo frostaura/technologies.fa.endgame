@@ -54,6 +54,36 @@ public sealed class NotesApiTests(EndgameAppFactory<Program> app) : IClassFixtur
     }
 
     [Fact]
+    public async Task A_note_keeps_when_it_happens_and_reads_it_back()
+    {
+        using var ada = app.CreateClientFor("ada@example.test");
+        var at = new DateTimeOffset(2026, 12, 12, 8, 0, 0, TimeSpan.Zero);
+        var created = await ada.PostAsJsonAsync("/api/notes", new { title = "Reef dive", happensAt = at });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var note = await created.Content.ReadFromJsonAsync<NoteDetail>();
+        var read = await app.CreateClient().GetFromJsonAsync<NoteDetail>($"/api/notes/{note!.Id}");
+        Assert.Equal(at, read!.HappensAt);
+        // Optional: a note without one has none.
+        var plain = await (await ada.PostAsJsonAsync("/api/notes", new { title = "Groceries" })).Content.ReadFromJsonAsync<NoteDetail>();
+        Assert.Null(plain!.HappensAt);
+    }
+
+    [Theory]
+    [InlineData("1999-12-31T23:59:00Z")]
+    [InlineData("2100-01-01T00:00:00Z")]
+    [InlineData("9999-12-31T00:00:00Z")]
+    public async Task A_date_outside_the_years_a_note_takes_is_refused_by_field_never_stored(string happensAt)
+    {
+        // A browser lets a six-digit year through a date field (R7-1): the page refuses it before sending, and the server refuses
+        // anything outside the years a note takes, field by field, whoever calls.
+        using var ada = app.CreateClientFor("ada@example.test");
+        var response = await ada.PostAsync("/api/notes", new StringContent($"{{\"title\":\"Odd\",\"happensAt\":\"{happensAt}\"}}", System.Text.Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(problem.TryGetProperty("errors", out var errors) && errors.TryGetProperty("HappensAt", out _), problem.ToString());
+    }
+
+    [Fact]
     public async Task A_missing_note_is_a_404_problem_not_an_empty_body()
     {
         var response = await app.CreateClient().GetAsync($"/api/notes/{Guid.NewGuid()}");

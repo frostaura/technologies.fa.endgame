@@ -64,6 +64,16 @@ The example feature is **Notes**; replace it with the real product, keeping its 
   renders is caught by the kit's `AppErrorBoundary`, mounted in `main.tsx` and around the routes in `App.tsx`: it shows
   "Something went wrong on this page" with a way back and keeps the header. Keep both; never remove them to "fix" a
   test — a boundary showing is a bug in the page, to be fixed there.
+- **Dates and numbers — only through the kit, never throwing.** Show them with `formatDate`, `formatDateTime` and
+  `formatNumber` from `@endgame/appkit`, never `toLocaleString()`, `toLocaleDateString()` or `Intl.DateTimeFormat(…).format(…)`
+  (ESLint `endgame/no-unsafe-format` fails the build). The reason: the browser's formatters throw `RangeError: Invalid time
+  value` on an invalid date, a browser lets one through — a `datetime-local` field keeps a six-digit year typed into its year
+  segment (`202612-12-12T08:00`) — and a throw while a page renders blanks it. The kit's helpers answer a fallback you can
+  name (`formatDateTime(when, { fallback: "No date yet" })`). Every `date`/`datetime-local` input carries `min` and `max`, and
+  the form checks what was typed on submit with `checkDateInput(value, { min, max })` (numbers: `checkNumberInput`, with
+  their own `min`/`max`), showing the error beside the field and sending nothing: a browser does not stop a person typing past
+  `min` and `max`. The server checks the same limits (`[Range]`). The example is the note's "When it happens" field
+  (`web/src/notes/NewNotePage.tsx`, `Note.HappensAt`).
 - **Reads stay current by themselves:** after any successful write through `api()` (POST, PUT,
   PATCH, DELETE), every `useApiQuery` on screen re-reads, keeping its data shown meanwhile. Do not
   hand-wire refreshes between pages or lists; write through `api()` and every read follows.
