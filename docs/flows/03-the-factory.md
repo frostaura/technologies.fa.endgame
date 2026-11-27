@@ -718,19 +718,20 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Starts at:** a build run.
 - **Needs:** a build decision.
 - **Level:** Core. **Learn first:** VERD-05.
-- **What you learn:** Endgame finds the app a home (a division, a project and the app itself) without asking.
+- **What you learn:** Endgame finds the app a home (a division, a project and the app itself) without asking, and a new idea is always a new app: nothing that already exists is built over.
 - **Steps:**
-  1. The division is the idea's own one if it was proposed to a division. Otherwise it is the verdict's proposed division, defaulting to "labs"; it is created if it is new.
-  2. The project and the app are created, or reused when their slugs already exist.
-  3. "The builder · Placed" reads "{name} will live in a new division, {Division}, as the project {Project}." (or "…will live in {Division}…").
-  4. From that moment the build is the app's work: the run moves to the app's scope, so the project's card shows it under way (stage "building", its progress and spend) and every later model call is charged — and capped — at the app, the project and the division, even though the Runner still names the scope it started at.
-- **You know it worked when:** the message appears, and the org chart shows the new project with the build under way.
+  1. The division is the idea's own one if it was proposed to a division (from the console, or from a division's, a project's or an app's conversation, which proposes it to the division it is in; a portfolio suggestion likewise). Otherwise it is the verdict's proposed division, defaulting to "labs"; it is created if it is new.
+  2. A **new project of its own** is made, and a new app in it. The verdict's project slug is a suggestion: when another project already has it, the next free address is taken (`dive-club-tools-2`, then `-3`, …) and the existing project is not touched (R9-1). An existing project is never joined by a build from an idea; growing an existing product is a change asked for on its app (CHG-01).
+  3. "The builder · Placed" reads "{name} is a new app. It will live in a new division, {Division}, as a new project of its own." (or "…It will live in {Division} as a new project of its own."; when the suggested address was taken, it ends "…, beside {that project}.").
+  4. **Enforced below the model.** The control plane refuses to record a build's placement in an app that is not new — one that work making or changing an app was ever on (a change, a task, another idea's build; a conversation about it does not count), or one that was published, has a version or holds end users while no earlier attempt of the same idea made it — with `409 placement_taken`, in the same transaction; the run does not move and the app is untouched. The build then stops before any hire, workspace or plan: "This build was about to be placed in an app that already exists, so it stopped before anything was planned or built. That app is untouched. “Try again” places it as a new app."
+  5. From that moment the build is the app's work: the run moves to the app's scope, so the project's card shows it under way (stage "building", its progress and spend) and every later model call is charged — and capped — at the app, the project and the division, even though the Runner still names the scope it started at.
+- **You know it worked when:** the message appears, and the org chart shows the new project with the build under way; the workspace is the new app's own, started from the kit's template.
 - **Variations and refusals:**
-  - **No person confirms or edits the placement.** There is no checkpoint for it.
+  - **No person confirms or edits the placement.** There is no checkpoint for it; with the plan checkpoint on, the plan's approval says where it goes first (BLD-04).
   - The start screen's "A home for it — Endgame suggests a division and a name." is closer to "decides".
 - **Where:** `BuildWorkflow.PlaceAsync`; `POST /internal/tree/nodes`.
 - **Reachable from:** internal.
-- **Covered by tests:** `WorkflowTests.Build_places_plans_builds…`; `factory.spec.ts` step 3; `WalkTwoServerTests.A_placed_build_is_the_work_of_its_project_and_its_spend_lands_there`.
+- **Covered by tests:** `WorkflowTests.Build_places_plans_builds…`, `…A_new_idea_whose_suggested_project_and_app_already_exist_is_placed_as_a_new_app…`, `…Every_taken_address_is_passed_over…`, `…A_placement_the_control_plane_refuses_stops_the_build…`, `…A_runner_that_dies_after_making_the_project…`; `PlacementGuardTests` (another idea's live app refused, a published or changed app refused, every way an idea starts, a stranded run); `placement.r9.test.ts` (the demo); `factory.spec.ts` step 3; `WalkTwoServerTests.A_placed_build_is_the_work_of_its_project_and_its_spend_lands_there`.
 
 ### BLD-02 See hires the factory proposes or makes
 - **Who:** nobody acts in auto-mode; an Admin decides a proposal.
@@ -787,14 +788,14 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Level:** Advanced. **Learn first:** BLD-03, RUN-07.
 - **What you learn:** with the plan checkpoint on, nothing is built until you agree the plan.
 - **Steps:**
-  1. Read the plan (the card's detail in technical mode, and the plan panel).
+  1. Read where it goes, first on the card: "{name} is a new app. It will live in {Division} as a new project of its own." (a change: "This changes {app}, the app already built and running in {Division}. Nothing else is touched."). Then the plan (the card's detail, folded to four lines on a phone with "Read all of it", and the plan panel).
   2. Press **"Approve"**: the plan becomes "Agreed" and building begins.
   3. Press **"Decline"** (optionally with a note): the card says "Declined. It was not done, so the work has stopped." and the run fails with "You declined the plan, so nothing was built. Your note: “…” “Try again” plans it afresh."
 - **You know it worked when:** after approving, the badge reads "Agreed".
 - **Variations and refusals:** after a decline, **"Try again"** on the run or the idea page plans afresh (CHG-03). A change's plan asks "Accept this plan for the change?".
 - **Where:** `BuildWorkflow` (`Checkpoint(run,"plan")`).
 - **Reachable from:** UI; MCP.
-- **Covered by tests:** `WorkflowTests.A_declined_plan_says_so_and_a_try_again_plans_afresh`.
+- **Covered by tests:** `WorkflowTests.A_declined_plan_says_so_and_a_try_again_plans_afresh`, `…A_new_idea_whose_suggested_project…` (where it goes, first on the card), `…A_change_names_the_app_it_changes_on_the_plan_approval`; `placement.r9.test.ts`.
 
 ### BLD-05 See the build re-estimated from the plan
 - **Who:** nobody acts.
@@ -1109,10 +1110,10 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   3. Press **"Start it again"** ("Starting…") or **"Not now"**. You are taken to the new run.
   4. The new run says "Endgame · Carrying on": "This picks up where the earlier attempt stopped: {n} of {m} parts were already built and checked, so they are kept, not rebuilt or charged again." (with one part: "1 of {m} parts was already built and checked, so it is kept, …") The plan shows those parts as "Built and checked in the earlier attempt; kept, not built or charged again."
 - **You know it worked when:** the new run finishes; the idea's "Watch the work that followed" now opens it.
-- **Variations and refusals:** a build that stopped before anything was published raises its hires again (its earlier proposals were withdrawn, RUN-06); a start the owner declined says so ("start-declined"); a declined plan is planned afresh; a part that failed is built again with fresh repair rounds; only the latest attempt can be tried, once (409); work that has not stopped is "409 not_retryable". While an employee on the project is paused, a build or change is not started again: "It was not started again: {Name}, who works on this app, is paused…".
+- **Variations and refusals:** a build that stopped before anything was published raises its hires again (its earlier proposals were withdrawn, RUN-06); a start the owner declined says so ("start-declined"); a declined plan is planned afresh; a part that failed is built again with fresh repair rounds; a try again finds the earlier attempt's own app again — never another app: an attempt that was placed in an app that already existed (a build from before R9-1) is placed afresh as a new app, planned from the start, its workspace from the kit's template, and says "Endgame · Placed afresh": "The earlier attempt was placed in an app that already existed and is not this idea's, so it is left as it is. This attempt builds a new app, planned from the start."; that earlier attempt's hires for the other app are withdrawn when it stops, and the app keeps its status, its version and its data; only the latest attempt can be tried, once (409); work that has not stopped is "409 not_retryable". While an employee on the project is paused, a build or change is not started again: "It was not started again: {Name}, who works on this app, is paused…".
 - **Where:** `runs/TryAgain.tsx`, `RunView.tsx` `StoppedPanel`, `VerdictView.tsx`; `POST /api/runs/{id}/retry/estimate`, `POST /api/runs/{id}/retry`; `RetryService`, `IdeaService.RetryBuildAsync`, `FactoryEstimates`; `BuildWorkflow.CarryOverAsync`.
 - **Reachable from:** UI; MCP `run_retry_estimate`, `run_retry`; the conversation (`try_again`, TALK-18).
-- **Covered by tests:** `WorkflowTests.A_build_tried_again_keeps_its_placement_plan_and_finished_parts_and_builds_only_the_rest`, `…A_declined_plan_says_so_and_a_try_again_plans_afresh`; `TryAgainAndChangesTests.A_stopped_build_is_built_again_priced_for_what_is_left_and_carrying_on_from_the_earlier_attempt`; `RetryEstimateWordingTests` (nothing, one or every part left); `TryAgainAndChanges.test.tsx`; `RoundThree.test.tsx` ("what a try again keeps").
+- **Covered by tests:** `WorkflowTests.A_build_tried_again_keeps_its_placement_plan_and_finished_parts_and_builds_only_the_rest`, `…A_declined_plan_says_so_and_a_try_again_plans_afresh`, `…Try_again_on_a_build_of_a_new_app_keeps_that_same_app`, `…Try_again_on_a_build_placed_in_another_apps_project_before_the_fix_is_placed_afresh…`; `PlacementGuardTests.Try_again_finds_the_same_ideas_own_app…`, `…A_build_wrongly_placed_in_a_live_app_before_the_rule_leaves_it_untouched_when_it_stops`; `TryAgainAndChangesTests.A_stopped_build_is_built_again_priced_for_what_is_left_and_carrying_on_from_the_earlier_attempt`; `RetryEstimateWordingTests` (nothing, one or every part left); `TryAgainAndChanges.test.tsx`; `RoundThree.test.tsx` ("what a try again keeps").
 
 ### CHG-04 Restore an earlier version
 - **Who:** Builder (another reader covers the details).

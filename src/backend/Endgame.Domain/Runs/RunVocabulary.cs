@@ -32,6 +32,15 @@ public static class RunKinds
     public static readonly IReadOnlyList<string> All = [Research, Conversation, Build, Task, Review, Suggest];
 }
 
+/// <summary>
+/// Why the control plane refuses to record where a build was placed (R9-1): a build starts from a new idea, so the app it
+/// names must be new — never one another idea's build or a change made or changed, one that was published, or one that holds data.
+/// </summary>
+public static class PlacementRefusals
+{
+    public const string Taken = "placement_taken";
+}
+
 /// <summary>The run log's event types (ARCH-004, <i>Run log</i>).</summary>
 public static class RunEventTypes
 {

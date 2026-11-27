@@ -433,13 +433,13 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
   3. The build starts ("Build it", or on its own in auto mode). Its placement step (`BuildWorkflow.PlaceAsync`) works out where it goes:
      - if the idea was raised at a division, it uses that division;
      - otherwise it uses research's proposed division slug, defaulting to `labs`;
-     - it creates the division if missing (`POST /internal/tree/nodes`), then the project (named after the proposal, or the idea's first line), then an app (slug from the proposal, default `web`).
-  4. The run's log says "{name} will live in a new division, {Division}, as the project {project}." (or "will live in {Division}…" when the division existed).
+     - it creates the division if missing (`POST /internal/tree/nodes`), then a **new** project (named after the proposal, or the idea's first line) and a new app in it (slug from the proposal, default `web`). A build from an idea is always a new app: a project slug that is already taken gets the next free one (`dive-club-tools-2`), never the project that has it (R9-1).
+  4. The run's log says "{name} is a new app. It will live in a new division, {Division}, as a new project of its own." (or "…It will live in {Division} as a new project of its own." when the division existed; "…, beside {project}." when the suggested address was another project's).
   5. Within 15 seconds, home shows the new division column with the project card.
 - **You know it worked when:** a new division column appears on the chart.
 - **Variations and refusals:**
   - To choose the division yourself, pick it in "Where it goes" (TREE-05), or make it first on "Manage" (TREE-02).
-  - A concurrent placement with the same slug reuses the existing node.
+  - A division with the same slug is reused (the idea belongs there); a project or an app never is. A Runner that dies after making the project finds its own project again from its log.
   - A new division can raise a hire proposal (HIRE-01).
 - **Where:** `features/start/StartView.tsx`; `Runner/Workflows/BuildWorkflow.cs` (`PlaceAsync`); `FactoryEndpoints` `POST /internal/tree/nodes`; `TreeService.EnsureChildAsync`.
 - **Reachable from:** UI (indirectly, through an idea).

@@ -356,12 +356,35 @@ a statement of its own (a leading "and" dropped, the first letter capitalised). 
 research, the planner is told the change wins: what it replaces goes to `leftOut`, "replaced by the change agreed after
 research", never beside it as a second requirement.
 
+## Placement: a new idea is a new app
+
+A build starts from an idea, so it is always a new product (R9-1). `BuildWorkflow.PlaceAsync` uses the idea's division (or
+research's proposed one, made if missing), then makes a **new project** and a new app in it. The verdict's project slug is
+only a suggestion: `POST /internal/tree/nodes` answers `200` with a node that already has it, and placement then tries
+`slug-2`, `slug-3`, … (kept within 40 characters) until it gets a `201`, naming the project that was in the way. The
+project is recorded as its own journal step (`placement.project`) the moment it is made, so a Runner that dies before the
+placement step finds it again rather than leaving an empty project. An existing project is never joined by a build from
+an idea; growing an existing product is a change, made from its app (below). The owner reads where it goes in one
+sentence (`WhereItGoes`) — "The builder · Placed" and the first sentence of the plan's approval: "{name} is a new app. It
+will live in {Division} as a new project of its own[, beside {project}]."; a change's approval opens "This changes
+{app}, the app already built and running in {Division}. Nothing else is touched."
+
+Below the model, the control plane refuses to record a build's `placement` step whose app is not new (`RunService`,
+in the append's transaction): work that makes or changes an app was ever on it (a change, a task, another idea's build — a conversation about it or a memory review does not count), or it
+was published, has a version or holds end users while no earlier attempt of the same idea is on it. The refusal is
+`409 placement_taken`; nothing is written, the run does not move to the app, and the build stops before any hire,
+workspace or plan. Only an earlier attempt of the same idea ("Try again") finds its own app again. The workspace is the
+app's own repository, so a new app's build starts from the kit's template, never from another app's code.
+
 ## Trying again
 
 A retried build or change (`retryOf` in the owner message) reads the earlier run's journal and records into its own:
 placement (and a change's red-line screen and earlier parts), the **agreed** plan with `plan.accepted { by:
 earlier-attempt }`, the plan's estimate (the try's own estimate, made for what is left, stands), and every item that
-passed its check. Those items are neither built nor checked again, so they are not billed twice; a `plan.carried`
+passed its check (a `placement.project` too, when the earlier attempt died between making its project and recording its
+placement). When the control plane refuses the carried placement (`placement_taken`: an attempt from before R9-1 placed in
+another app), nothing is carried: the owner hears "Placed afresh", the attempt is placed as a new app, planned anew, and
+its workspace starts from the new app's own line, not the earlier branch. Those carried items are neither built nor checked again, so they are not billed twice; a `plan.carried`
 message lists them and the owner hears "Carrying on". A plan that was declined was never recorded, so it is planned
 afresh; a part that failed is built again with fresh repair rounds. The workspace is recreated from the app's last
 commit, which holds every finished part.

@@ -93,6 +93,9 @@ public sealed class FakeWorkspace : IWorkspace
 
     public List<string> CommitMessages { get; } = [];
 
+    /// <summary>Each time a run asked for this workspace: for which app, and where it was to start (R9-1).</summary>
+    public List<(Guid AppId, string? StartFrom)> Ensured { get; } = [];
+
     /// <summary>Who each commit was authored by, with Dock's own rule applied: no angle brackets or line breaks.</summary>
     public List<string> CommitAuthors { get; } = [];
 

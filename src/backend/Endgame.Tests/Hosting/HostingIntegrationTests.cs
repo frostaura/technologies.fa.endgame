@@ -83,6 +83,37 @@ public sealed class HostingIntegrationTests(HostingEnvironment env, ITestOutputH
     }
 
     [DockerFact]
+    public async Task A_new_apps_workspace_starts_from_the_template_even_when_asked_for_another_apps_branch()
+    {
+        // R9-1: a build wrongly placed in a live app planned to replace "the existing Dives example" — its workspace was that
+        // app's code. Each app has a repository of its own, made from the template; another app's run branch is not in it.
+        var seatSheet = Guid.NewGuid();
+        await env.DockAsync<RepositoryInfo>(HttpMethod.Post, "/internal/repos", new CreateRepositoryRequest(seatSheet));
+        var built = await CreateWorkspaceAsync(seatSheet);
+        await WriteAsync(built, "web/src/dives/DivesPage.tsx", "export function DivesPage() { return null; }\n");
+        Assert.True((await env.DockAsync<WorkspaceCommitResult>(HttpMethod.Post, $"/internal/workspaces/{built:D}/commit", new WorkspaceCommitRequest("Dives", Author, AuthorEmail))).Changed);
+        await DestroyWorkspaceAsync(built);
+
+        var serviceLog = Guid.NewGuid();
+        var fresh = await env.DockAsync<RepositoryInfo>(HttpMethod.Post, "/internal/repos", new CreateRepositoryRequest(serviceLog));
+        var run = Guid.NewGuid();
+        var workspace = await env.DockAsync<WorkspaceInfo>(HttpMethod.Post, "/internal/workspaces",
+            new CreateWorkspaceRequest(run, serviceLog, RunBranches.Of(built), DateTimeOffset.UtcNow.AddMinutes(10), null, null));
+        try
+        {
+            Assert.Equal(fresh.Head, workspace.BaseCommit);
+            var exec = await ExecAsync(run, "test -e SampleApp.csproj && test ! -e web/src/dives");
+            Assert.True(exec.ExitCode == 0, exec.Stderr);
+            using var missing = await env.DockAsync(HttpMethod.Get, $"/internal/repos/{serviceLog:D}/log?ref={RunBranches.Of(built)}");
+            Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        }
+        finally
+        {
+            await DestroyWorkspaceAsync(run);
+        }
+    }
+
+    [DockerFact]
     public async Task A_workspace_commit_carries_the_employee_as_author_and_publishing_refuses_a_moved_line()
     {
         var app = Guid.NewGuid();

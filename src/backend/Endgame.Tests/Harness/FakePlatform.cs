@@ -96,7 +96,27 @@ public sealed class FakeControlPlane : HttpMessageHandler
 
     public JsonObject? Verdict { get; private set; }
 
+    /// <summary>The tree nodes this run created.</summary>
     public List<JsonObject> Nodes { get; } = [];
+
+    /// <summary>Nodes that were already in the tree before the run: placing at one of their paths finds it (200), as the control plane does.</summary>
+    public List<JsonObject> Existing { get; } = [];
+
+    /// <summary>App ids the control plane refuses a build's placement in (R9-1): <c>409 placement_taken</c>.</summary>
+    public HashSet<string> TakenApps { get; } = [];
+
+    /// <summary>Refuses every build placement, whatever app it names; <see cref="PlacementsRefused"/> counts them.</summary>
+    public bool RefuseEveryPlacement { get; set; }
+
+    public int PlacementsRefused { get; private set; }
+
+    /// <summary>A node already in the tree, by path; returns its id.</summary>
+    public string Exists(string level, string path, string name)
+    {
+        var id = Guid.NewGuid().ToString();
+        Existing.Add(new JsonObject { ["id"] = id, ["level"] = level, ["name"] = name, ["slug"] = path.Split('/')[^1], ["path"] = path });
+        return id;
+    }
 
     public List<string> Requests { get; } = [];
 
@@ -244,6 +264,13 @@ public sealed class FakeControlPlane : HttpMessageHandler
         if (body["events"]!.AsArray().OfType<JsonObject>().Any(e => System.Text.Encoding.UTF8.GetByteCount((e["payload"] ?? new JsonObject()).ToJsonString()) > 64 * 1024))
         {
             return Problem(HttpStatusCode.BadRequest, "invalid_request", "An event's payload is at most 65536 bytes; truncate tool results before logging them.");
+        }
+
+        // The control plane refuses a build placed in an app that is not new, in the append's own transaction (R9-1).
+        if (body["events"]!.AsArray().OfType<JsonObject>().Any(e => e["payload"]?["step"]?.ToString() == "placement" && e["payload"]?["data"]?["appId"]?.ToString() is { } app && (RefuseEveryPlacement || TakenApps.Contains(app))))
+        {
+            PlacementsRefused++;
+            return Problem(HttpStatusCode.Conflict, "placement_taken", "That app already exists and is not this idea's: a build from an idea always makes a new app.");
         }
 
         foreach (var e in body["events"]!.AsArray().OfType<JsonObject>())
@@ -457,6 +484,12 @@ public sealed class FakeControlPlane : HttpMessageHandler
 
     private HttpResponseMessage Node(JsonObject body)
     {
+        var path = $"{body["parent"]}/{body["slug"]}";
+        if (Existing.Concat(Nodes).FirstOrDefault(n => n["path"]!.GetValue<string>() == path) is { } found)
+        {
+            return Json(found.DeepClone());
+        }
+
         var node = new JsonObject
         {
             ["id"] = Guid.NewGuid().ToString(),
@@ -566,6 +599,7 @@ public sealed class FakeWorkspaces(FakeWorkspace workspace) : IWorkspaceProvider
     public Task<(IWorkspace Workspace, bool Recreated)> EnsureAsync(Guid runId, Guid appId, DateTimeOffset leaseExpiresAt, string? startFrom, CancellationToken cancellationToken)
     {
         StartedFrom.Add(startFrom);
+        workspace.Ensured.Add((appId, startFrom));
         return Task.FromResult<(IWorkspace, bool)>((workspace, false));
     }
 
