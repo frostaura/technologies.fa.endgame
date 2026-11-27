@@ -801,7 +801,7 @@ function RecentWork({ employee, runs: worked, led }: { employee: Employee; runs:
               <table aria-label={byTasks ? "Tasks" : "Work it led"} className="w-full border-collapse text-left">
                 <thead className="border-b bg-ground text-sm text-ink-muted max-sm:hidden">
                   <tr>
-                    <th scope="col" className="px-5 py-2.5 font-medium">
+                    <th scope="col" className="w-full px-5 py-2.5 font-medium">
                       Work
                     </th>
                     <th scope="col" className="px-3 py-2.5 font-medium">
