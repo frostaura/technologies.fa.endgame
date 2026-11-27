@@ -16,9 +16,9 @@
         }
       ],
       "highlight": {
-        "text": "Rebuild and restart",
-        "note": "Its newest version is built again and started."
-      }
+        "none": "While it rebuilds, the button gives way to its progress, which ends before a ring could be drawn; step 2 rings what it leaves."
+      },
+      "note": "Its newest version is built again and started."
     },
     {
       "step": 2,

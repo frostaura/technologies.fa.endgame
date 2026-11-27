@@ -131,6 +131,8 @@ for (const { script, variation, name } of plays) {
     const passedButAllowed: string[] = [];
     /** Per size, per step: the address the step ended on. */
     const routes: Record<string, Record<number, string>> = {};
+    /** Per size, per step: what failed there (null when it passed); the allow-list is applied once both sizes have played. */
+    const results: Record<string, Record<number, string | null>> = {};
     const live: Record<number, string> = {};
     const demoSteps = script.steps.filter((s) => s.kind === "demo");
     const sizes = SIZES.filter((s) => script.device !== "phone" || s.name === "phone");
@@ -142,9 +144,10 @@ for (const { script, variation, name } of plays) {
       await call("goto", { route: script.start, persona: script.persona, scenario: script.scenario });
       const here: Record<number, string> = {};
       routes[size.name] = here;
+      const outcome: Record<number, string | null> = {};
+      results[size.name] = outcome;
       let previous: { ring: Box | null; note: string | undefined } | null = null;
       for (const step of demoSteps) {
-        const where = `${script.flow}${variation ? ` variation ${variation}` : ""} step ${step.step} (${size.name})`;
         let failed: string | null = null;
         const marker = step.step;
         try {
@@ -189,9 +192,7 @@ for (const { script, variation, name } of plays) {
         // (c) nothing over the console.
         if (!failed && (await page.locator("[data-demo-note]").count()) > 0) failed = "a caption bubble is drawn over the console";
         previous = { ring: step.highlight?.none ? null : ring.visible, note };
-        const ok = allowed(script.flow, step.step, size.name, variation);
-        if (failed && !ok) failures.push(`${where}: ${failed}`);
-        if (!failed && ok) passedButAllowed.push(`${where} is on the allow-list ("${ok.reason}") but now passes: remove it`);
+        outcome[step.step] = failed;
         if (size.name === "laptop" && SAME_MOMENT.some((p) => script.flow.startsWith(p))) live[step.step] = await steady(page);
       }
     }
@@ -203,7 +204,17 @@ for (const { script, variation, name } of plays) {
         // A record made during the lesson (a run started again) has a new id on each play: the screen is what is compared.
         const screen = (r: string | undefined) => (r ?? "").replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "{id}");
         const [a, b] = [screen(routes.laptop[step.step]), screen(routes.phone[step.step])];
-        if (a !== b && !allowed(script.flow, step.step, "phone", variation)) failures.push(`${script.flow}${variation ? ` variation ${variation}` : ""} step ${step.step}: the laptop ends at ${a}, the phone at ${b}`);
+        const phone = results.phone ?? {};
+        if (a !== b) phone[step.step] = [phone[step.step], `the laptop ends at ${a}, the phone at ${b}`].filter(Boolean).join("; ");
+      }
+    }
+    // The allow-list, once, per step and size: an excused step must still fail, or it leaves the list.
+    for (const [size, outcome] of Object.entries(results)) {
+      for (const [n, failed] of Object.entries(outcome)) {
+        const where = `${script.flow}${variation ? ` variation ${variation}` : ""} step ${n} (${size})`;
+        const ok = allowed(script.flow, Number(n), size, variation);
+        if (failed && !ok) failures.push(`${where}: ${failed}`);
+        if (!failed && ok) passedButAllowed.push(`${where} is on the allow-list ("${ok.reason}") but now passes: remove it`);
       }
     }
 

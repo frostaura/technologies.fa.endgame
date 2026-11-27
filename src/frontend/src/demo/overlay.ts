@@ -280,12 +280,16 @@ function place() {
   const now = performance.now();
   // Measured again when the control moves, and every so often while it stays (the page may still be filling in).
   if (!placed || placed.key !== key || now - placed.at > 400) {
-    const subject = boxOf(subjectEl && onPage(subjectEl) ? subjectEl : tracked);
+    let subject = boxOf(subjectEl && onPage(subjectEl) ? subjectEl : tracked);
+    const inside = (b: Box) => b.left >= clip.left - 2 && b.right <= clip.right + 2 && b.top >= clip.top - 2 && b.bottom <= clip.bottom + 2;
+    // A card its scroll area cuts (a long reply in a pane), when what was named in it shows whole: the
+    // ring goes round what was named, whole, rather than round a card shown in part.
+    if (!inside(subject) && subject.bottom - subject.top <= clip.bottom - clip.top && inside(named)) subject = named;
     const around = ringBox(subject, ringInsets(subject, contentBoxes()));
     // A subject that shows whole is ringed whole: where its room around would run past the edge of
     // its scroll area (a card the width of a phone, a pane's last row), the ring is drawn just
     // inside that edge. One cut by the edge is left cut, and so shown for what it is.
-    const whole = subject.left >= clip.left - 2 && subject.right <= clip.right + 2 && subject.top >= clip.top - 2 && subject.bottom <= clip.bottom + 2;
+    const whole = inside(subject);
     // A subject bigger than its scroll area (a whole app's page, a long list) is ringed where it shows.
     const bigger = subject.bottom - subject.top > clip.bottom - clip.top;
     placed = { key, at: now, ring: whole || bigger ? keepInside(bigger ? intersect(around, clip) : around, clip) : keepInside(around, { left: 0, top: -Infinity, right: view.width, bottom: Infinity }) };
