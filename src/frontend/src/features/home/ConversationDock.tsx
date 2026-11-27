@@ -351,7 +351,7 @@ function PaneHeader({ selection, name, inSheet, onEmployeePage, busy, onGo, full
               {above.map((c) => (
                 <li key={c.selection.scope} className="flex min-w-0 items-center gap-1">
                   <span aria-hidden>· in</span>
-                  <button type="button" onClick={() => onGo(c.selection)} aria-label={`Back up to ${c.label}`} title={`Talk to ${c.label}`} className="min-w-0 truncate rounded-xs hover:text-ink hover:underline">
+                  <button type="button" onClick={() => onGo(c.selection)} aria-label={`Back up to ${c.label}`} title={`Talk to ${c.label}`} className="min-w-0 truncate rounded-xs hover:text-ink hover:underline touch:min-h-touch">
                     {c.label}
                   </button>
                 </li>
@@ -359,7 +359,7 @@ function PaneHeader({ selection, name, inSheet, onEmployeePage, busy, onGo, full
             </ol>
           )}
           {narrowed && home && (
-            <button type="button" onClick={() => onGo(home.selection)} aria-label={`Talk to all of ${home.label} again`} title={`Talk to all of ${home.label} again`} className="flex size-6 shrink-0 items-center justify-center rounded-full text-ink-muted hover:bg-ground hover:text-ink">
+            <button type="button" onClick={() => onGo(home.selection)} aria-label={`Talk to all of ${home.label} again`} title={`Talk to all of ${home.label} again`} className="flex size-6 shrink-0 items-center justify-center rounded-full text-ink-muted hover:bg-ground hover:text-ink touch:min-h-touch touch:min-w-touch">
               <X aria-hidden className="size-3.5" />
             </button>
           )}

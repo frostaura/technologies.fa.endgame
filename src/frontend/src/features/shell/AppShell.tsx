@@ -177,7 +177,7 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
             <DockLayoutContext.Provider value={dock}>
               <aside
                 aria-label="Conversation pane"
-                data-dock={dock.full ? "full" : dock.collapsed ? "collapsed" : dock.wide ? "wide" : "narrow"}
+                data-dock={dock.full ? "full" : dock.collapsed ? "collapsed" : dock.wide || dock.overlay ? "wide" : "narrow"}
                 data-overlay={dock.overlay || undefined}
                 className={cn(
                   "sticky top-chrome z-20 flex h-dock shrink-0 flex-col self-start border-l bg-surface",
