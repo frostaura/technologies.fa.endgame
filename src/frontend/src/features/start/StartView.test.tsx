@@ -92,6 +92,20 @@ const TREE = {
 };
 
 describe("where the idea goes", () => {
+  it("keeps one order at every width — the idea, what it must respect, where it goes, the estimate, the start — with no link back of its own", async () => {
+    stubApi({ "GET /api/me": json(ME), "GET /api/credits": json(CREDITS), "GET /api/tree": json(TREE), "GET /api/autonomy": json(autonomyFixture()) });
+    renderWithStore(<StartView />);
+    const where = await screen.findByLabelText("Where it goes");
+    const idea = screen.getByLabelText("The idea");
+    const respect = screen.getByRole("group", { name: /Anything it must respect/ });
+    const estimate = screen.getByRole("region", { name: "Research estimate" });
+    const start = screen.getByRole("button", { name: "Research this idea" });
+    const order = [idea, respect, where, estimate, start];
+    for (let i = 1; i < order.length; i++) expect(order[i - 1]?.compareDocumentPosition(order[i] as Node) ?? 0).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.queryByRole("link", { name: "Back to the org chart" })).toBeNull();
+  });
+
+
   it("sends the chosen division with both the estimate and the idea, so the figure shown is the one recorded", async () => {
     const api = stubApi({
       "GET /api/me": json(ME),

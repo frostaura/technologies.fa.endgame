@@ -1,5 +1,4 @@
-import { useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ConfirmCard } from "@/components/ui/confirm";
 import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -12,22 +11,25 @@ import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/field";
 import { LINK } from "@/components/ui/layout";
 import { ContentGrid, SECTION, SideCard, TITLE, useShowAll } from "@/components/ui/page";
-import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
+import { Stat, StatRow } from "@/components/ui/stat";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { formatCredits, formatDate, formatNumber, percent, plural } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { navigate, paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
-import { useViewport } from "@/lib/useViewport";
+import { useMinWidth, useViewport } from "@/lib/useViewport";
+import { breakpoints } from "@/lib/tokens";
 import { useAppSelector } from "@/store";
-import { api, useDecideIdeaMutation, useGetIdeaQuery } from "@/store/api";
+import { api, useDecideIdeaMutation, useGetIdeaQuery, useGetMeQuery } from "@/store/api";
 import type { DecisionChoice, ExistingProduct, Idea, Verdict, VerdictOutcome } from "@/store/types";
 import { AppShell, type Crumb } from "../shell/AppShell";
 import { usePageConversation } from "../conversation/pageConversation";
+import { useDockState } from "../conversation/dockLayout";
 import { TryAgain } from "../runs/TryAgain";
+import { ResearchTrace } from "./ResearchTrace";
 import { namesFor } from "../home/treeModel";
-import { decisionOptions, notResearched, paragraphs, plainProductName, redLineBreached, sameText, shortSummary, sourceLabel } from "./verdictModel";
+import { decisionOptions, heroFacts, notResearched, nothingSearched, paragraphs, plainProductName, redLineBreached, sameText, shortSummary, sourceCount, sourceLabel, sourceSites, titleCase, wordClamp } from "./verdictModel";
 
 const OUTCOME: Record<VerdictOutcome, string> = { build: "Build", change: "Change", "do-not-build": "Do not build" };
 
@@ -38,6 +40,7 @@ const RESEARCH_POLL_MS = 5_000;
 const PRODUCTS_SHOWN = 5;
 const SIGNALS_SHOWN = 5;
 const OVERRULES_SHOWN = 3;
+const SOURCES_SHOWN = 6;
 
 /**
  * The verdict page: a document with a decision. A calm white hero (the verdict's kind as one tag, the
@@ -54,9 +57,11 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
   const tree = useActiveTree();
   const active = useActiveOrganisation();
   const idea = view.kind === "loaded" ? view.data : null;
-  const viewport = useViewport();
-  // Only a desktop has a side panel beside the page; a tablet or a phone reads everything in one column.
-  const desktop = viewport === "desktop";
+  // The conversation at the level the idea belongs to, docked beside its verdict (ARCH-012).
+  const talk = usePageConversation(idea?.scope ? { scope: idea.scope } : null);
+  // The side panel is beside the page only on a desktop, and beside the docked conversation only from 1600 (or
+  // with the pane collapsed); anywhere else it falls under the page, so the decision is drawn under the verdict.
+  const desktop = useSideBeside(!!talk);
 
   const crumbs: Crumb[] = [];
   const org = active.organisation;
@@ -89,9 +94,6 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
           </SideCard>,
         ];
 
-  // The conversation at the level the idea belongs to, docked beside its verdict (ARCH-012).
-  const talk = usePageConversation(idea?.scope ? { scope: idea.scope } : null);
-
   return (
     <AppShell crumbs={crumbs} aside={aside} talk={talk}>
       {view.kind === "loading" && (
@@ -107,11 +109,14 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
           {view.stale && <Stale reason={view.stale.reason} />}
           {view.data.verdict ? (
             <ErrorBoundary name="The verdict">
-              <VerdictBody idea={view.data} verdict={view.data.verdict} />
+              <VerdictBody idea={view.data} verdict={view.data.verdict} desktop={desktop} />
             </ErrorBoundary>
           ) : (
             <>
               <NoVerdictYet idea={view.data} />
+              <ErrorBoundary name="Research's steps">
+                <ResearchTrace runId={view.data.runId} stopped={view.data.status === "failed"} />
+              </ErrorBoundary>
               {!desktop && <TrackRecord idea={view.data} />}
             </>
           )}
@@ -119,6 +124,15 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
       )}
     </AppShell>
   );
+}
+
+/** True where the page's side panel sits beside the page rather than under it (AppShell's own rule). */
+function useSideBeside(talk: boolean): boolean {
+  const desktop = useViewport() === "desktop";
+  const me = useGetMeQuery(undefined);
+  const dock = useDockState(me.data?.user.id ?? null);
+  const wide = useMinWidth(breakpoints["3xl"]);
+  return desktop && (!talk || dock.collapsed || wide);
 }
 
 /** Who researched it and what it cost against its estimate: one quiet line. */
@@ -161,7 +175,7 @@ function NoVerdictYet({ idea }: { idea: Idea }) {
       </div>
       <h1 className={cn(TITLE, "max-w-prose")}>{failed ? "No verdict could be reached." : "The verdict is being worked out."}</h1>
       <p className="max-w-prose text-ink-body">
-        {failed ? "Research stopped before it reached a verdict. The trace shows where." : "The case against the idea is argued first. You can watch every step as it happens."}
+        {failed ? "Research stopped before it reached a verdict. Where it got to is below." : "The case against the idea is argued first. Each step shows below as it happens."}
       </p>
       <p className="max-w-prose text-ink-muted">“{idea.text}”</p>
       <div className="flex flex-wrap items-start gap-3 phone:w-full phone:flex-col phone:items-stretch">
@@ -201,10 +215,8 @@ function DecisionHistory({ idea }: { idea: Idea }) {
   );
 }
 
-function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
-  const viewport = useViewport();
-  const phone = viewport === "phone";
-  const desktop = viewport === "desktop";
+function VerdictBody({ idea, verdict, desktop }: { idea: Idea; verdict: Verdict; desktop: boolean }) {
+  const phone = useViewport() === "phone";
   const redLine = redLineBreached(verdict, idea.redLine);
   const short = verdict.summary ? shortSummary(verdict.summary) : null;
   // Each thing is said once: the case against is not repeated when it is the summary the hero already
@@ -213,25 +225,23 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
   const redLineReason = verdict.redLines?.reasoning && ![verdict.summary, verdict.headline, ...verdict.against].some((t) => sameText(t, verdict.redLines?.reasoning ?? "")) ? verdict.redLines.reasoning : null;
   // Over a red line research stops: the market sections hold only "not researched", said once.
   const marketSkipped = !!redLine && notResearched(verdict);
+  const unsearched = nothingSearched(verdict);
 
   return (
     <>
-      <Hero
-        idea={idea}
-        verdict={verdict}
-        beside={
-          redLine ? (
-            <section role="alert" aria-label="Red line" className="flex flex-col gap-1.5 rounded-md border border-attention-line px-4 py-3.5 max-sm:py-3 3xl:w-96">
-              <h2 className="flex items-start gap-2 text-base font-semibold text-attention-text">
-                <Icon name="verdict" className="mt-0.5 size-5 shrink-0" />
-                This idea crosses a red line: {redLine}
-              </h2>
-              <p className="text-ink max-sm:text-sm">FrostAura never builds it, and no one can overrule that — not research, not auto-mode, not you. You can change the idea and have it researched again, or drop it.</p>
-              {redLineReason && <p className="text-ink-body">{redLineReason}</p>}
-            </section>
-          ) : undefined
-        }
-      />
+      <Hero idea={idea} verdict={verdict} />
+
+      {/* A red line is a banner of its own, the width of the page: never a card inside the verdict's card. */}
+      {redLine && (
+        <section role="alert" aria-label="Red line" className={cn("flex flex-col gap-1.5 rounded-md border border-attention-line bg-surface px-5 py-4 shadow-card sm:px-6", RISE)}>
+          <h2 className="flex items-start gap-2 text-base font-semibold text-attention-text">
+            <Icon name="verdict" className="mt-0.5 size-5 shrink-0" />
+            <span className="min-w-0">This idea crosses a red line: {redLine}</span>
+          </h2>
+          <p className="max-w-prose text-ink max-sm:text-sm">FrostAura never builds it, and no one can overrule that — not research, not auto-mode, not you. You can change the idea and have it researched again, or drop it.</p>
+          {redLineReason && <p className="max-w-prose text-ink-body">{redLineReason}</p>}
+        </section>
+      )}
 
       {/* The decision: under the verdict on a tablet or a phone; beside the page on a desktop. */}
       {!desktop && (
@@ -243,7 +253,10 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
         </section>
       )}
 
-      <ContentGrid masonry label="The evidence">
+      <FoldGroup
+        label="The evidence"
+        summary={marketSkipped ? "Research stopped at the red line" : unsearched ? "No web search was run" : evidenceLine(verdict)}
+      >
         {against.length > 0 && (
           <Fold title="The case against, argued first" summary={plural(against.length, "point")} defaultOpen>
             <Evidence title="The case against, argued first" id="against-title" index={0}>
@@ -275,7 +288,7 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
                 <ExistingProducts products={verdict.existing.products} evidence={verdict.existing.evidence} />
               </Evidence>
             </Fold>
-            <Fold title="What gap is left">
+            <Fold title="What gap is left" summary={verdict.gap.paragraphs.length === 0 ? "Research named no gap" : undefined}>
               <Evidence title="What gap is left" index={2}>
                 {verdict.gap.paragraphs.length === 0 ? (
                   <p data-state="empty" className="text-ink-muted">
@@ -290,7 +303,7 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
                 )}
               </Evidence>
             </Fold>
-            <Fold title="Who would want it" summary={verdict.demand.evidenceFound ? undefined : "No evidence of demand was found"}>
+            <Fold title="Who would want it" summary={verdict.demand.evidenceFound ? (verdict.demand.signals.length > 0 ? plural(verdict.demand.signals.length, "signal") : undefined) : "No evidence of demand was found"}>
               <Evidence title="Who would want it" index={3}>
                 <Demand verdict={verdict} />
               </Evidence>
@@ -332,13 +345,13 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
         )}
 
         {!desktop && verdict.method && (
-          <Fold title="How this was researched">
+          <Fold title="How this was researched" summary={unsearched ? undefined : methodFacts(idea)}>
             <section aria-label="How this was researched" className="flex min-w-0 flex-col gap-3 rounded-md border bg-surface p-5 shadow-card">
               <Method idea={idea} />
             </section>
           </Fold>
         )}
-      </ContentGrid>
+      </FoldGroup>
 
       <TrackRecord idea={idea} />
     </>
@@ -346,12 +359,59 @@ function VerdictBody({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
 }
 
 /**
+ * Sections of a page, grouped. On a phone each is a fold, and the folds sit together in one card under a heading
+ * and a line that sums them up — never a wall of separate fold cards. Elsewhere they are the evidence's columns:
+ * one column, then two from 1280, each section the height of what it holds (masonry), every column starting at
+ * the same top.
+ */
+function FoldGroup({ label, summary, children }: { label: string; summary?: string; children: ReactNode }) {
+  const phone = useViewport() === "phone";
+  if (!phone)
+    return (
+      <ContentGrid masonry label={label} className="xl:block xl:columns-2 xl:gap-6 xl:[&>*:last-child]:mb-0 xl:[&>*]:mb-6 xl:[&>*]:break-inside-avoid">
+        {children}
+      </ContentGrid>
+    );
+  return (
+    <section aria-label={label} className="flex flex-col gap-2">
+      <div className="flex flex-col gap-0.5 px-1">
+        <h2 className={SECTION}>{label}</h2>
+        {summary && <p className="text-sm text-ink-muted">{summary}</p>}
+      </div>
+      <div className={GROUPED}>{children}</div>
+    </section>
+  );
+}
+
+/** Folds held together in one card: each loses its own edge and lift, and a rule parts it from the one above. */
+const GROUPED =
+  "flex flex-col overflow-hidden rounded-md border bg-surface shadow-card [&>[data-fold]]:!rounded-none [&>[data-fold]]:!border-x-0 [&>[data-fold]]:!border-b-0 [&>[data-fold]]:!shadow-none [&>[data-fold]:first-child]:!border-t-0";
+
+/** The evidence in one line, for a phone's heading over its folds: what is sold, the demand, how sure. */
+function evidenceLine(verdict: Verdict): string | undefined {
+  if (heroFacts(verdict).length === 0) return undefined;
+  const products = verdict.existing.products.length;
+  const signals = verdict.demand.signals.length;
+  const demand = !verdict.demand.evidenceFound ? "no demand found" : signals > 0 ? plural(signals, "sign") + " of demand" : "some demand";
+  return [`${formatNumber(products)} already sold`, demand, verdict.method.confidence ? `${verdict.method.confidence} confidence` : null].filter(Boolean).join(" · ");
+}
+
+/** The method in one line: searches, sources and confidence, each said once. */
+function methodFacts(idea: Idea): string | undefined {
+  const verdict = idea.verdict;
+  if (!verdict?.method) return undefined;
+  const m = verdict.method;
+  const sources = sourceCount(verdict);
+  return [m.searchCount !== null ? plural(m.searchCount, "search", "searches") : null, sources > 0 ? plural(sources, "source") : "no sources recorded", m.confidence ? `${m.confidence} confidence` : null].filter(Boolean).join(" · ") || undefined;
+}
+
+/**
  * The verdict, at the top: its kind as one tag, who researched it and for what, the headline, and a few
  * lines of the reasoning — "Read the full reasoning" opens the rest in place of those lines, never under
- * them. Beside it from 1600 (under it below that): a red line's notice when one is crossed, otherwise
- * three figures from the research.
+ * them. Beside it from 1280 (under it below that): three figures from the research — or, when research ran no
+ * web search at all, that said once and plainly, so what it already knew is never shown as counted evidence.
  */
-function Hero({ idea, verdict, beside }: { idea: Idea; verdict: Verdict; beside?: ReactNode }) {
+function Hero({ idea, verdict }: { idea: Idea; verdict: Verdict }) {
   const stamp: BadgeTone = verdict.outcome === "build" ? "good" : verdict.outcome === "change" ? "info" : "bad";
   const short = verdict.summary ? shortSummary(verdict.summary) : null;
   const [open, setOpen] = useState(false);
@@ -369,9 +429,10 @@ function Hero({ idea, verdict, beside }: { idea: Idea; verdict: Verdict; beside?
   }, [short?.text]);
   const more = !!short && (!short.full || cut);
   const facts = heroFacts(verdict);
+  const unsearched = nothingSearched(verdict) && !notResearched(verdict);
 
   return (
-    <section aria-label="The verdict" className={cn("flex flex-col gap-6 rounded-lg border bg-surface px-6 py-6 shadow-card max-sm:gap-4 max-sm:px-5 max-sm:py-5 sm:px-8 sm:py-7 3xl:flex-row 3xl:items-start 3xl:justify-between 3xl:gap-10", RISE)}>
+    <section aria-label="The verdict" className={cn("flex flex-col gap-6 rounded-lg border bg-surface px-6 py-6 shadow-card max-sm:gap-4 max-sm:px-5 max-sm:py-5 sm:px-8 sm:py-7 xl:grid xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start xl:gap-10", RISE)}>
       <div className="flex min-w-0 max-w-prose flex-col gap-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
           <Badge tone={stamp}>
@@ -390,7 +451,7 @@ function Hero({ idea, verdict, beside }: { idea: Idea; verdict: Verdict; beside?
               ))}
             </div>
           ) : (
-            <p ref={lines} className={cn("text-base text-ink-body", beside ? "max-sm:line-clamp-2 rail:line-clamp-2" : "max-sm:line-clamp-3 rail:line-clamp-2")}>
+            <p ref={lines} className="text-base text-ink-body max-sm:line-clamp-3 rail:line-clamp-2">
               {short.text}
             </p>
           ))}
@@ -407,36 +468,24 @@ function Hero({ idea, verdict, beside }: { idea: Idea; verdict: Verdict; beside?
         )}
         <TechnicalLine idea={idea} />
       </div>
-      {beside ??
-        (facts.length > 0 && (
-          <div role="group" aria-label="What research found" className="hidden shrink-0 border-t pt-5 lg:block 3xl:border-l 3xl:border-t-0 3xl:pl-8 3xl:pt-0">
-            <StatRow cols={3} className="gap-x-8">
+      {unsearched ? (
+        <div role="note" aria-label="How much was looked at" className="flex flex-col gap-1 border-t pt-4 xl:w-72 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0">
+          <span className="font-semibold text-ink">No web search was run</span>
+          <span className="text-ink-body">This verdict rests on what research already knew, not on sources it read. Treat it as a first opinion{verdict.method.confidence ? `, held with ${verdict.method.confidence} confidence` : ""}.</span>
+        </div>
+      ) : (
+        facts.length > 0 && (
+          <div role="group" aria-label="What research found" className="hidden shrink-0 border-t pt-5 lg:block xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0">
+            <StatRow cols={3} className="gap-x-8 xl:w-44 xl:grid-cols-1 xl:gap-y-5 3xl:w-auto 3xl:grid-cols-3">
               {facts.map((f) => (
                 <Stat key={f.label} plain label={f.label} value={f.value} caption={f.caption} />
               ))}
             </StatRow>
           </div>
-        ))}
+        )
+      )}
     </section>
   );
-}
-
-/** How many sources research read: its list, or what its strands counted when it kept no list. */
-function sourceCount(verdict: Verdict): number {
-  const listed = new Set(verdict.method.sources).size;
-  return listed > 0 ? listed : verdict.method.strands.reduce((n, x) => n + (x.sources ?? 0), 0);
-}
-
-/** Three short figures for the hero: what was found already sold, whether demand was, and how sure research is. */
-function heroFacts(verdict: Verdict): { label: string; value: string; caption: string }[] {
-  if (notResearched(verdict)) return [];
-  const products = verdict.existing.products.length;
-  const confidence = verdict.method?.confidence;
-  return [
-    { label: "Already sold", value: formatNumber(products), caption: products === 1 ? "product does this" : "products do this" },
-    { label: "Demand", value: verdict.demand.evidenceFound ? "Found" : "None", caption: verdict.demand.evidenceFound ? plural(verdict.demand.signals.length, "signal") : "No evidence of demand" },
-    { label: "Confidence", value: confidence ? `${confidence.charAt(0).toUpperCase()}${confidence.slice(1)}` : NO_VALUE, caption: `${plural(sourceCount(verdict), "source")} read` },
-  ];
 }
 
 function Demand({ verdict }: { verdict: Verdict }) {
@@ -666,21 +715,19 @@ function Decisions({ idea, verdict, redLine, stacked = false }: { idea: Idea; ve
 /** How research reached this verdict: its strands, searches, sources and confidence, each said once. */
 function Method({ idea }: { idea: Idea }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
-  const method = idea.verdict?.method;
-  if (!method) return null;
-  const sources = [...new Set(method.sources)];
-  const facts = [
-    method.searchCount !== null ? plural(method.searchCount, "search", "searches") : null,
-    idea.verdict && sourceCount(idea.verdict) > 0 ? plural(sourceCount(idea.verdict), "source") : "no sources recorded",
-    method.confidence ? `${method.confidence} confidence` : null,
-  ].filter(Boolean);
+  const verdict = idea.verdict;
+  const method = verdict?.method;
+  if (!verdict || !method) return null;
+  // With no web search there is nothing to count: the hero says so, once; here only the confidence remains.
+  const unsearched = nothingSearched(verdict);
+  const line = unsearched ? (method.confidence ? `${titleCase(method.confidence)} confidence` : null) : methodFacts(idea);
   return (
     <>
       <h2 id="method-title" className="flex items-center gap-2 text-base font-semibold">
         <Icon name="research" className="size-5 text-ink" />
         How this was researched
       </h2>
-      <p className="text-ink-body">{facts.join(" · ")}</p>
+      {line && <p className="text-ink-body">{line}</p>}
       {method.summary && <p className="text-ink-body">{method.summary}</p>}
       {(method.argued || method.contractors !== null) && (
         <p className="text-sm text-ink-muted">{[method.argued ? `The case ${method.argued}` : null, method.contractors !== null ? `${plural(method.contractors, "contractor")} briefed` : null].filter(Boolean).join(" · ")}</p>
@@ -690,7 +737,7 @@ function Method({ idea }: { idea: Idea }) {
           {method.strands.map((x) => (
             <li key={x.id} className="flex min-w-0 flex-col py-2">
               <span className="font-medium">{strandLabel(x.title)}</span>
-              {method.strands.length > 1 && (x.searches !== null || x.sources !== null || x.confidence) && (
+              {!unsearched && method.strands.length > 1 && (x.searches !== null || x.sources !== null || x.confidence) && (
                 <span className="text-sm text-ink-muted">
                   {[x.searches !== null ? plural(x.searches, "search", "searches") : null, x.sources !== null ? plural(x.sources, "source") : null, x.confidence ? `${x.confidence} confidence` : null].filter(Boolean).join(" · ")}
                 </span>
@@ -699,10 +746,10 @@ function Method({ idea }: { idea: Idea }) {
           ))}
         </ul>
       )}
-      {idea.verdict?.placement && <p className="text-ink-body">Suggested home: {idea.verdict.placement.name ?? idea.verdict.placement.project}</p>}
-      {idea.verdict && idea.verdict.rulesApplied.length > 0 && (
+      {verdict.placement && <p className="text-ink-body">Suggested home: {verdict.placement.name ?? verdict.placement.project}</p>}
+      {verdict.rulesApplied.length > 0 && (
         <ul aria-label="Rules applied" className="flex flex-col gap-1 text-sm text-ink-body">
-          {idea.verdict.rulesApplied.map((rule, i) => (
+          {verdict.rulesApplied.map((rule, i) => (
             <li key={i}>{rule}</li>
           ))}
         </ul>
@@ -716,7 +763,7 @@ function Method({ idea }: { idea: Idea }) {
           ))}
         </ul>
       )}
-      {sources.length > 0 && <EverySource sources={sources} />}
+      {method.sources.length > 0 && <EverySource sources={method.sources} />}
       <Link href={paths.run(idea.runId)} className={cn(LINK, "inline-flex min-h-touch items-center self-start")}>
         See every step
       </Link>
@@ -725,53 +772,75 @@ function Method({ idea }: { idea: Idea }) {
 }
 
 /**
- * Every source research read, opened in place. The method is itself held in a card or a fold, so this is a plain
- * row that opens, never a fold inside one (ARCH-011).
+ * Every source research read, listed plainly — the method is itself in a card or a fold, so never a fold inside
+ * one (ARCH-011). In normal mode each site once, with how many pages were read there; in technical mode every
+ * address. A long list shows its first few and "Show all".
  */
 function EverySource({ sources }: { sources: string[] }) {
-  const [open, setOpen] = useState(false);
-  const id = useId();
+  const technical = useAppSelector((s) => s.ui.mode) === "technical";
+  const all = [...new Set(sources)];
+  const sites = technical ? all.map((url) => ({ site: url, url, pages: 1 })) : sourceSites(all);
+  const { shown, control } = useShowAll(sites, SOURCES_SHOWN, technical ? "sources" : "sites");
   return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((x) => !x)} className="flex min-h-touch items-center gap-2 self-start text-left font-medium text-ink hover:text-primary-hover">
-        Every source ({formatNumber(sources.length)})
-        <ChevronDown aria-hidden className={cn("size-4 shrink-0 text-ink-muted transition-transform motion-reduce:transition-none", open && "rotate-180")} />
-      </button>
-      <ul id={id} hidden={!open} className={open ? "flex flex-col gap-0.5" : "hidden"}>
-        {sources.map((u) => (
-          <li key={u} className="min-w-0">
-            <SourceLink url={u} />
+    <section aria-label="Every source" className="flex min-w-0 flex-col gap-1.5">
+      <h3 className="text-sm font-semibold text-ink">
+        {technical || sites.length === all.length ? `Every source (${formatNumber(all.length)})` : `${plural(all.length, "source")}, from ${plural(sites.length, "site")}`}
+      </h3>
+      <ul className="flex flex-col">
+        {shown.map((x) => (
+          <li key={x.url} className="flex min-w-0 items-baseline justify-between gap-3">
+            <SourceLink url={x.url} />
+            {x.pages > 1 && <span className="shrink-0 text-sm tabular-nums text-ink-muted">{plural(x.pages, "page")}</span>}
           </li>
         ))}
       </ul>
-    </div>
+      {control}
+    </section>
   );
 }
 
-/** Research's track record here: how often it says no, and how each overrule turned out. */
+/**
+ * Research's track record here: how often it says no, and how each overrule turned out. One card, the two halves
+ * side by side from a tablet up, so neither is a short card stretched beside a long one; on a phone two folds,
+ * held together under one heading.
+ */
 function TrackRecord({ idea }: { idea: Idea }) {
+  const phone = useViewport() === "phone";
+  const r = idea.record;
+  if (phone)
+    return (
+      <FoldGroup label="Research's record" summary={r.total === 0 ? "The first verdict here" : `${formatNumber(r.doNotBuild)} of ${formatNumber(r.total)} verdicts here said do not build`}>
+        <Fold title="How often research says no" summary={r.total === 0 ? "The first verdict here" : `${formatNumber(r.doNotBuild)} of ${formatNumber(r.total)} said do not build`}>
+          <section aria-label="How often research says no" className="flex min-w-0 flex-col gap-3 rounded-md border bg-surface p-5 shadow-card">
+            <Refusals idea={idea} />
+          </section>
+        </Fold>
+        <Fold title="When you overruled" summary={r.overruled.length === 0 ? "Not yet" : plural(r.overruled.length, "idea")}>
+          <section aria-label="When you overruled" className="flex min-w-0 flex-col gap-3 rounded-md border bg-surface p-5 shadow-card">
+            <Overrules idea={idea} />
+          </section>
+        </Fold>
+      </FoldGroup>
+    );
   return (
-    <ContentGrid label="Research's record" className="md:grid-cols-2">
-      <Fold title="How often research says no" summary={idea.record.total === 0 ? "The first verdict here" : `${formatNumber(idea.record.doNotBuild)} of ${formatNumber(idea.record.total)} verdicts said do not build`}>
-        <section aria-label="How often research says no" className={cn("flex min-w-0 flex-col gap-3 rounded-md border bg-surface p-5 shadow-card", RISE)}>
-          <Refusals idea={idea} />
-        </section>
-      </Fold>
-      <Fold title="When you overruled" summary={idea.record.overruled.length === 0 ? "Not yet" : plural(idea.record.overruled.length, "idea")}>
-        <section aria-label="When you overruled" className={cn("flex min-w-0 flex-col gap-3 rounded-md border bg-surface p-5 shadow-card", RISE)}>
-          <Overrules idea={idea} />
-        </section>
-      </Fold>
-    </ContentGrid>
+    <section aria-label="Research's record" className={cn("grid grid-cols-1 gap-6 rounded-md border bg-surface p-5 shadow-card md:grid-cols-2 md:gap-0 md:divide-x sm:p-6", RISE)}>
+      <section aria-label="How often research says no" className="flex min-w-0 flex-col gap-3 md:pr-6">
+        <Refusals idea={idea} />
+      </section>
+      <section aria-label="When you overruled" className="flex min-w-0 flex-col gap-3 border-t pt-6 md:border-t-0 md:pl-6 md:pt-0">
+        <Overrules idea={idea} />
+      </section>
+    </section>
   );
 }
 
 function Refusals({ idea }: { idea: Idea }) {
   const r = idea.record;
-  const rows: { label: string; n: number; tone: "soft" | "primary" | "ink" }[] = [
-    { label: "Build", n: r.build, tone: "soft" },
+  // The verdict tags' own colours: build green, change the accent, do not build red — one outcome palette.
+  const rows: { label: string; n: number; tone: "success" | "primary" | "attention" }[] = [
+    { label: "Build", n: r.build, tone: "success" },
     { label: "Change", n: r.change, tone: "primary" },
-    { label: "Do not build", n: r.doNotBuild, tone: "ink" },
+    { label: "Do not build", n: r.doNotBuild, tone: "attention" },
   ];
   return (
     <>
@@ -815,8 +884,8 @@ function Overrules({ idea }: { idea: Idea }) {
           {shown.map((o) => (
             <li key={o.ideaId}>
               <Link href={paths.idea(o.ideaId)} className="flex min-w-0 flex-col gap-0.5 rounded-xs py-2.5 text-ink hover:text-primary-link">
-                <span className="line-clamp-2 font-semibold" title={o.title}>
-                  {o.title}
+                <span className="font-semibold" title={titleCase(o.title)}>
+                  {wordClamp(titleCase(o.title))}
                 </span>
                 <span className="text-sm text-ink-body">
                   Research said {OUTCOME[o.verdict].toLowerCase()}. {overruledOutcome(o.outcome)}

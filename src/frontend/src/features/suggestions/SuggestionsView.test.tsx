@@ -46,6 +46,12 @@ describe("SuggestionsView", () => {
     expect(within(card).getByText("Clubs track ladders on paper.")).toBeTruthy();
     expect(within(card).getByText("Acme already runs bookings for the club.")).toBeTruthy();
     expect(within(card).getByText("Member sign-in")).toBeTruthy();
+    // The card's choices come after why it is suggested in reading order, so a phone ends each card on them.
+    const why = within(card).getByText("The gap it fills");
+    const take = within(card).getByRole("button", { name: "Take this idea" });
+    expect(why.compareDocumentPosition(take) & Node.DOCUMENT_POSITION_FOLLOWING || take.closest(".order-last")).toBeTruthy();
+    // One card per row: the list is a single column, so cards of different heights leave no holes.
+    expect(screen.getByRole("list", { name: "Suggested ideas" }).className).not.toMatch(/grid-cols-[23]/);
     // Taken and set-aside ones fold away under the shared disclosure, never the browser's own triangle.
     fireEvent.click(screen.getByRole("button", { name: "Taken or set aside (1)" }));
     expect(within(screen.getByRole("list", { name: "Taken or set aside" })).getByText("Coach notes")).toBeTruthy();

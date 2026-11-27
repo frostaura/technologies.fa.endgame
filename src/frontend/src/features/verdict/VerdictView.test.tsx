@@ -1,12 +1,13 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { check } from "@/lib/guards";
 import { ideaGuard } from "@/store/guards";
 import type { Verdict } from "@/store/types";
 import { RESEARCH_VERDICT, ideaFixture } from "@/test/fixtures";
-import { ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
+import { FakeEventSource, ME, json, problem, renderWithStore, stubApi } from "@/test/harness";
 import { VerdictView } from "./VerdictView";
-import { decisionOptions, normaliseVerdict, notResearched, plainProductName, sameText, shortSummary } from "./verdictModel";
+import { decisionOptions, heroFacts, normaliseVerdict, nothingSearched, notResearched, plainProductName, sameText, shortSummary, sourceSites, titleCase, wordClamp } from "./verdictModel";
+import { traceLines } from "./traceModel";
 
 const CREDITS = { scope: "acme", balance: 5, month: { spent: 0, ai: 0, hosting: 0 }, monthsLeftAtPace: null, budgets: [], estimates: null, notCharged: { credits: 0, repairs: 0 }, overdraft: null, topUps: [] };
 const TREE = { generatedAt: "2026-11-24T10:00:00Z", viewerRole: "owner", organisation: { id: "o1", slug: "acme", name: "Acme", summary: null, spend: { monthCredits: 0 }, workers: [] }, divisions: [{ id: "d", slug: "tools", name: "Tools", spend: { monthCredits: 0 }, workers: [], projects: [] }], needsYou: [] };
@@ -156,6 +157,11 @@ describe("shortSummary", () => {
 });
 
 describe("VerdictView", () => {
+  beforeEach(() => {
+    FakeEventSource.instances = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+  });
+
   it("keeps the hero to a headline and a short summary, with the rest behind the full reasoning", async () => {
     stub(json(ideaFixture({ verdict: { ...STRUCTURED, outcome: "do-not-build", suggestedChange: null, summary: LONG_SUMMARY } })));
     renderWithStore(<VerdictView ideaId="i1" />);
@@ -300,7 +306,10 @@ describe("VerdictView", () => {
     expect(screen.getAllByRole("button", { name: "Overrule and build anyway" })).toHaveLength(1);
     expect(within(side).getByRole("heading", { name: "How this was researched" })).toBeTruthy();
     expect(within(side).queryByRole("heading", { name: "How often research says no" })).toBeNull();
-    expect(screen.getByRole("group", { name: "Research's record" })).toBeTruthy();
+    // Research's record is one card, its two halves side by side: never a short card stretched beside a long one.
+    const record = screen.getByRole("region", { name: "Research's record" });
+    expect(within(record).getByRole("region", { name: "How often research says no" })).toBeTruthy();
+    expect(within(record).getByRole("region", { name: "When you overruled" })).toBeTruthy();
   });
 
   it("over a red line says the red line once and the market once", async () => {
@@ -336,11 +345,12 @@ describe("VerdictView", () => {
     expect(within(list).getAllByRole("link")[0]?.className).toContain("truncate");
   });
 
-  it("lists every source in a row that opens, never the browser's own disclosure nor a fold inside a fold", async () => {
+  it("lists every source plainly, each site once: never the browser's own disclosure nor a fold inside a fold", async () => {
     stub(json(ideaFixture()));
     const { container } = renderWithStore(<VerdictView ideaId="i1" />);
-    const fold = await screen.findByRole("button", { name: "Every source (2)" });
-    expect(fold.getAttribute("aria-expanded")).toBe("false");
+    const sources = await screen.findByRole("region", { name: "Every source" });
+    expect(within(sources).queryAllByRole("button", { expanded: false })).toHaveLength(0);
+    expect(within(sources).getAllByRole("link").length).toBeGreaterThan(0);
     expect(container.querySelector("details")).toBeNull();
   });
 
@@ -350,7 +360,8 @@ describe("VerdictView", () => {
     const tag = await screen.findByText("Research cancelled");
     expect(tag.closest("span[class*='bg-quiet']")).toBeTruthy();
     expect(screen.queryByText("Research did not finish")).toBeNull();
-    expect(screen.queryByRole("alert")).toBeNull();
+    // The page itself raises no alert (the docked conversation beside it is not this test's concern).
+    expect(within(tag.closest("main") as HTMLElement).queryByRole("alert")).toBeNull();
   });
 
   it("asks before dropping, under the choices, with the choices still in place", async () => {
@@ -369,5 +380,82 @@ describe("VerdictView", () => {
     expect(await screen.findByText("Dropped")).toBeTruthy();
     expect(screen.getByText(/You dropped the idea on/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Drop the idea" })).toBeNull();
+  });
+});
+
+describe("a verdict reached with no web search", () => {
+  beforeEach(() => vi.stubGlobal("EventSource", FakeEventSource));
+  const UNSEARCHED = {
+    ...STRUCTURED,
+    existing: { evidence: "Two products cover most of it.", products: [{ name: "Beeper Co", what: "Pages people." }, { name: "Ringer", what: "Paid paging." }] },
+    method: { searches: 0, sources: [], confidence: "low", strands: ["existing", "gap", "demand"].map((id) => ({ id, title: id, searches: 0, sources: 0, confidence: "low" })) },
+  };
+
+  it("is known as one: no search counted, no source read", () => {
+    const v = read(UNSEARCHED);
+    expect(nothingSearched(v)).toBe(true);
+    expect(heroFacts(v)).toEqual([]);
+    expect(nothingSearched(read(STRUCTURED))).toBe(false);
+  });
+
+  it("says so once, plainly, and never counts what research knew as evidence it read", async () => {
+    stub(json(ideaFixture({ verdict: UNSEARCHED })));
+    renderWithStore(<VerdictView ideaId="i1" />);
+    const note = await screen.findByRole("note", { name: "How much was looked at" });
+    expect(note.textContent).toContain("No web search was run");
+    const main = note.closest("main") as HTMLElement;
+    const text = main.parentElement?.textContent ?? "";
+    expect(text.split("No web search was run").length - 1).toBe(1);
+    expect(text).not.toMatch(/0 searches|no sources recorded|sources read|products like it/);
+    expect(screen.queryByRole("group", { name: "What research found" })).toBeNull();
+  });
+});
+
+describe("the hero's figures", () => {
+  it("read as three plain facts: what is sold, the signs of demand, and how sure research is from how much it read", () => {
+    const v = read({ ...STRUCTURED, method: { ...STRUCTURED.method, sources: ["https://a.example.test/1", "https://b.example.test/2", "https://b.example.test/3"] } });
+    expect(heroFacts(v)).toEqual([
+      { label: "Already sold", value: "2", caption: "products like it" },
+      { label: "Demand", value: "1", caption: "signal found" },
+      { label: "Confidence", value: "Medium", caption: "from 5 sources" },
+    ]);
+  });
+});
+
+describe("the verdict's words", () => {
+  it("cuts a long title at a word's end and starts it with a capital", () => {
+    const t = "a compressor service log for the dive club: members sign in and record each service with the date it was done, the hours run and who did it.";
+    const cut = wordClamp(titleCase(t), 110);
+    expect(cut.startsWith("A compressor")).toBe(true);
+    expect(cut.endsWith("…")).toBe(true);
+    expect(cut.length).toBeLessThanOrEqual(110);
+    expect(t).toContain(cut.slice(1, -1).trimEnd());
+    expect(cut).toMatch(/\b\w+…$/);
+    expect(cut).not.toMatch(/ the ho…$/);
+    expect(wordClamp("Short.", 110)).toBe("Short.");
+  });
+
+  it("names each source's site once, with how many pages were read there", () => {
+    expect(sourceSites(["https://www.a.example/1", "https://a.example/2", "https://b.example/x", "https://a.example/2"])).toEqual([
+      { site: "a.example", url: "https://www.a.example/1", pages: 2 },
+      { site: "b.example", url: "https://b.example/x", pages: 1 },
+    ]);
+  });
+});
+
+describe("research's steps on the idea page", () => {
+  const group = (key: string, status: "working" | "done" | "stopped") => ({ kind: "group" as const, key, agent: key, seq: 1, at: "", title: key, outcome: null, status, credits: 0, searches: 0, items: [] });
+  const step = { kind: "step" as const, key: "s", seq: 1, at: "", tone: "quiet" as const, icon: "research" as const, title: "Work started", detail: null, credits: null, raw: null };
+
+  it("shows each part of the research once, and where research that stopped got to", () => {
+    expect(traceLines([step, group("existing", "done"), group("gap", "working")], false).map((l) => [l.title, l.state])).toEqual([
+      ["existing", "done"],
+      ["gap", "working"],
+    ]);
+    expect(traceLines([group("existing", "done"), group("gap", "working")], true).map((l) => l.state)).toEqual(["done", "stopped"]);
+    expect(traceLines([group("existing", "done")], true).map((l) => [l.title, l.state])).toEqual([
+      ["existing", "done"],
+      ["Writing the verdict", "stopped"],
+    ]);
   });
 });
