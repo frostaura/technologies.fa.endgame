@@ -132,11 +132,16 @@ function Proposals({ scope, tree }: { scope: string; tree: Tree | undefined }) {
   );
 }
 
-/** The columns of a list of proposals: who and where takes the room, then its cost and its state. */
+/**
+ * The columns of a list of proposals, the same in both tables so they read alike: who and why takes the room,
+ * then when it was raised, what it would cost a month, and its state. A proposal still waiting is weighed
+ * against the budget in its state column (the section already says it waits), so the state says whether it fits.
+ */
 const HIRE_COLUMNS: Column[] = [
   { key: "hire", header: "Proposal", kind: "grow" },
-  { key: "cost", header: "What it costs", kind: "text" },
-  { key: "state", header: "State", kind: "status" },
+  { key: "raised", header: "Raised", kind: "date" },
+  { key: "cost", header: "Credits a month", kind: "figure", track: "minmax(7.5rem, 0.6fr)" },
+  { key: "state", header: "State", kind: "status", track: "minmax(9rem, 1fr)" },
 ];
 
 /**
@@ -160,26 +165,25 @@ function HireRows({ label, hires, tree }: { label: string; hires: Hire[]; tree: 
 
 function HireRow({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
   const waiting = hire.status === "proposed" && !hire.withdrawn;
-  const badge = waiting ? { label: "Waiting for you", tone: "warn" as const } : hireBadge(hire);
+  // Waiting: whether it fits the budget (real-stack 47 — the section already says it waits). Decided: what was decided.
+  const badge = waiting ? (hire.withinBudget ? { label: "Fits the budget", tone: "good" as const } : { label: "More than the budget has room for", tone: "bad" as const }) : hireBadge(hire);
   return (
     // The whole row opens the proposal: its title's link covers the row.
-    <TableRow className="relative transition-colors hover:bg-ground">
+    <TableRow className="relative transition-colors hover:bg-ground" data-hire={hire.id}>
       <Cell col="hire" primary>
         <span className="flex min-w-0 flex-col gap-0.5">
           <Link href={paths.hire(hire.id)} className="font-semibold text-ink after:absolute after:inset-0">
             {nameWithRole(hire.name, hire.role)} for {scopeName(tree, hire.scope)}
           </Link>
-          <span className="text-sm text-ink-muted">
-            {TRIGGER[hire.trigger]} · <span className="whitespace-nowrap">{formatDate(hire.createdAt)}</span>
-          </span>
+          <span className="text-sm text-ink-muted">{TRIGGER[hire.trigger]}</span>
           {hire.withdrawn && hire.decision?.note && <span className="text-sm text-ink-body">{hire.decision.note}</span>}
         </span>
       </Cell>
+      <Cell col="raised">
+        <span className="whitespace-nowrap text-sm text-ink-body">{formatDate(hire.createdAt)}</span>
+      </Cell>
       <Cell col="cost">
-        <span className="flex flex-col gap-0.5 text-sm">
-          <span className="text-ink-body">About {formatCredits(expectedMonthly(hire))} a month</span>
-          {!hire.withinBudget && waiting && <span className="text-attention-text">More than the budget has room for</span>}
-        </span>
+        <span className="text-sm tabular-nums text-ink-body">{formatNumber(expectedMonthly(hire))}</span>
       </Cell>
       <Cell col="state">
         <Badge tone={badge.tone}>{badge.label}</Badge>
@@ -210,7 +214,7 @@ function RecurringRoles({ scope, tree, isAdmin }: { scope: string; tree: Tree | 
             No contractor role recurs here yet.
           </p>
         ) : (
-          <ul aria-label="Recurring roles" className="flex flex-col gap-2.5">
+          <ul aria-label="Recurring roles" className="flex flex-col divide-y border-t">
             {view.data.map((r) => (
               <RecurringRow key={`${r.scope}-${r.role}`} role={r} tree={tree} isAdmin={isAdmin} waiting={waitingProposal(hires.data, r)} />
             ))}
@@ -250,7 +254,7 @@ function RecurringRow({ role, tree, isAdmin, waiting }: { role: RecurringRole; t
   };
 
   return (
-    <li className="flex flex-col gap-1.5 rounded-xs border bg-surface px-4 py-3.5">
+    <li className="flex flex-col gap-1.5 py-3.5 last:pb-0">
       <span className="font-semibold">{role.role}</span>
       <span className="text-ink-body">
         Briefed {plural(role.contractors, "time")} in {plural(role.windowDays, "day")} at {scopeName(tree, role.scope)}, costing {formatCredits(role.costCredits)}.
@@ -395,10 +399,10 @@ function LetGo({ scope, tree }: { scope: string; tree: Tree | undefined }) {
             No one has been let go here.
           </p>
         ) : (
-          <ul aria-label="People let go" className="flex flex-col gap-2">
+          <ul aria-label="People let go" className="flex flex-col divide-y border-t">
             {released.map((e) => (
               <li key={e.id}>
-                <Link href={paths.employee(e.id)} className="flex flex-col gap-0.5 rounded-xs border border-border-strong bg-surface px-4 py-3 text-ink transition-colors hover:bg-ground">
+                <Link href={paths.employee(e.id)} className="-mx-2 flex flex-col gap-0.5 rounded-xs px-2 py-3 text-ink transition-colors hover:bg-ground">
                   <span className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-semibold">{e.name}</span>
                     <Badge tone={EMPLOYEE_STATUS.released.tone}>{EMPLOYEE_STATUS.released.label}</Badge>
