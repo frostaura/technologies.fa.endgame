@@ -121,12 +121,12 @@
             },
             {
               "wait": {
-                "text": "refused by your rules"
+                "text": "You declined: change part of the app"
               }
             }
           ],
           "highlight": {
-            "text": "refused by your rules",
+            "text": "You declined: change part of the app",
             "note": "Declined: only that step is skipped, and the work goes on without it."
           }
         }
