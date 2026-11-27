@@ -315,7 +315,7 @@ test.describe("app and credits", () => {
     await expect(page.getByRole("region", { name: "Today" }).getByText("Not measured yet")).toHaveCount(2);
     await expect(page.getByText(/Not enough history yet to say what it costs a month/)).toHaveCount(2);
     await page.goto("/");
-    await expect(page.getByRole("article", { name: "Recipes" }).getByText("Not measured yet")).toBeVisible();
+    await expect(page.getByRole("article", { name: "Recipes" }).getByText("Not measured", { exact: true })).toBeVisible();
   });
 
   test("making an app public waits for a person to confirm it", async ({ page }) => {

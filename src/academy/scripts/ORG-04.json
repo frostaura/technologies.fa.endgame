@@ -18,7 +18,7 @@
       "kind": "demo",
       "highlight": {
         "selector": "section[aria-label='Organisation']",
-        "note": "The band totals the whole organisation: its summary, its workers, four figures and New idea."
+        "note": "The band totals the whole organisation: its five figures, its workers and New idea."
       }
     },
     {

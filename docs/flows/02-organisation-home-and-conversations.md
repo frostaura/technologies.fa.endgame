@@ -103,12 +103,11 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
   2. The band shows:
      - the eyebrow "Organisation";
      - the organisation's name as a large button (selects the whole organisation, ORG-07);
-     - a summary line built by the server, "{n} divisions · {n} projects · {n} apps · {n} employees";
      - chips for any employee placed at organisation level (for example the standing Security reviewer), each "{Name} · {Role}" and "— {activity}" when it is working;
-     - four figures: "{n} division(s)", "{n} app(s)", "{n} employee(s)", "{n} credits this month";
+     - five figures across the band, each said once (the server's summary line of the same counts is not shown again): "{n} division(s)", "{n} project(s)", "{n} app(s)", "{n} employee(s)", "{n} credits this month";
      - a white "New idea" button, which goes to `/start`.
   3. Every 15 seconds the tree is fetched again while the tab is in focus, so status, spend and who is working stay live.
-- **You know it worked when:** the band shows your organisation's name and its four figures.
+- **You know it worked when:** the band shows your organisation's name and its five figures.
 - **Variations and refusals:**
   - The chip itself stays neutral; only its dot changes: green with room to spend, amber below zero, red only when nothing is left to spend (overdraft included), grey for an organisation FrostAura has never topped up. The read-out adds ", below zero", ", at its limit" or ", never topped up".
   - "Credits unavailable" appears only when the credits read fails. Someone with no role at the organisation itself has the balance read at their own level (as on Credits), so the chip shows the organisation's balance for them too.
@@ -131,7 +130,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 
      | Kind | Badge | Headline | Line | Goes to |
      | --- | --- | --- | --- | --- |
-     | Verdict | "Verdict waiting" | "Research says build \| change \| do not build “{title}”" | first meaningful sentence of the verdict summary, or else "Read it, then decide." (for do-not-build, "Read it, or overrule.") | `/ideas/{id}` |
+     | Verdict | "Verdict waiting" | "Research says build \| change \| do not build “{title}”" — a title over 60 characters is quoted up to its first clause break (colon, comma, full stop, dash), or else cut at a word with "…" | first meaningful sentence of the verdict summary, or else "Read it, then decide." (for do-not-build, "Read it, or overrule.") | `/ideas/{id}` |
      | Verdict refused over a red line | "Refused" | "Research refused this idea: it crosses a red line" | "“{title}” — drop it, or change it." (nothing else can be decided: VERD-06) | `/ideas/{id}` |
      | Approval | "Approval needed" | the approval's title, for example "Start researching an idea: …?" | the detail, or "It waits until you answer." | `/runs/{runId}` |
      | Hire | "Hire proposed" | "Hire {Name} as {Role}?" | "About {credits} a month. {reason}" | `/hires/{id}` |
@@ -206,10 +205,10 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Starts at:** `/`, the "The organisation" tab.
 - **Needs:** at least one division.
 - **Level:** Foundation · **Learn first:** ORG-04 · **What you learn:** a division groups projects, and its spend is the sum beneath it.
-- **Steps:** the chart is a masonry of columns — as many as its width holds, up to four — and each division stacks under whichever column is shortest, so a short division leaves no hole. Each division shows:
+- **Steps:** the chart is a masonry of columns — as many as its width holds, up to four — and each division stacks under whichever column is shortest, so a short division leaves no hole. Once every division is drawn, the chart keeps the layout whose columns end most nearly level: one column fewer, or the tallest division placed first, when that closes a hole under a short one (three divisions in three columns would leave one ending far above the others). Each division shows:
   - its letter in an ink badge (one look for every division);
-  - "Division" and its name; a long name wraps rather than being cut;
-  - "· {credits}", this month's spend summed beneath it, beside "Division", and "Manage" (TREE-13);
+  - "Division" and its name; a long name wraps to at most two lines, the whole name in its tooltip;
+  - "· {credits}", this month's spend summed beneath it, beside "Division", and "Manage" (TREE-13) — on a phone "Manage" is its mark alone (read out as "Manage {division}"), so the name keeps the row;
   - its own employees as chips;
   - a wire down to its projects: each project (and the row of the division's own people) hangs off it with the same node, and the wire ends at the last project. A lone division takes the full width, with its projects side by side.
 
@@ -231,7 +230,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Steps:**
   1. The card shows its name (a selection button) and "Manage".
   2. A stage chip appears unless the project is live with apps. The stages the server sends are "Researching", "Reviewing", "Building", "Planning", "Live" and "Paused".
-  3. Under its name the card shows its stage chip and "{credits} this month" (by the one number rule: "0.05 credits this month", "<0.01 credits this month" for under a hundredth, "1 credit this month" only for exactly 1), then an optional note: "Waiting for your approval.", "Work here is paused.", "The last piece of work failed." or "Archived.". A live project with apps has no chip at all. A project that is one app of the same name, with the same spend, says its name and spend once: the app's row carries its chips, **"Open the app"** and its two figures. An app with no version yet (never built, or its build stopped before anything was published) has nothing to open there: the row says a muted "No version yet" in place of "Open the app".
+  3. Under its name the card shows its stage chip and "{credits} this month" (by the one number rule: "0.05 credits this month", "<0.01 credits this month" for under a hundredth, "1 credit this month" only for exactly 1), then an optional note: "Waiting for your approval.", "Work here is paused.", "The last piece of work failed." or "Archived.". A live project with apps has no chip at all. A project that is one app of the same name, with the same spend, says its name and spend once: the app's row carries its chips, **"Open the app"** (always at its top right, the chips flowing beside and under it) and its two figures. An app with no version yet (never built, or its build stopped before anything was published) has nothing to open there: the row says a muted "No version yet" in place of "Open the app".
   4. If work is under way: "{stage}, step {x} of {y}" — {x} the step under way, counted from 1 (`progress.step`) — (just "{stage}" until a step of the plan has begun: never "step 0 of {y}"), then "{spent} of an estimated {estimate}" (or "{spent} so far" when there is no estimate, or an estimate of 0), a moving progress bar once there is a plan, filled by the finished steps (`progress.done`), and the link "Watch the work", which goes to `/runs/{id}`.
   5. Below that: its apps (ORG-10) and its people (ORG-11).
 - **You know it worked when:** "Watch the work" opens the live run.
@@ -253,10 +252,10 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
      - a health chip: "Healthy", "Struggling", "Down" or "Health unknown";
      - a running chip: "Always on", "Awake", "Asleep", "Waking" or "Paused";
      - an app that was never built (a draft, or its first build under way) shows the single chip "Not built yet" in place of these; one whose build stopped before anything was published (`notBuilt`) shows "Not built", with the control plane's line beneath it ("Not built — the build was cancelled."), and its project's stage reads "Not built" with the same line;
-     - an app paused behind Edge's holding page (health `paused`) shows "Paused" in place of its health, with the reason beneath it ("Paused: a monthly budget above it is spent. …");
+     - an app paused behind Edge's holding page (health `paused`) shows "Paused" in place of its health, with the reason beneath it ("Paused: a monthly budget above it is spent. …"); when its project already gives the same reason, it is said once, on the project's card, in the fuller of the two wordings (likewise "Not built — …");
      - an access chip: "Public", "Shared with {n}", "Shared" or "Private";
-     - "{n} visits today" (or "{time ago} last visit", or "Not measured yet" when nothing has been measured);
-     - "{n} credits this month" — written by the one precision rule (ARCH-011): whole from 10, up to two decimals below, "<0.01" for an amount under a hundredth.
+     - "Visits today" {n} (or "Last visit" {time ago}, or "—" captioned "Not measured" when nothing has been measured);
+     - "Credits" {n}, captioned "This month" — written by the one precision rule (ARCH-011): whole from 10, up to two decimals below, "<0.01" for an amount under a hundredth.
   2. Selecting the name opens `/apps/{id}` (APP-01).
 - **You know it worked when:** the app page opens.
 - **Variations and refusals:** an app paused by overdraft or an exhausted budget shows "Paused" and "Health unknown". An archived app shows the single chip "Archived" (TREE-08).
@@ -320,7 +319,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Needs:** Owner.
 - **Level:** Core · **Learn first:** TREE-13 · **What you learn:** the organisation's name can change; its address (and every app's) does not.
 - **Steps:**
-  1. "Manage" opens with the organisation chosen. Under **"Its name"**, the field **"Name"** holds the current name, with the hint "Its address stays {slug}: an address never changes once it is made."
+  1. "Manage" opens with the organisation chosen. Under **"Its name"**, the field **"Name"** holds the current name, **"Save the name"** at its end on the same line (under it where the two do not fit), with the hint "Its address stays {slug}: an address never changes once it is made."
   2. Type the new name and press **"Save the name"**: "It is called {name} now."
   3. The band, the breadcrumb and the header follow the new name.
 - **You know it worked when:** the organisation band shows the new name.
@@ -645,11 +644,11 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Core · **Learn first:** ORG-06, ORG-07 · **What you learn:** everything about one level is managed from the page that takes it as its level.
 - **Steps:**
   1. On the chart, a division's header has "Manage" (read out as "Manage {division}").
-  2. It opens "Manage {organisation}". The outline "Every part of the organisation" lists the organisation, its divisions, projects and apps; archived ones are marked "Archived".
+  2. It opens "Manage {organisation}". The outline "Every part of the organisation" lists the organisation, its divisions, projects and apps, each level indented under the one above on a guide line; an app's row says "App" (an app usually shares its project's name); archived ones are marked "Archived". With a part below the organisation chosen, the trail reads "{organisation} / Manage / {part}", "Manage" leading back to the outline.
   3. The panel for the chosen part shows its level and parent ("Division in {organisation}"), its name, "Its address: {path}", and the badge "Active" or "Archived".
   4. "Its name" (TREE-06), and "What is in it", with **"Add a {level}"** (TREE-02 to TREE-04).
   5. "Archive or delete" (TREE-07 to TREE-09).
-  6. "What this is" (TREE-11, TREE-12): in the same card, beside the rest on a wide screen and under it on a narrower one. The page is two panes — the outline as wide as a side panel, and the part chosen filling the rest — from 1024 wide up.
+  6. "What this is" (TREE-11, TREE-12): in the same card, beside the rest on a wide screen and under it on a narrower one. The page is two panes — the outline (as wide as a side panel from 1024, narrower on a portrait tablet), and the part chosen filling the rest — from 768 wide up.
   7. Autonomy, hiring, people and secrets stay on their own screens, from the shortcut row (ORG-06); budgets on `/credits`.
 - **You know it worked when:** the panel shows the part chosen.
 - **Variations and refusals:** each control is shown only to the role that may use it; anyone else reads who may. Loading draws skeletons; a failed read says "The organisation could not be loaded" with **"Try again"**; with no organisation: "There is no organisation to manage yet".

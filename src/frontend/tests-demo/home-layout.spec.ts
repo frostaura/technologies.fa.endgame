@@ -68,8 +68,9 @@ for (const [width, height] of [
       await noSideways(page);
       const chart = page.getByRole("region", { name: "Organisation chart" });
       await expect(chart).toBeVisible();
-      const tops = await chart.locator("[data-chart-column] > div:first-child").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
-      expect(new Set(tops).size, `column tops ${tops.join(", ")}`).toBe(1);
+      // The columns settle once every division is measured (and a live build may grow one): wait for them to start level.
+      const tops = () => chart.locator("[data-chart-column] > div:first-child").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+      await expect.poll(async () => new Set(await tops()).size, { message: "column tops differ" }).toBe(1);
       // Masonry: when a column's last division was placed, that column was the shortest, so it starts no lower than any other column ends.
       const columns = await chart.locator("[data-chart-column]").evaluateAll((cols) => cols.map((c) => [...c.children].map((d) => ({ top: d.getBoundingClientRect().top, bottom: d.getBoundingClientRect().bottom }))));
       for (const [i, col] of columns.entries()) {
@@ -127,6 +128,62 @@ for (const [width, height] of [
       }
     });
 
+    test("the chart's columns end nearly level: no column ends far above the rest", async ({ page }) => {
+      for (const scenario of ["quiet", "messy-tree", "budget-spent"]) {
+        await open(page, scenario, "/");
+        const feet = async () =>
+          page.locator("section[aria-label='Organisation chart'] [data-chart-column]").evaluateAll((cols) => cols.map((c) => Math.round(c.getBoundingClientRect().bottom)));
+        await expect
+          .poll(async () => {
+            const f = await feet();
+            return f.length < 2 ? 0 : Math.max(...f) - f.reduce((a, b) => a + b, 0) / f.length;
+          }, { message: `${scenario}: a column ends far above the others` })
+          .toBeLessThanOrEqual(360);
+      }
+    });
+
+    test("an app tile's figures sit level, nothing in it is cut, and its way in keeps the top right", async ({ page }) => {
+      await open(page, "quiet", "/");
+      const r = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>("ul[aria-label^='Apps in'] > li")].map((tile) => {
+          const values = [...tile.querySelectorAll<HTMLElement>("[data-stat-value]")].map((v) => Math.round(v.getBoundingClientRect().top));
+          const cut = [...tile.querySelectorAll<HTMLElement>("*")].filter((el) => el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== "visible" && (el.textContent ?? "").trim()).map((el) => el.textContent);
+          const open = tile.querySelector<HTMLElement>("[data-app-open]")?.getBoundingClientRect();
+          const box = tile.getBoundingClientRect();
+          return { values, cut, right: open ? Math.round(box.right - open.right) : null, top: open ? Math.round(open.top - box.top) : null };
+        }),
+      );
+      expect(r.length).toBeGreaterThan(0);
+      for (const t of r) {
+        expect(new Set(t.values).size, `figures not level: ${t.values.join(", ")}`).toBe(1);
+        expect(t.cut, "a word in an app tile is cut").toEqual([]);
+      }
+      const placed = r.filter((t) => t.right !== null);
+      expect(new Set(placed.map((t) => t.top)).size, "Open the app moves within its tile").toBe(1);
+      expect(new Set(placed.map((t) => t.right)).size).toBe(1);
+    });
+
+    test("the hero says each count once, its figures level across its width", async ({ page }) => {
+      await open(page, "messy-tree", "/");
+      const hero = page.getByRole("region", { name: "Organisation", exact: true });
+      await expect(hero).not.toContainText(/\d+ projects? ·/);
+      const tops = await hero.locator("[data-org-figures] [data-stat-value]").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+      expect(tops).toHaveLength(5);
+      expect(new Set(tops).size, `figure values ${tops.join(", ")}`).toBe(1);
+      const used = await hero.evaluate((h) => {
+        const grid = h.querySelector("[data-org-figures]")!.getBoundingClientRect();
+        return grid.width / h.getBoundingClientRect().width;
+      });
+      expect(used, "the figures huddle at the left of the hero").toBeGreaterThan(0.8);
+    });
+
+    test("a paused app's reason is said once", async ({ page }) => {
+      await open(page, "budget-spent", "/");
+      const card = page.getByRole("article", { name: "Stock Counter" });
+      await expect(card).toBeVisible();
+      expect(((await card.textContent()) ?? "").match(/Paused: /g)?.length ?? 0).toBe(1);
+    });
+
     test("Manage is two panes, the outline's names whole", async ({ page }) => {
       await open(page, "default", "/tree?scope=northwind%2Ftechnologies");
       await noSideways(page);
@@ -147,8 +204,35 @@ for (const [width, height] of [
   });
 }
 
+test.describe("Manage on a portrait tablet", () => {
+  test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true });
+
+  test("is two panes, the part chosen beside the outline (console-small 35)", async ({ page }) => {
+    await open(page, "default", "/tree?scope=northwind%2Ftechnologies");
+    await noSideways(page);
+    const outline = await page.getByRole("navigation", { name: "Every part of the organisation" }).boundingBox();
+    const part = await page.getByRole("region", { name: "Division: Technologies" }).boundingBox();
+    expect((part?.x ?? 0) - ((outline?.x ?? 0) + (outline?.width ?? 0))).toBeGreaterThan(0);
+    expect(Math.abs((part?.y ?? 0) - (outline?.y ?? 0))).toBeLessThanOrEqual(2);
+  });
+});
+
 test.describe("home on a phone", () => {
   test.use({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
+
+  test("a long division name is two lines at most, and never broken inside a word (console-small 12)", async ({ page }) => {
+    for (const width of [375, 320]) {
+      await page.setViewportSize({ width, height: 812 });
+      await open(page, "messy-tree", "/");
+      const names = await page.locator("[data-division-name]").evaluateAll((els) =>
+        els.map((e) => ({ text: e.textContent ?? "", lines: Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight)), widest: Math.max(...(e.textContent ?? "").split(/\s+/).map((w) => { const r = document.createRange(); const span = document.createElement("span"); span.textContent = w; span.style.font = getComputedStyle(e).font; span.style.whiteSpace = "nowrap"; document.body.appendChild(span); const width = span.getBoundingClientRect().width; span.remove(); r.detach(); return width; })), box: e.getBoundingClientRect().width })),
+      );
+      for (const n of names.filter((x) => x.box > 0)) {
+        expect(n.lines, `${n.text} at ${width}`).toBeLessThanOrEqual(2);
+        expect(n.widest, `${n.text} breaks inside a word at ${width}`).toBeLessThanOrEqual(n.box + 1);
+      }
+    }
+  });
 
   test("the More sheet's pages are not drawn again at the top level; a division gets its own folded row", async ({ page }) => {
     await open(page, "default", "/");

@@ -5,7 +5,7 @@ import { ME, json, renderWithStore, stubApi } from "@/test/harness";
 import { AddDivision, OrgChart } from "./OrgChart";
 import { tidyFigures } from "./needsYouModel";
 import { nodeName } from "./ontologyModel";
-import { activityLine, appChips, appNote, progressLine, stageChip, workerActivity, workerLabel } from "./treeModel";
+import { activityLine, appChips, appNote, progressLine, saysSame, stageChip, workerActivity, workerLabel } from "./treeModel";
 
 const app = { id: "a1", slug: "web", name: "Ledger web", health: "healthy", running: "awake", access: "private", sharedWith: 0, visitsToday: 1, lastVisitAt: null, spend: { monthCredits: 1 }, workers: [], status: "archived" };
 const TREE = {
@@ -97,7 +97,10 @@ describe("a project card's work under way (R2-9)", () => {
     const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
     expect(container.textContent).not.toMatch(/step 0 of|0 of an estimated 0|less than 0\.01/);
     expect(container.textContent).toContain("<0.01 credits this month");
-    expect(screen.getByText("Credits this month").nextSibling?.textContent).toBe("<0.01");
+    // One short label per figure, the period as its caption: the two values sit level in a narrow tile (console-desktop 58).
+    const credits = screen.getByText("Credits");
+    expect(credits.nextSibling?.textContent).toBe("<0.01");
+    expect(credits.parentElement?.textContent).toContain("This month");
   });
 
   it("fills the bar with the finished steps and names the one under way", () => {
@@ -126,7 +129,23 @@ describe("the chart after the real-stack walk", () => {
     const tree = { ...TREE, divisions: [{ ...tools, projects: [project] }] } as unknown as Tree;
     const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
     expect(container.textContent).toContain("Not built — the build was cancelled.");
+    // Said once, by the project: the app's tile does not repeat it (console-desktop 59).
+    expect(container.textContent?.split("Not built — the build was cancelled.").length).toBe(2);
     expect(container.textContent).not.toContain("Planning");
+  });
+
+  it("says a budget pause once, at the project, in the fuller of the two wordings (console-desktop 59)", () => {
+    stubApi({ "GET /api/me": json(ME) });
+    const tools = TREE.divisions[0] as Tree["divisions"][number];
+    const paused = { reason: "budget_exhausted", note: "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it." };
+    const project = { ...tools.projects[0], name: "Stock Counter", stage: "paused", note: "Paused: its monthly budget is spent.", apps: [{ ...app, name: "Stock Counter", health: "paused", running: "paused", paused }] };
+    const tree = { ...TREE, divisions: [{ ...tools, projects: [project] }] } as unknown as Tree;
+    const { container } = renderWithStore(<OrgChart tree={tree} selection={null} onSelect={() => undefined} />);
+    const text = container.textContent ?? "";
+    expect(text.split("Paused: a monthly budget above it is spent.").length).toBe(2);
+    expect(text).not.toContain("Paused: its monthly budget is spent.");
+    expect(saysSame("Paused: its monthly budget is spent.", paused.note)).toBe(true);
+    expect(saysSame("Paused: its monthly budget is spent.", "Not built — the build was cancelled.")).toBe(false);
   });
 
   it("shows a project whose build attached at placement with its progress and Watch the work (D80)", () => {

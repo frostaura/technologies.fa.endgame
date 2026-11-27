@@ -57,7 +57,7 @@
           "kind": "demo",
           "highlight": {
             "selector": "ul[aria-label='Apps in Tutor Match'] li",
-            "note": "Tutor Match says “Not measured yet”, never zero."
+            "note": "Tutor Match says “—”, “Not measured”, never zero."
           }
         }
       ]

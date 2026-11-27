@@ -55,6 +55,17 @@ export function appNote(app: Partial<Pick<TreeApp, "paused" | "notBuilt">>): str
   return app.notBuilt?.note ?? app.paused?.note ?? null;
 }
 
+/**
+ * Whether two notes give the same reason: both open with the same state before a colon ("Paused: its monthly budget is
+ * spent." and "Paused: a monthly budget above it is spent. …"), or one is the other.
+ */
+export function saysSame(a: string | null, b: string | null): boolean {
+  if (!a || !b) return false;
+  const head = (s: string) => /^([^:.]{2,30}):/.exec(s.trim())?.[1]?.trim().toLowerCase() ?? null;
+  const x = head(a);
+  return a.trim() === b.trim() || (x !== null && x === head(b));
+}
+
 export function runningChip(running: AppRunning): Chip {
   switch (running) {
     case "always-on":
@@ -211,6 +222,7 @@ export function activeWork(tree: Tree): { id: string; name: string; activity: st
 export function orgFigures(counts: OrgCounts, monthCredits: number): { value: string; label: string }[] {
   return [
     { value: formatNumber(counts.divisions), label: counts.divisions === 1 ? "division" : "divisions" },
+    { value: formatNumber(counts.projects), label: counts.projects === 1 ? "project" : "projects" },
     { value: formatNumber(counts.apps), label: counts.apps === 1 ? "app" : "apps" },
     { value: formatNumber(counts.employees), label: counts.employees === 1 ? "employee" : "employees" },
     { value: formatNumber(monthCredits), label: "credits this month" },

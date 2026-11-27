@@ -158,7 +158,7 @@ function Organisation({
   const isRootSelected = selection?.scope === home.scope && selection.kind === home.kind;
   return (
     <>
-      {/* The hero: white, the organisation's name as the title, its four figures under the name, its people as chips. */}
+      {/* The hero: white, the organisation's name as the title, its five figures across it, its people as chips. */}
       <section aria-label="Organisation" className={cn("flex flex-col gap-5 rounded-lg border bg-surface px-6 py-6 shadow-card max-sm:gap-4 max-sm:px-5 max-sm:py-5 sm:px-8", RISE)}>
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 max-w-prose flex-col gap-1.5">
@@ -168,16 +168,16 @@ function Organisation({
                 {org.name}
               </button>
             </h1>
-            {/* A phone has the four figures just below: the summary line would say them twice. */}
-            {org.summary && <span className="text-ink-body max-sm:hidden">{org.summary}</span>}
+            {/* The control plane's summary line is the same counts as the figures below: they say it once (real-stack 5). */}
           </div>
           <Link href={paths.start()} className={cn(buttonVariants({ size: "lg" }), "shrink-0")}>
             New idea
           </Link>
         </div>
-        <div className="grid grid-cols-4 gap-x-8 gap-y-3 self-start max-sm:w-full max-sm:grid-cols-2 max-sm:gap-x-4">
+        {/* Five figures across the hero's whole width; a phone sets them two across, the month's credits on a row of its own. */}
+        <div data-org-figures="" className="grid w-full grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-5 sm:gap-x-8">
           {orgFigures(counts, org.spend.monthCredits).map((f) => (
-            <Stat key={f.label} plain label={f.label} value={f.value} className="flex-col-reverse" />
+            <Stat key={f.label} plain label={f.label} value={f.value} className="flex-col-reverse justify-end max-sm:last:col-span-2" />
           ))}
         </div>
         {org.workers.length > 0 && (
