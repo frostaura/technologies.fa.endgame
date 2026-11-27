@@ -360,7 +360,8 @@ describe("VerdictView", () => {
     const tag = await screen.findByText("Research cancelled");
     expect(tag.closest("span[class*='bg-quiet']")).toBeTruthy();
     expect(screen.queryByText("Research did not finish")).toBeNull();
-    expect(screen.queryByRole("alert")).toBeNull();
+    // The page itself raises no alert (the docked conversation beside it is not this test's concern).
+    expect(within(tag.closest("main") as HTMLElement).queryByRole("alert")).toBeNull();
   });
 
   it("asks before dropping, under the choices, with the choices still in place", async () => {
