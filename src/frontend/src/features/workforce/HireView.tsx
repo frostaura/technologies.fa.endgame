@@ -9,6 +9,7 @@ import { ConfirmCard } from "@/components/ui/confirm";
 import { Stat } from "@/components/ui/stat";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LINK } from "@/components/ui/layout";
 import { formatCredits, formatDate, formatNumber } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
@@ -159,7 +160,7 @@ function Decide({ hire, onEdit, onError }: { hire: Hire; onEdit: () => void; onE
         <Button variant="secondary" onClick={onEdit} disabled={state.isLoading}>
           Edit the proposal
         </Button>
-        <Button variant="quiet" onClick={() => setConfirming("decline")} disabled={state.isLoading} aria-expanded={confirming === "decline"}>
+        <Button variant="danger-outline" onClick={() => setConfirming("decline")} disabled={state.isLoading} aria-expanded={confirming === "decline"}>
           Decline
         </Button>
       </div>
@@ -206,7 +207,7 @@ function Decided({ hire }: { hire: Hire }) {
         </>
       )}
       {hire.employeeId && (
-        <Link href={paths.employee(hire.employeeId)} className="self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+        <Link href={paths.employee(hire.employeeId)} className={cn(LINK, "self-start")}>
           See {hire.name}’s record
         </Link>
       )}
@@ -280,7 +281,7 @@ function EditHire({ hire, tree, onDone, onError }: { hire: Hire; tree: Tree | un
         <Button type="submit" disabled={state.isLoading}>
           Save the proposal
         </Button>
-        <Button variant="quiet" onClick={onDone}>
+        <Button variant="secondary" onClick={onDone}>
           Cancel
         </Button>
       </span>
@@ -294,16 +295,26 @@ function EditHire({ hire, tree, onDone, onError }: { hire: Hire; tree: Tree | un
 }
 
 function CostAside({ hire }: { hire: Hire }) {
+  const capped = expectedMonthly(hire) < hire.expectedMonthlyCredits;
+  // Only a proposal still waiting is weighed against the budget: a withdrawn, declined or accepted one carries no budget warning.
+  const open = hire.status === "proposed" && !hire.withdrawn;
   return (
     <>
       <SideCard label="What it costs" className={RISE}>
-        <Stat plain size="lg" label="What it costs" value={formatNumber(expectedMonthly(hire))} caption={expectedMonthly(hire) < hire.expectedMonthlyCredits ? "credits a month at most: its own budget caps it" : "credits a month, expected"} />
-        <div className="flex flex-col gap-1 border-t pt-3">
-          <Badge tone={hire.withinBudget ? "good" : "bad"} className="self-start">
-            {hire.withinBudget ? "Fits the budget" : "More than the budget has room for"}
-          </Badge>
-          <span className="text-ink-body">{formatCredits(hire.headroomCredits)} of room left this month where it would work.</span>
-        </div>
+        <Stat plain size="lg" label="What it costs" value={formatNumber(expectedMonthly(hire))} caption={capped ? "credits a month, at most" : "credits a month, expected"} />
+        {(open || capped) && (
+          <div className="flex flex-col gap-1 border-t pt-3">
+            {capped && <span className="text-ink-body">Its own budget caps it.</span>}
+            {open && (
+              <>
+                <Badge tone={hire.withinBudget ? "good" : "bad"} className="self-start">
+                  {hire.withinBudget ? "Fits the budget" : "More than the budget has room for"}
+                </Badge>
+                <span className="text-ink-body">{formatCredits(hire.headroomCredits)} of room left this month where it would work.</span>
+              </>
+            )}
+          </div>
+        )}
       </SideCard>
       <SideCard>
         <p className="text-ink-body">An employee with nothing to do is flagged and let go, so an idle hire is never paid for. Its memory is kept, so a rehire is not a cold start.</p>

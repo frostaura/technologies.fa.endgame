@@ -37,7 +37,8 @@ describe("HireView", () => {
     stub(json(capped));
     renderWithStore(<HireView hireId="h1" />);
     expect(await screen.findByText("800")).toBeTruthy();
-    expect(screen.getByText("credits a month at most: its own budget caps it")).toBeTruthy();
+    expect(screen.getByText("credits a month, at most")).toBeTruthy();
+    expect(screen.getByText("Its own budget caps it.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Hire Lin" }));
     expect(screen.getByText("Hire Lin at about 800 credits a month?")).toBeTruthy();
     expect(document.body.textContent).not.toContain("1,500");
@@ -62,6 +63,9 @@ describe("HireView", () => {
     expect(screen.getByText("The build it was for was cancelled before anything was built.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Hire / })).toBeNull();
     expect(screen.queryByText("This hire was declined")).toBeNull();
+    // A withdrawn hire is weighed against no budget: no red warning (ARCH-011).
+    expect(screen.queryByText("More than the budget has room for")).toBeNull();
+    expect(screen.queryByText("Fits the budget")).toBeNull();
   });
 
   it("accepts after confirming, with a note", async () => {
