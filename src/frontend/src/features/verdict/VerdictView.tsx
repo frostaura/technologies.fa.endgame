@@ -1,14 +1,18 @@
-import { useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { ConfirmCard } from "@/components/ui/confirm";
 import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Disclosure, Fold } from "@/components/Fold";
+import { Fold } from "@/components/Fold";
 import { Icon } from "@/components/Icon";
 import { Link } from "@/components/Link";
 import { Bar, Failed, Loading, Skeleton, Stale } from "@/components/states";
+import { Alert, StatusTag } from "@/components/ui/alert";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/field";
+import { LINK } from "@/components/ui/layout";
 import { ContentGrid, SECTION, SideCard, TITLE, useShowAll } from "@/components/ui/page";
-import { NO_VALUE, Stat } from "@/components/ui/stat";
+import { NO_VALUE, Stat, StatRow } from "@/components/ui/stat";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { formatCredits, formatDate, formatNumber, percent, plural } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
@@ -117,7 +121,7 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
 function ResearchLine({ idea }: { idea: Idea }) {
   return (
     <span className="text-sm text-ink-muted">
-      Research{idea.research.by ? ` by ${idea.research.by}` : ""} · {formatNumber(idea.research.spentCredits)} credits, estimated {formatNumber(idea.research.estimatedCredits)}
+      Research{idea.research.by ? ` by ${idea.research.by}` : ""} · {formatCredits(idea.research.spentCredits)}, estimated {formatNumber(idea.research.estimatedCredits)}
     </span>
   );
 }
@@ -136,10 +140,19 @@ function TechnicalLine({ idea }: { idea: Idea }) {
 
 function NoVerdictYet({ idea }: { idea: Idea }) {
   const failed = idea.status === "failed";
+  // Stopped by a person or held by its budget is not a fault: neither is drawn in the failure's red.
+  const cancelled = failed && idea.tryAgain?.why === "cancelled";
+  const budget = failed && idea.tryAgain?.why === "budget";
   return (
-    <section className={cn("flex flex-col items-start gap-4 rounded-lg border bg-surface px-6 py-7 shadow-card sm:px-8", RISE)} role={failed ? "alert" : "status"}>
+    <section className={cn("flex flex-col items-start gap-4 rounded-lg border bg-surface px-6 py-7 shadow-card sm:px-8", RISE)} role={failed && !cancelled && !budget ? "alert" : "status"}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-        <Badge tone={failed ? "bad" : "info"} className="px-3 py-1 text-sm uppercase tracking-wide">{failed ? "Research did not finish" : "Research in progress"}</Badge>
+        {cancelled ? (
+          <StatusTag state="cancelled">Research cancelled</StatusTag>
+        ) : budget ? (
+          <StatusTag state="paused-by-budget">Research did not finish</StatusTag>
+        ) : (
+          <Badge tone={failed ? "bad" : "info"}>{failed ? "Research did not finish" : "Research in progress"}</Badge>
+        )}
         <ResearchLine idea={idea} />
       </div>
       <h1 className={cn(TITLE, "max-w-prose")}>{failed ? "No verdict could be reached." : "The verdict is being worked out."}</h1>
@@ -148,7 +161,7 @@ function NoVerdictYet({ idea }: { idea: Idea }) {
       </p>
       <p className="max-w-prose text-ink-muted">“{idea.text}”</p>
       <div className="flex flex-wrap items-start gap-3 phone:w-full phone:flex-col phone:items-stretch">
-        <Link href={paths.run(idea.runId)} className={buttonVariants({ variant: failed && idea.tryAgain ? "outline" : "primary" })}>
+        <Link href={paths.run(idea.runId)} className={buttonVariants({ variant: failed && idea.tryAgain ? "secondary" : "primary" })}>
           {failed ? "See what happened" : "Watch the research"}
         </Link>
       </div>
@@ -174,7 +187,7 @@ function DecisionHistory({ idea }: { idea: Idea }) {
                 : `Research that did not finish was started again on ${formatDate(h.at)}.`}
             </span>
             {h.note && <span className="text-ink-body">“{h.note}”</span>}
-            <Link href={paths.run(h.runId)} className="flex min-h-touch items-center self-start rounded-xs text-sm font-semibold text-primary-link hover:text-primary-hover">
+            <Link href={paths.run(h.runId)} className={cn(LINK, "inline-flex min-h-touch items-center self-start text-sm")}>
               See the research that followed
             </Link>
           </li>
@@ -357,7 +370,7 @@ function Hero({ idea, verdict, beside }: { idea: Idea; verdict: Verdict; beside?
     <section aria-label="The verdict" className={cn("flex flex-col gap-6 rounded-lg border bg-surface px-6 py-6 shadow-card max-sm:gap-4 max-sm:px-5 max-sm:py-5 sm:px-8 sm:py-7 3xl:flex-row 3xl:items-start 3xl:justify-between 3xl:gap-10", RISE)}>
       <div className="flex min-w-0 max-w-prose flex-col gap-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-          <Badge tone={stamp} className="px-3 py-1 text-sm uppercase tracking-wide">
+          <Badge tone={stamp}>
             Verdict · {OUTCOME[verdict.outcome].toLowerCase()}
           </Badge>
           <ResearchLine idea={idea} />
@@ -392,10 +405,12 @@ function Hero({ idea, verdict, beside }: { idea: Idea; verdict: Verdict; beside?
       </div>
       {beside ??
         (facts.length > 0 && (
-          <div role="group" aria-label="What research found" className="hidden shrink-0 grid-cols-3 gap-x-8 gap-y-4 border-t pt-5 lg:grid 3xl:border-l 3xl:border-t-0 3xl:pl-8 3xl:pt-0">
-            {facts.map((f) => (
-              <Stat key={f.label} plain label={f.label} value={f.value} caption={f.caption} />
-            ))}
+          <div role="group" aria-label="What research found" className="hidden shrink-0 border-t pt-5 lg:block 3xl:border-l 3xl:border-t-0 3xl:pl-8 3xl:pt-0">
+            <StatRow cols={3} className="gap-x-8">
+              {facts.map((f) => (
+                <Stat key={f.label} plain label={f.label} value={f.value} caption={f.caption} />
+              ))}
+            </StatRow>
           </div>
         ))}
     </section>
@@ -490,7 +505,7 @@ function ExistingProducts({ products, evidence }: { products: ExistingProduct[];
 function SourceLink({ url }: { url: string }) {
   const technical = useAppSelector((s) => s.ui.mode) === "technical";
   return (
-    <a href={url} target="_blank" rel="noreferrer noopener" title={url} className="block min-w-0 max-w-full truncate rounded-xs text-sm text-primary-link hover:text-primary-hover touch:flex touch:min-h-touch touch:items-center">
+    <a href={url} target="_blank" rel="noreferrer noopener" title={url} className={cn(LINK, "block min-w-0 max-w-full truncate text-sm touch:flex touch:min-h-touch touch:items-center")}>
       <span className="truncate">{technical ? url : sourceLabel(url)}</span>
     </a>
   );
@@ -582,33 +597,19 @@ function Decisions({ idea, verdict, redLine, stacked = false }: { idea: Idea; ve
   const withChange = verdict.outcome === "change" && !!verdict.suggestedChange && !redLine;
   return (
     <div className="flex flex-col gap-3">
+      {/* One row of same-sized choices: the primary first, then the outlined ones; what a choice asks opens under the row. */}
       <div className={cn("flex flex-wrap items-center gap-3 phone:flex-col phone:items-stretch", stacked && "flex-col items-stretch")}>
         {options.flatMap((o) => [
-          confirming === o.choice && o.choice !== "change" ? (
-            <ConfirmCard
-              key={o.choice}
-              label="Confirm"
-              question={o.choice === "drop" ? "Drop this idea?" : "Build it against the verdict?"}
-              detail={o.choice === "drop" ? undefined : "This is recorded as an overrule."}
-              confirm="Yes"
-              cancel="No"
-              destructive={o.choice === "drop"}
-              busy={state.isLoading}
-              onConfirm={() => void submit(o.choice)}
-              onCancel={() => setConfirming(null)}
-            />
-          ) : (
-            <Button
-              key={o.choice}
-              size="lg"
-              variant={o.variant}
-              disabled={state.isLoading}
-              aria-expanded={o.choice === "change" ? confirming === "change" : undefined}
-              onClick={() => (o.choice === "build" ? void submit("build") : setConfirming(confirming === o.choice ? null : o.choice))}
-            >
-              {o.label}
-            </Button>
-          ),
+          <Button
+            key={o.choice}
+            size="lg"
+            variant={o.variant}
+            disabled={state.isLoading}
+            aria-expanded={o.choice === "build" ? undefined : confirming === o.choice}
+            onClick={() => (o.choice === "build" ? void submit("build") : setConfirming(confirming === o.choice ? null : o.choice))}
+          >
+            {o.label}
+          </Button>,
           // On a "change" verdict research's own change can be accepted and built in, without another round of research (VERD-06).
           o.choice === "build" && withChange ? (
             <Button key="with-change" size="lg" variant="secondary" disabled={state.isLoading} onClick={() => void submit("build", undefined, true)}>
@@ -617,34 +618,42 @@ function Decisions({ idea, verdict, redLine, stacked = false }: { idea: Idea; ve
           ) : null,
         ])}
       </div>
-      {withChange && <p className="text-sm text-ink-muted">“Build it with this change” builds the idea with research’s change as part of what is asked for; “Build it as described” builds your own words.</p>}
+      {confirming === "drop" || confirming === "overrule" ? (
+        <ConfirmCard
+          key={confirming}
+          label="Confirm"
+          question={confirming === "drop" ? "Drop this idea?" : "Build it against the verdict?"}
+          detail={confirming === "drop" ? undefined : "This is recorded as an overrule."}
+          confirm="Yes"
+          cancel="No"
+          destructive={confirming === "drop"}
+          busy={state.isLoading}
+          onConfirm={() => void submit(confirming)}
+          onCancel={() => setConfirming(null)}
+        />
+      ) : null}
       {confirming === "change" && (
-        <form onSubmit={changeSubmit} aria-label="Change the idea" className={cn("flex max-w-prose flex-col gap-2", stacked ? "border-t pt-3" : "rounded-md border bg-surface p-4")}>
-          <label htmlFor={`change-note-${idea.id}`} className="font-medium">
-            What should change?
-          </label>
-          <textarea id={`change-note-${idea.id}`} value={changeNote} onChange={(e) => setChangeNote(e.target.value)} rows={4} className="rounded-xs border border-border-field bg-surface px-3 py-2" />
-          <span className="text-sm text-ink-muted">Research runs again with your change, and you see a new verdict before anything is built.</span>
-          <div className={cn("flex flex-wrap gap-2", stacked && "flex-col items-stretch")}>
-            <Button type="submit" disabled={!changeNote.trim() || state.isLoading}>
-              Research it again with this change
-            </Button>
-            <Button variant="quiet" onClick={() => setConfirming(null)}>
-              Not now
-            </Button>
-          </div>
-        </form>
+        <ConfirmCard
+          label="Change the idea"
+          question={<label htmlFor={`change-note-${idea.id}`}>What should change?</label>}
+          detail="Research runs again with your change, and you see a new verdict before anything is built."
+          confirm="Research it again with this change"
+          cancel="Not now"
+          destructive={false}
+          busy={!changeNote.trim() || state.isLoading}
+          onSubmit={changeSubmit}
+          onCancel={() => setConfirming(null)}
+        >
+          <Textarea id={`change-note-${idea.id}`} value={changeNote} onChange={(e) => setChangeNote(e.target.value)} rows={4} />
+        </ConfirmCard>
       )}
+      {withChange && <p className="text-sm text-ink-muted">“Build it with this change” builds the idea with research’s change as part of what is asked for; “Build it as described” builds your own words.</p>}
       {redLine ? (
         <p className="text-sm text-ink-muted">Overruling is not offered: no one may build over a red line.</p>
       ) : (
         verdict.outcome === "do-not-build" && <p className="text-sm text-ink-muted">Overruling is your call. The project will carry a note that research advised against it.</p>
       )}
-      {error && (
-        <p role="alert" className="rounded-xs border border-attention-line bg-attention-tint px-4 py-3 text-attention-text">
-          Your decision was not recorded: {error}
-        </p>
-      )}
+      {error && <Alert tone="bad" title={`Your decision was not recorded: ${error}`} />}
       <DecisionHistory idea={idea} />
     </div>
   );
@@ -703,21 +712,35 @@ function Method({ idea }: { idea: Idea }) {
           ))}
         </ul>
       )}
-      {sources.length > 0 && (
-        <Disclosure title={`Every source (${formatNumber(sources.length)})`}>
-          <ul className="flex flex-col gap-0.5 px-1">
-            {sources.map((u) => (
-              <li key={u} className="min-w-0">
-                <SourceLink url={u} />
-              </li>
-            ))}
-          </ul>
-        </Disclosure>
-      )}
-      <Link href={paths.run(idea.runId)} className="flex min-h-touch items-center self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover">
+      {sources.length > 0 && <EverySource sources={sources} />}
+      <Link href={paths.run(idea.runId)} className={cn(LINK, "inline-flex min-h-touch items-center self-start")}>
         See every step
       </Link>
     </>
+  );
+}
+
+/**
+ * Every source research read, opened in place. The method is itself held in a card or a fold, so this is a plain
+ * row that opens, never a fold inside one (ARCH-011).
+ */
+function EverySource({ sources }: { sources: string[] }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((x) => !x)} className="flex min-h-touch items-center gap-2 self-start text-left font-medium text-ink hover:text-primary-hover">
+        Every source ({formatNumber(sources.length)})
+        <ChevronDown aria-hidden className={cn("size-4 shrink-0 text-ink-muted transition-transform motion-reduce:transition-none", open && "rotate-180")} />
+      </button>
+      <ul id={id} hidden={!open} className="flex flex-col gap-0.5">
+        {sources.map((u) => (
+          <li key={u} className="min-w-0">
+            <SourceLink url={u} />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
