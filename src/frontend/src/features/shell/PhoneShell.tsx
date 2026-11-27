@@ -231,7 +231,7 @@ export function PhoneNav({ creditsScope, talkLabel, talkOpen, onTalk }: { credit
             key: "credits",
             // The tab is "Credits"; the balance stays in sight as a small value on its icon, red only at a real limit.
             label: "Credits",
-            badge: balance !== undefined ? { text: compactNumber(balance), tone: credits.data && credits.data.available <= 0 ? ("bad" as const) : ("neutral" as const) } : undefined,
+            badge: balance !== undefined ? { text: compactNumber(balance), tone: credits.data && !credits.data.neverToppedUp && credits.data.available <= 0 ? ("bad" as const) : ("neutral" as const) } : undefined,
             icon: <Icon name="credits" className="size-5" />,
             href: paths.credits(),
             name: balance !== undefined ? `Credits: ${formatNumber(balance)} left` : credits.isError ? "Credits: the balance could not be read" : "Credits",

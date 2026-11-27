@@ -100,6 +100,8 @@ const config: Config = {
         ".tbl-row": { display: "flex", flexDirection: "column", rowGap: theme("spacing.1.5") },
         ".tbl-cell": { display: "grid", gridTemplateColumns: `${tableTracks.cardLabel} minmax(0, 1fr)`, columnGap: theme("spacing.3"), alignItems: "baseline" },
         ".tbl-cell[data-primary], .tbl-cell[data-kind='action']": { display: "block" },
+        // A select in a cell keeps a field's width in the card form rather than stretching across the card.
+        ".tbl-cell [data-select]": { maxWidth: theme("maxWidth.xs") },
         ...wide("narrow"),
         ...wide("medium"),
         ...wide("wide"),
