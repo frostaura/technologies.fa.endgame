@@ -14,9 +14,15 @@ import { cn } from "@/lib/utils";
  *
  * Two looks only: boxed (a tile of its own) and `plain` (in a hero or a card already drawn). A value is
  * NEVER cut with an ellipsis: when its slot is too narrow its type steps down until it fits. A label wraps
- * rather than being cut; a caption is one line (the explanation belongs in the alert or text beside it).
+ * rather than being cut. A caption is one line from `sm` up (cut with its whole text in the tooltip, the
+ * explanation belonging in the alert or text beside it); on a phone, where there is no tooltip to read, it
+ * wraps instead and is never cut. It is the tile's last slot, so a caption that wraps moves nothing above it:
+ * sibling tiles keep their tops, their values and their meters on the same lines.
  * Numbers come from `formatNumber` (one precision rule, a true minus sign).
  */
+
+/** The caption: one line from `sm` up, wrapping (never cut) on a phone. Exported only for the guard test. */
+export const STAT_CAPTION = "text-sm text-ink-body max-sm:break-words sm:truncate";
 
 /** The value classes, exported only so the guard test can name them; use {@link Stat}. */
 export const STAT_VALUE = {
@@ -88,7 +94,7 @@ export function Stat({
         </span>
       )}
       {caption && (
-        <span title={typeof caption === "string" ? caption : undefined} className="truncate text-sm text-ink-body">
+        <span data-stat-caption="" title={typeof caption === "string" ? caption : undefined} className={STAT_CAPTION}>
           {caption}
         </span>
       )}
@@ -122,11 +128,18 @@ function useFitValue() {
   return ref as RefObject<HTMLSpanElement & HTMLHeadingElement>;
 }
 
+/**
+ * A meter is drawn at its real width from the first frame — a page captured, printed or seen as it opens never shows an
+ * empty track — and eases to a new width when its value changes (no motion under reduced motion). Exported for the tests.
+ */
+export const METER_FILL = "block h-full rounded-full transition-width duration-500 ease-out motion-reduce:transition-none";
+
 function Meter({ value, label, tone = "primary" }: { value: number; label: string; tone?: "primary" | "bad" }) {
   return (
     <span role="img" aria-label={label} className="block h-2 w-full overflow-hidden rounded-full bg-border">
       <span
-        className={cn("block h-full origin-left animate-grow rounded-full motion-reduce:animate-none", tone === "bad" ? "bg-attention-text" : "bg-primary")}
+        data-meter-fill=""
+        className={cn(METER_FILL, tone === "bad" ? "bg-attention-text" : "bg-primary")}
         style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
       />
     </span>

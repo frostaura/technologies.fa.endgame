@@ -5,8 +5,9 @@ import { cn } from "@/lib/utils";
 
 /**
  * The one button (ARCH-011). A label never runs out of its column: a button is at most as wide as its
- * container, and a label too long for that (an app's 200-character name) is cut with an ellipsis, the whole of
- * it in the tooltip. Three heights — `sm` 32, `md` 40, `lg` 48 — each at least 44 wherever the
+ * column (`max-w-column`, measured with the button's own margins, so a quiet button pulled to its column's edge by a
+ * negative margin keeps every word), and only a label really too long for that column (an app's 200-character
+ * name) is cut with an ellipsis, the whole of it in the tooltip. Three heights — `sm` 32, `md` 40, `lg` 48 — each at least 44 wherever the
  * screen is worked by touch; one corner radius (`rounded-xs`); one label size per height; five variants;
  * one disabled look (a grey fill and muted words, never a faded colour). A pill is a chip, never a button.
  *
@@ -19,7 +20,7 @@ import { cn } from "@/lib/utils";
  * `icon`: a square button holding only an icon (it carries an `aria-label`).
  */
 const buttonVariants = cva(
-  "inline-flex max-w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xs font-semibold transition-colors duration-150 motion-reduce:transition-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-transparent disabled:bg-quiet disabled:text-ink-muted disabled:shadow-none aria-disabled:pointer-events-none aria-disabled:border-transparent aria-disabled:bg-quiet aria-disabled:text-ink-muted",
+  "inline-flex max-w-column shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xs font-semibold transition-colors duration-150 motion-reduce:transition-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:border-transparent disabled:bg-quiet disabled:text-ink-muted disabled:shadow-none aria-disabled:pointer-events-none aria-disabled:border-transparent aria-disabled:bg-quiet aria-disabled:text-ink-muted",
   {
     variants: {
       variant: {

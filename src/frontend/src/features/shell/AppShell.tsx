@@ -178,7 +178,7 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
           */}
           <div data-page-frame="" className={cn("flex min-w-0 flex-1 flex-col", docked && dock.full && "hidden")}>
             <div data-page-column="" className={cn("mx-auto flex w-full min-w-0 max-w-frame flex-1 flex-col", besideFrom === "lg" ? "lg:flex-row" : "3xl:flex-row")}>
-              <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col gap-6 px-4 py-6 outline-none max-sm:gap-5 max-sm:py-5 sm:px-8 sm:py-8 lg:py-10 rail:gap-4 rail:px-5 rail:py-4">
+              <main id="main" tabIndex={-1} className="page-column flex min-w-0 flex-1 flex-col gap-6 px-4 py-6 outline-none max-sm:gap-5 max-sm:py-5 sm:px-8 sm:py-8 lg:py-10 rail:gap-4 rail:px-5 rail:py-4">
                 {children}
               </main>
               {aside && (

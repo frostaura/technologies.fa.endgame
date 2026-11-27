@@ -55,7 +55,6 @@ describe("the look", () => {
       violet: "#6B4BF0",
       "violet-tint": "#F3EEFF",
       teal: "#0B8FA6",
-      "teal-tint": "#E3F8FB",
       success: "#12A15E",
       "success-text": "#0E6B42",
       "success-tint": "#E9FBF1",

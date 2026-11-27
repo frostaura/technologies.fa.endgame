@@ -59,7 +59,6 @@ export function PeopleView() {
     >
       <PageHeader
         className={RISE}
-        icon="employee"
         title={`People in ${here}`}
         lead="Everyone with a role here, and where each grant was set. A grant holds for everything beneath where it is set."
         actions={<ScopePicker tree={tree.data} scope={scope} />}

@@ -53,7 +53,7 @@ export function OperatorView() {
         ) : undefined
       }
     >
-      <PageHeader className={RISE} icon="god-mode" title="God mode" lead="Every organisation on Endgame. Entering one, topping it up or changing its overdraft is written to a log its Owner reads — operator access is never silent." />
+      <PageHeader className={RISE} title="God mode" lead="Every organisation on Endgame. Entering one, topping it up or changing its overdraft is written to a log its Owner reads — operator access is never silent." />
       {me.data && !operator ? (
         <Failed title="God mode is for FrostAura operators" reason="Your account is not one of FrostAura's operators, so these screens are closed to you." status={403} />
       ) : operator ? (

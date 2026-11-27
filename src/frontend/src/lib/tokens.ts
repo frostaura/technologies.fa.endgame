@@ -21,12 +21,12 @@ export const primitives = {
   slate: { 100: "#EEF0F7" },
   navy: "#141B4D",
   blue: { 50: "#EEF2FF", 100: "#DCE4FF", 200: "#C6D2FF", 300: "#A9B8FF", 500: "#2F5BFF", 600: "#2447D6", 700: "#1E3FCC" },
-  violet: { 50: "#F3EEFF", 200: "#D9CCFF", 400: "#8D7BE8", 500: "#6B4BF0", 600: "#5B3FD6", 800: "#3F2E87" },
-  teal: { 50: "#E3F8FB", 600: "#0B8FA6", 700: "#0B6E7F" },
+  violet: { 50: "#F3EEFF", 500: "#6B4BF0", 600: "#5B3FD6" },
+  teal: { 600: "#0B8FA6" },
   mint: "#7DF0DC",
   green: { 50: "#E9FBF1", 500: "#12A15E", 800: "#0E6B42" },
-  coral: { 50: "#FFF1EC", 100: "#FFE3DC", 200: "#FFC9BA", 300: "#FFB6A3", 25: "#FFF8F5", 500: "#D9432B", 900: "#5C2A1F" },
-  red: { 50: "#FFF1EC", 700: "#B42318", 800: "#8A1C0F" },
+  coral: { 50: "#FFF1EC", 200: "#FFC9BA", 25: "#FFF8F5", 500: "#D9432B", 900: "#5C2A1F" },
+  red: { 700: "#B42318", 800: "#8A1C0F" },
   orange: { 700: "#C2410C" },
   amber: { 50: "#FFF4E0", 500: "#D98A00", 800: "#8A4B00" },
   magenta: { 600: "#B4237A" },
@@ -59,8 +59,8 @@ export const roles = {
    * so these two are kept only for the organisation graph's node kinds and the avatar fills; a tag, a
    * card, a band or an icon never uses them (`design.test.ts` holds their use from growing).
    */
-  violet: { DEFAULT: p.violet[500], text: p.violet[600], deep: p.violet[800], line: p.violet[200], dash: p.violet[400], tint: p.violet[50] },
-  teal: { DEFAULT: p.teal[600], text: p.teal[700], tint: p.teal[50] },
+  violet: { DEFAULT: p.violet[500], text: p.violet[600], tint: p.violet[50] },
+  teal: { DEFAULT: p.teal[600] },
   /** Money and health. */
   success: { DEFAULT: p.green[500], text: p.green[800], tint: p.green[50] },
   /**
@@ -76,9 +76,7 @@ export const roles = {
     deep: p.coral[900],
     tint: p.coral[50],
     wash: p.coral[25],
-    chip: p.coral[100],
     line: p.coral[200],
-    dash: p.coral[300],
   },
   /** The verdict band. */
   night: p.navy,
@@ -108,26 +106,14 @@ export const shadow = {
  * `prefers-reduced-motion` by the base layer in `index.css`.
  */
 export const motion = {
-  ease: { out: "cubic-bezier(.2,.7,.2,1)", spring: "cubic-bezier(.2,.9,.3,1.2)" },
+  ease: { out: "cubic-bezier(.2,.7,.2,1)" },
   keyframes: {
     rise: { from: { opacity: "0", transform: "translateY(16px)" }, to: { opacity: "1", transform: "none" } },
-    grow: { from: { transform: "scaleX(0)" }, to: { transform: "scaleX(1)" } },
-    pulse: { "0%": { boxShadow: "0 0 0 0 rgb(18 161 94 / 0.55)" }, "100%": { boxShadow: "0 0 0 10px rgb(18 161 94 / 0)" } },
-    ring: { "0%": { boxShadow: "0 0 0 0 rgb(47 91 255 / 0.5)" }, "100%": { boxShadow: "0 0 0 12px rgb(47 91 255 / 0)" } },
+    /** The live dot (work under way, a run playing live): a quiet breath of its own opacity, never a ring spreading out of it. */
+    pulse: { "0%, 100%": { opacity: "1" }, "50%": { opacity: "0.35" } },
     halo: { "0%": { boxShadow: "0 0 0 0 rgb(107 75 240 / 0.5)" }, "100%": { boxShadow: "0 0 0 16px rgb(107 75 240 / 0)" } },
-    drift: {
-      "0%": { transform: "translate(0,0) scale(1)" },
-      "50%": { transform: "translate(70px,-24px) scale(1.25)" },
-      "100%": { transform: "translate(0,0) scale(1)" },
-    },
-    travel: { "0%": { top: "0", opacity: "0" }, "12%": { opacity: "1" }, "88%": { opacity: "1" }, "100%": { top: "100%", opacity: "0" } },
     sheen: { from: { backgroundPosition: "0 0" }, to: { backgroundPosition: "40px 0" } },
     bob: { "0%, 80%, 100%": { transform: "translateY(0)", opacity: "0.4" }, "40%": { transform: "translateY(-5px)", opacity: "1" } },
-    stamp: {
-      "0%": { opacity: "0", transform: "scale(1.6) rotate(-6deg)" },
-      "60%": { opacity: "1", transform: "scale(.96) rotate(0)" },
-      "100%": { transform: "scale(1)" },
-    },
     shimmer: { from: { backgroundPosition: "-200% 0" }, to: { backgroundPosition: "200% 0" } },
     /** A sheet rising from the foot of the screen; one coming in from the side; the page dimming behind it. */
     sheet: { from: { transform: "translateY(24px)", opacity: "0" }, to: { transform: "none", opacity: "1" } },
@@ -136,21 +122,17 @@ export const motion = {
   },
   animation: {
     rise: "rise .7s cubic-bezier(.2,.7,.2,1) both",
-    grow: "grow 1.1s .35s cubic-bezier(.2,.7,.2,1) both",
-    pulse: "pulse 1.8s ease-out infinite",
-    ring: "ring 1.8s ease-out infinite",
+    pulse: "pulse 2s ease-in-out infinite",
     halo: "halo 2s ease-out infinite",
-    drift: "drift 12s ease-in-out infinite",
-    travel: "travel 3.2s linear infinite",
     sheen: "sheen 1s linear infinite",
     bob: "bob 1.2s ease-in-out infinite",
-    stamp: "stamp .6s .35s cubic-bezier(.2,.9,.3,1.2) both",
     shimmer: "shimmer 1.6s linear infinite",
     sheet: "sheet .22s cubic-bezier(.2,.7,.2,1) both",
     slide: "slide .22s cubic-bezier(.2,.7,.2,1) both",
     fade: "fade .2s ease-out both",
-    live: "grow 1.1s .35s cubic-bezier(.2,.7,.2,1) both, sheen 1s linear infinite",
   },
+  /** What a transition moves beyond Tailwind's own sets: a meter's or bar's width as its value changes. */
+  property: { width: "width" },
   /** Stagger between siblings that rise in. */
   delay: { 1: "80ms", 2: "160ms", 3: "240ms", 4: "320ms", 5: "400ms" },
 } as const;
@@ -165,9 +147,6 @@ export const surfaces = {
   stripe: "repeating-linear-gradient(115deg, rgb(255 255 255 / 0.3) 0 10px, rgb(255 255 255 / 0) 10px 20px)",
   shimmer: "linear-gradient(90deg, rgb(228 231 242 / 0.6) 0%, rgb(245 246 251 / 0.9) 50%, rgb(228 231 242 / 0.6) 100%)",
 } as const;
-
-/** Blur radius of the aura blobs on the coloured bands. */
-export const blur = { aura: "48px" } as const;
 
 export const typography = {
   fontFamily: {
@@ -247,6 +226,19 @@ export const viewportQueries = {
  */
 export const tableAt = { narrow: "36rem", medium: "48rem", wide: "60rem" } as const;
 
+/**
+ * Where a PAGE changes its layout: the width of the shell's page column (`main`, the named container `page`), not the
+ * window's. Beside the docked conversation and the side panel a 1920 window leaves the page about 900 px, and with the
+ * pane collapsed to its rail the same window leaves it 1,380 — a page that switched on the window would get both wrong.
+ * Used through the `page-medium:`, `page-wide:` and `page-split:` variants (a container query on `main`):
+ *
+ * - `medium` (48rem): two of something small side by side — a dashboard's tiles two across.
+ * - `wide` (60rem): two independent sections side by side, or small tiles three across.
+ * - `split` (73.75rem, 1,180 px): a page's main column with a 32rem column beside it (`grid-cols-run-wide`) — a run's
+ *   steps keep the room for their grid and the plan stands beside them.
+ */
+export const pageAt = { medium: "48rem", wide: "60rem", split: "73.75rem" } as const;
+
 /** A table's column widths by kind (`components/ui/table.tsx`): fixed by kind, never by content, so rows line up. */
 export const tableTracks = {
   grow: "minmax(0, 2fr)",
@@ -273,7 +265,6 @@ export const layout = {
     "dock-rail": "3.5rem",
     form: "40rem",
     prose: "45rem",
-    aura: "20rem",
     bubble: "85%",
     reply: "92%",
     /** A menu or panel that opens over the composer. */
@@ -285,16 +276,13 @@ export const layout = {
     /** A picture sent in the thread, at its own shape, at its widest. */
     sent: "15rem",
   },
-  /** The organisation graph's frame: tall enough to read, short enough to keep the page in view. A bottom sheet's tallest. */
+  /** Named heights: a bottom sheet's tallest, the docked conversation, the composer and its menus. */
   height: {
-    graph: "40rem",
     /** A bottom sheet's tallest: 85% of what is visible, so the page behind always shows it is a sheet. */
     sheet: "calc(var(--visible-height, 100dvh) * 0.85)",
     visible: "var(--visible-height, 100dvh)",
     /** The docked conversation: the viewport under the shell's sticky header (`--shell-chrome`, kept current by the shell). */
     dock: "calc(100dvh - var(--shell-chrome, 0px))",
-    /** The conversation placed in a page (a tablet, an app's or an employee's page): tall enough to talk, never the whole page. */
-    pane: "min(46rem, 80dvh)",
     /** The composer's text box at its tallest before it scrolls (about eight lines). */
     composer: "12rem",
     /** In a phone's sheet the box stops sooner, so the thread keeps most of a small screen. */
@@ -340,26 +328,25 @@ export const layout = {
     "lead-grow": "auto minmax(0, 1fr)",
     "lead-grow-end": "auto minmax(0, 1fr) auto",
     "dot-grow": "0.5rem minmax(0, 1fr)",
-    "dot-grow-end": "0.5rem minmax(0, 1fr) auto",
     /** A wide credits page: the budget tree, and the month's figures and top-ups beside it. */
     "main-side": "minmax(0, 1fr) 24rem",
     /** God mode's organisation row: who it is, then its four figures. */
     "name-wide": "minmax(13rem, 1.1fr) minmax(0, 2.4fr)",
     /** A form's first field wider than the two after it. */
     "wide-two": "minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr)",
-    /** A run's timeline row: mark | who and what | time over cost (a phone) … */
-    step: "2rem minmax(0, 1fr) 5.5rem",
-    /** … and mark | who and what | cost | time, the same two right-hand columns on every row. */
+    /** A run's timeline row from `sm`: mark | who and what | cost | time, the same two right-hand columns on every row. */
     "step-wide": "2rem minmax(0, 1fr) 6.5rem 5.25rem",
     /** A run page from 1600: the steps, and the plan beside them. */
     "run-wide": "minmax(0, 1fr) minmax(0, 32rem)",
     /** A numbered item with its tag: number | words, and on a wide card | tag. */
     numbered: "1.75rem minmax(0, 1fr)",
     "numbered-tagged": "1.75rem minmax(0, 1fr) auto",
-    /** One task on one line: its state | what it is | who has it | the way to more. */
-    task: "7.25rem minmax(0, 1fr) auto 1rem",
     /** Cards that fill their row: as many 20rem cards as fit, stretched to the row's width; one on a phone. */
     "card-fill": "repeat(auto-fit, minmax(min(100%, 20rem), 1fr))",
+  },
+  /** Grid rows. `lead-rest`: a first row as tall as what it holds, and the rest — an item spanning both gives its extra height to the second, so the first sits straight on what follows it. */
+  rows: {
+    "lead-rest": "auto 1fr",
   },
   /** Where the org chart's connecting wire sits under a division's badge. */
   wireInset: "39px",
@@ -415,7 +402,7 @@ export function tailwindColors(): ColorTree {
 }
 
 /** WCAG relative luminance. */
-export function luminance(hex: string): number {
+function luminance(hex: string): number {
   const [r, g, b] = channels(hex).split(" ").map((c) => {
     const v = Number(c) / 255;
     return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;

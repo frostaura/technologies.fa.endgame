@@ -53,7 +53,6 @@ export function SecretsView() {
       {/* Before an organisation is named there is nothing to name the secrets for. */}
       <PageHeader
         className={RISE}
-        icon="secrets"
         title={here ? `Secrets for ${here}` : "Secrets"}
         lead="What applies here, and where each was set. A secret set higher up applies beneath unless a lower level sets its own. A value is never shown, not even to you: to change one, replace it."
       />

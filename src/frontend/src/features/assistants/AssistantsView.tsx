@@ -50,7 +50,6 @@ export function AssistantsView() {
     <AppShell crumbs={[...(org ? [{ label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() }] : []), { label: technical ? "MCP" : "AI assistants" }]} aside={org ? <Addresses tree={tree.data} technical={technical} /> : undefined}>
       <PageHeader
         className={RISE}
-        icon="assistants"
         title={title}
         lead={
           technical

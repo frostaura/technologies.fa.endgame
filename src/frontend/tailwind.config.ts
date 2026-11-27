@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss";
 import plugin from "tailwindcss/plugin";
-import { blur, coarseQuery, cssVariables, layout, lowQuery, masks, motion, radius, railQuery, screens, shortQuery, surfaces, tableAt, tableTracks, tailwindColors, typography, viewportQueries } from "./src/lib/tokens";
+import { coarseQuery, cssVariables, layout, lowQuery, masks, motion, pageAt, radius, railQuery, screens, shortQuery, surfaces, tableAt, tableTracks, tailwindColors, typography, viewportQueries } from "./src/lib/tokens";
 
 /**
  * The Tailwind theme. It holds no values: every colour, radius, shadow, typeface and motion comes
@@ -30,7 +30,6 @@ const config: Config = {
       width: layout.width,
       maxHeight: layout.height,
       spacing: {
-        aura: layout.width.aura,
         nav: layout.nav,
         bar: layout.bar,
         rail: layout.rail,
@@ -44,8 +43,9 @@ const config: Config = {
         chrome: layout.chrome,
         thumb: layout.height.thumb,
       },
-      height: { visible: layout.visible.height, dock: layout.height.dock, pane: layout.height.pane, thumb: layout.height.thumb },
+      height: { visible: layout.visible.height, dock: layout.height.dock, thumb: layout.height.thumb },
       gridTemplateColumns: layout.columns,
+      gridTemplateRows: layout.rows,
       minHeight: { touch: layout.touch, nav: layout.nav, bar: layout.bar },
       lineHeight: { touch: layout.touch },
       borderWidth: { touch: layout.touchPad },
@@ -55,9 +55,9 @@ const config: Config = {
       animation: motion.animation,
       animationDelay: motion.delay,
       transitionTimingFunction: motion.ease,
+      transitionProperty: motion.property,
       backgroundImage: surfaces,
       backgroundSize: { stripe: "40px 100%", shimmer: "200% 100%" },
-      blur,
     },
   },
   plugins: [
@@ -72,6 +72,9 @@ const config: Config = {
         ".fade-y": { maskImage: masks["fade-y"], WebkitMaskImage: masks["fade-y"] },
         ".text-vertical": { writingMode: "vertical-rl", transform: "rotate(180deg)" },
         ".wrap-balance": { textWrap: "balance" },
+        // At most as wide as its column, measured with its own margins: a control pulled outside its box by a negative margin
+        // keeps the room it was given (100% would cut it to the box it left). 100% where the keyword is not known.
+        ".max-w-column": { maxWidth: ["100%", "-webkit-fill-available", "stretch"] },
       });
     }),
     // `short:` — a phone on its side: little height, so headers and bars draw slimmer.
@@ -89,6 +92,14 @@ const config: Config = {
     // `rail:` — a phone on its side: the side rail, the one-line header, two columns. Registered last, so it wins.
     plugin(({ addVariant }) => {
       addVariant("rail", `@media ${railQuery}`);
+    }),
+    // The page column (`main` in `AppShell`, the named container `page`) and its thresholds (`pageAt`): a page switches its
+    // layout on the room it has — beside a docked pane, a side panel or neither — never on the window's width. The rule is
+    // scoped under `.page-column`, so a `page-*:` class outranks a window class (`lg:`, `xl:`) on the same property: the room
+    // the page really has is the last word.
+    plugin(({ addComponents, addVariant }) => {
+      addComponents({ ".page-column": { containerType: "inline-size", containerName: "page" } });
+      for (const [name, at] of Object.entries(pageAt)) addVariant(`page-${name}`, `@container page (min-width: ${at}) { .page-column & }`);
     }),
     // The one table (`components/ui/table.tsx`): a list of cards in a narrow box, a table from its threshold up —
     // measured on the table's own box (a container query), so it switches wherever it has the room.

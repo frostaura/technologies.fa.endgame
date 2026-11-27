@@ -66,7 +66,6 @@ export function SuggestionsView() {
     >
       <PageHeader
         className={RISE}
-        icon="research"
         title="Ideas from your portfolio"
         lead={`Products ${here} is well placed to build, from what it already runs and has researched. Taking one starts its research, like any idea.`}
         actions={<DivisionPicker scope={scope} />}

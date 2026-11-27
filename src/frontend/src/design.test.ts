@@ -2,7 +2,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import ts from "typescript";
-import { breakpoints, contrastRatio, layout, railQuery, roles, viewportQueries } from "./lib/tokens";
+import { breakpoints, contrastRatio, flatRoles, layout, motion, pageAt, railQuery, roles, tableAt, viewportQueries } from "./lib/tokens";
+import { METER_FILL, STAT_CAPTION } from "./components/ui/stat";
 import { STATES } from "./components/ui/alert";
 
 /**
@@ -303,5 +304,163 @@ describe("the states (ARCH-011)", () => {
   it("never draws a shield for a state", () => {
     const offenders = sources().filter((s) => !s.file.startsWith("src/demo/") && /\bShield\w*\b/.test(s.text)).map((s) => s.file);
     expect(offenders).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Round three (ARCH-011): captions on a phone, bars drawn from the first frame, a quiet live dot, a button that keeps
+// its words beside a negative margin, words-only page titles, the page column's container, and no dead tokens.
+// ---------------------------------------------------------------------------------------------
+
+describe("a figure's caption and its meter (ARCH-011)", () => {
+  it("cuts a caption only from sm up: on a phone it wraps", () => {
+    const classes = STAT_CAPTION.split(/\s+/);
+    expect(classes).toContain("sm:truncate");
+    expect(classes).not.toContain("truncate");
+    expect(classes).not.toContain("line-clamp-1");
+    expect(classes).toContain("max-sm:break-words");
+  });
+
+  it("draws every meter and bar at its real width from the first frame: no grow-in from zero", () => {
+    expect(METER_FILL).not.toMatch(/\banimate-/);
+    expect(METER_FILL).toContain("transition-width");
+    expect(METER_FILL).toContain("motion-reduce:transition-none");
+    for (const [name, frames] of Object.entries(motion.keyframes)) expect(JSON.stringify(frames), name).not.toMatch(/scaleX\(0\)|"width":"0/);
+    const offenders = sources().filter((s) => /\banimate-(?:grow|live)\b/.test(s.text)).map((s) => s.file);
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("the live dot (ARCH-011)", () => {
+  it("breathes its own opacity, never a ring spreading out of it", () => {
+    const frames = JSON.stringify(motion.keyframes.pulse);
+    expect(frames).toContain("opacity");
+    expect(frames).not.toMatch(/boxShadow|transform/);
+  });
+
+  it("is still under reduced motion wherever it is used", () => {
+    const offenders = sources().flatMap((s) =>
+      [...s.text.matchAll(/className=(?:"|\{cn\(")([^"]*\banimate-(?:pulse|sheen|halo|bob)\b[^"]*)"/g)].filter((m) => !/motion-reduce:animate-none/.test(m[1] ?? "")).map(() => s.file),
+    );
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("a button keeps its words (ARCH-011)", () => {
+  it("is capped at its column measured with its own margins, never at 100% of a box it was pulled out of", () => {
+    const button = readFileSync(join(root, "src/components/ui/button.tsx"), "utf8");
+    expect(button).toContain("max-w-column");
+    expect(button).not.toMatch(/\bmax-w-full\b/);
+    const config = readFileSync(join(root, "tailwind.config.ts"), "utf8");
+    expect(config).toMatch(/"\.max-w-column": \{ maxWidth: \["100%", "-webkit-fill-available", "stretch"\] \}/);
+  });
+});
+
+describe("a page's title is words only (ARCH-011)", () => {
+  it("offers no icon on the page header", () => {
+    const page = readFileSync(join(root, "src/components/ui/page.tsx"), "utf8");
+    const header = page.slice(page.indexOf("export function PageHeader"), page.indexOf("export function ContentGrid"));
+    expect(header).not.toMatch(/\bicon\b|<Icon\b/);
+  });
+
+  it("draws no icon inside any page's h1", () => {
+    const offenders = sources()
+      .filter((s) => s.file.endsWith(".tsx") && !s.file.startsWith("src/demo/"))
+      .flatMap((s) => iconsInH1(s.file, s.text));
+    expect(offenders).toEqual([]);
+  });
+
+  it("would catch one", () => {
+    expect(iconsInH1("x.tsx", 'import { Bell } from "lucide-react";\nconst A = () => <h1 className="t"><Bell /> Notifications</h1>;')).toEqual(["x.tsx:2"]);
+    expect(iconsInH1("x.tsx", 'const A = () => <h1><span><Icon name="health" /></span>System</h1>;')).toEqual(["x.tsx:1"]);
+    expect(iconsInH1("x.tsx", 'const A = () => <><Icon name="health" /><h1>System</h1></>;')).toEqual([]);
+  });
+});
+
+/** Where an icon is drawn inside an h1: the house `Icon` or anything the file imports from lucide. */
+function iconsInH1(file: string, text: string): string[] {
+  const out: string[] = [];
+  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const icons = new Set(["Icon"]);
+  for (const st of sf.statements)
+    if (ts.isImportDeclaration(st) && (st.moduleSpecifier as ts.StringLiteral).text === "lucide-react" && st.importClause?.namedBindings && ts.isNamedImports(st.importClause.namedBindings))
+      for (const el of st.importClause.namedBindings.elements) icons.add(el.name.text);
+  const visit = (n: ts.Node, inH1: boolean) => {
+    const tag = ts.isJsxElement(n) ? n.openingElement.tagName.getText(sf) : ts.isJsxSelfClosingElement(n) ? n.tagName.getText(sf) : null;
+    if (inH1 && tag && icons.has(tag)) out.push(`${file}:${sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1}`);
+    ts.forEachChild(n, (c) => visit(c, inH1 || tag === "h1"));
+  };
+  visit(sf, false);
+  return out;
+}
+
+describe("the page column is a container (ARCH-011)", () => {
+  it("names the shell's page column `page`, with thresholds from the token layer only", () => {
+    const shell = readFileSync(join(root, "src/features/shell/AppShell.tsx"), "utf8");
+    expect(shell).toMatch(/<main id="main"[^>]*className="page-column /);
+    const config = readFileSync(join(root, "tailwind.config.ts"), "utf8");
+    expect(config).toContain('containerName: "page"');
+    expect(config).toContain("@container page (min-width: ${at})");
+    expect(Object.keys(pageAt)).toEqual(["medium", "wide", "split"]);
+    for (const at of [...Object.values(pageAt), ...Object.values(tableAt)]) expect(at).toMatch(/^\d+(?:\.\d+)?rem$/);
+  });
+
+  it("switches no page section's columns on the 2000 px window tier: that is the page column's to decide", () => {
+    const offenders = sources()
+      .filter((s) => s.file.startsWith("src/features/") && /\b4xl:(?:grid-cols|columns)-/.test(s.text))
+      .map((s) => s.file);
+    expect(offenders).toEqual([]);
+  });
+
+  it("uses no arbitrary container query", () => {
+    const offenders = sources().filter((s) => /@container|@\[[\d.]+(?:px|rem)\]:/.test(s.text)).map((s) => s.file);
+    expect(offenders).toEqual([]);
+  });
+});
+
+/** Every file the token layer's classes can be written in: the console's source and the academy's, which uses it as a preset. */
+function classSources(): string {
+  const out: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (/\.(tsx?|css|html)$/.test(entry) && !/\.test\.tsx?$/.test(entry) && full !== join(root, "src/lib/tokens.ts")) out.push(readFileSync(full, "utf8"));
+    }
+  };
+  walk(join(root, "src"));
+  walk(join(root, "../academy/src"));
+  out.push(readFileSync(join(root, "index.html"), "utf8"), readFileSync(join(root, "../academy/index.html"), "utf8"));
+  return out.join("\n");
+}
+
+describe("the token layer holds nothing dead (ARCH-011)", () => {
+  const text = classSources();
+  const used = (pattern: string) => new RegExp(`(?<![\\w-])${pattern}(?![\\w-])`).test(text);
+
+  it("draws every grid track it names", () => {
+    const dead = [...Object.keys(layout.columns).filter((k) => !used(`grid-cols-${k}`)), ...Object.keys(layout.rows).filter((k) => !used(`grid-rows-${k}`))];
+    expect(dead).toEqual([]);
+  });
+
+  it("runs every animation it names, and every keyframe belongs to one", () => {
+    expect(Object.keys(motion.animation).filter((k) => !used(`animate-${k}`))).toEqual([]);
+    const animations = Object.values(motion.animation).join(", ");
+    expect(Object.keys(motion.keyframes).filter((k) => !new RegExp(`(?:^|, )${k} `).test(animations))).toEqual([]);
+  });
+
+  it("paints with every colour role it names", () => {
+    const paint = "(?:bg|text|border|border-[trblxy]|ring|ring-offset|fill|stroke|outline|divide|shadow|accent|caret|decoration|placeholder)";
+    expect(Object.keys(flatRoles()).filter((name) => !used(`${paint}-${name}`))).toEqual([]);
+  });
+
+  it("uses every named width and height", () => {
+    expect(Object.keys(layout.width).filter((k) => !used(`(?:max-w|w|min-w)-${k}`))).toEqual([]);
+    expect(Object.keys(layout.height).filter((k) => !used(`(?:max-h|h|min-h)-${k}`))).toEqual([]);
+  });
+
+  it("would catch one", () => {
+    expect(used("grid-cols-step")).toBe(false);
+    expect(used("grid-cols-step-wide")).toBe(true);
   });
 });
