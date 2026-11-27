@@ -100,6 +100,15 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
         if (!isHook)
         {
             var decision = await access.CheckAsync(app.Route, context, inApp + context.Request.QueryString, context.RequestAborted);
+            if (decision.Decision == AccessDecisions.SignIn && app.Route.Availability == AppAvailability.Unpublished)
+            {
+                // Signing in cannot help an app with nothing published yet, so a signed-out visitor is told so at once. It tells
+                // them nothing the sign-in page would not: being sent to sign in already says an app is here (and that page names
+                // it and its organisation), while this page names neither. Someone signed in and refused is still refused (ACC-16).
+                await UnavailablePage.WriteAsync(context, Unavailable.NotReady, links);
+                return;
+            }
+
             if (!decision.Allowed)
             {
                 await RefuseAsync(context, decision, appAddress, inApp, links);
@@ -112,8 +121,8 @@ public sealed class AppGate(AppRegistry registry, IAppBackend backend, AccessGat
             }
         }
 
-        // An app with an address and no published version yet says so — to whoever may open it; a visitor who may not is
-        // sent to sign in or refused first, exactly as for a published app (D68, ACC-16).
+        // An app with an address and no published version yet says so — to whoever may open it, and (above) to a signed-out
+        // visitor; someone signed in who may not open it is refused first, exactly as for a published app (D68, ACC-16).
         if (app.Route.Availability == AppAvailability.Unpublished)
         {
             await UnavailablePage.WriteAsync(context, Unavailable.NotReady, links);
