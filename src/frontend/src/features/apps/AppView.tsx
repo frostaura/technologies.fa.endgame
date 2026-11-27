@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useId, useState, type FormEvent, type ReactNode } from "react";
 import { Check, ChevronDown, Copy } from "lucide-react";
 import { ConfirmCard } from "@/components/ui/confirm";
 import { TAP } from "@/lib/touch";
@@ -728,35 +728,21 @@ function Choice({ name, value, checked, disabled, onChange, children }: { name: 
   );
 }
 
-/** Going public is a person's act (CLAUDE.md rule 10): it waits for this explicit confirmation. */
+/** Going public is a person's act (CLAUDE.md rule 10): it waits for this explicit confirmation, the house's one confirmation card. */
 function ConfirmPublic({ appName, onConfirm, onCancel }: { appName: string; onConfirm: () => void; onCancel: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const titleId = useId();
-  useEffect(() => {
-    ref.current?.focus();
-  }, []);
   return (
-    <div
-      ref={ref}
+    <ConfirmCard
       role="alertdialog"
-      aria-labelledby={titleId}
-      tabIndex={-1}
-      onKeyDown={(e) => e.key === "Escape" && onCancel()}
-      className="flex flex-col gap-3 rounded-sm border border-attention-line bg-attention-tint px-4 py-3 outline-none"
-    >
-      <p id={titleId} className="font-semibold text-attention-text">
-        Make {appName} public?
-      </p>
-      <p className="text-attention-deep">Anyone with the address will be able to open it, without signing in. Only a person can make this choice.</p>
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={onConfirm}>
-          Make it public
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
-          Keep it as it is
-        </Button>
-      </div>
-    </div>
+      focus
+      destructive={false}
+      label={`Make ${appName} public?`}
+      question={`Make ${appName} public?`}
+      detail="Anyone with the address will be able to open it, without signing in. Only a person can make this choice."
+      confirm="Make it public"
+      cancel="Keep it as it is"
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
   );
 }
 
