@@ -64,7 +64,9 @@ export function Stat({
         className,
       )}
     >
-      <span className="truncate text-sm text-ink-muted">{label}</span>
+      <span title={typeof label === "string" ? label : undefined} className="truncate text-sm text-ink-muted">
+        {label}
+      </span>
       <Value
         className={cn(
           "truncate font-sans font-semibold leading-tight tracking-tight tabular-nums",

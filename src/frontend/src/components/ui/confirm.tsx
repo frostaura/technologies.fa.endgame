@@ -45,8 +45,12 @@ export function ConfirmCard({
 }) {
   const ref = useRef<HTMLElement>(null);
   const questionId = useId();
+  // It opens where it was asked for, and all of it comes into view — above a phone's bottom bar (its scroll margin).
   useEffect(() => {
-    if (focus) ref.current?.focus();
+    const el = ref.current;
+    if (!el) return;
+    if (focus) el.focus({ preventScroll: true });
+    el.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
   }, [focus]);
   const body = (
     <>
@@ -65,7 +69,7 @@ export function ConfirmCard({
       </div>
     </>
   );
-  const look = cn("flex w-full max-w-form flex-col gap-2 rounded-md border bg-surface p-4 text-left shadow-card outline-none", className);
+  const look = cn("flex w-full max-w-form scroll-mb-nav-safe scroll-mt-4 flex-col gap-2 rounded-md border bg-surface p-4 text-left shadow-card outline-none", className);
   const keys = (e: KeyboardEvent) => e.key === "Escape" && onCancel();
   return onSubmit ? (
     <form ref={ref as RefObject<HTMLFormElement>} aria-label={label} tabIndex={-1} onKeyDown={keys} onSubmit={onSubmit} className={look}>
