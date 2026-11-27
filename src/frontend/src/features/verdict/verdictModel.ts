@@ -315,7 +315,7 @@ export function heroFacts(verdict: Verdict): { label: string; value: string; cap
     {
       label: "Demand",
       value: !verdict.demand.evidenceFound ? "None" : signals > 0 ? formatNumber(signals) : "Some",
-      caption: !verdict.demand.evidenceFound ? "none found" : signals > 0 ? (signals === 1 ? "signal found" : "signals found") : "no signals listed",
+      caption: !verdict.demand.evidenceFound ? "counts against it" : signals > 0 ? (signals === 1 ? "signal found" : "signals found") : "no signals listed",
     },
     { label: "Confidence", value: confidence ? `${confidence.charAt(0).toUpperCase()}${confidence.slice(1)}` : NO_VALUE, caption: sources > 0 ? `from ${plural(sources, "source")}` : "no sources recorded" },
   ];
