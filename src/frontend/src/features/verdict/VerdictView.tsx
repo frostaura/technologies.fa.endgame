@@ -63,9 +63,10 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
   crumbs.push({ label: idea?.title ?? "Idea" });
 
   // Beside a verdict: the decision, in view all the way down, and how research reached it. Before there is
-  // a verdict there is nothing to decide, and research's record sits under the page as it does on a phone.
-  const aside =
-    idea?.verdict && desktop
+  // a verdict there is nothing to decide: research's record sits beside the page instead.
+  const aside = !idea || !desktop
+    ? undefined
+    : idea.verdict
       ? [
           <DecisionCard key="decision" idea={idea} verdict={idea.verdict} />,
           <SideCard key="method" label="How this was researched">
@@ -74,7 +75,14 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
             </ErrorBoundary>
           </SideCard>,
         ]
-      : undefined;
+      : [
+          <SideCard key="refusals" label="How often research says no">
+            <Refusals idea={idea} />
+          </SideCard>,
+          <SideCard key="overrules" label="When you overruled">
+            <Overrules idea={idea} />
+          </SideCard>,
+        ];
 
   return (
     <AppShell crumbs={crumbs} aside={aside}>
@@ -96,7 +104,7 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
           ) : (
             <>
               <NoVerdictYet idea={view.data} />
-              <TrackRecord idea={view.data} />
+              {!desktop && <TrackRecord idea={view.data} />}
             </>
           )}
         </>
