@@ -140,6 +140,18 @@ public sealed class FakeControlPlane : HttpMessageHandler
     /// <summary>Schedules the app declares, as the ontology shows them.</summary>
     public List<string> Schedules { get; } = [];
 
+    /// <summary>The turn's files, as <c>GET /internal/runs/{id}/attachments</c> answers.</summary>
+    public JsonArray Attachments { get; } = [];
+
+    /// <summary>Whether the route asked about takes images, as the control plane says it.</summary>
+    public bool ImagesAccepted { get; set; } = true;
+
+    /// <summary>The task types the Runner asked the attachments endpoint about.</summary>
+    public List<string?> AttachmentTaskTypes { get; } = [];
+
+    /// <summary>The runs the conversation started (an idea's research, a change, a try again), in the shapes the control plane answers with.</summary>
+    public List<JsonObject> Started { get; } = [];
+
     public ControlPlaneClient Client() => new(new HttpClient(this) { BaseAddress = new Uri("http://control-plane") });
 
     public RunInfo Info() => System.Text.Json.JsonSerializer.Deserialize<RunInfo>(Run.ToJsonString(), Endgame.Harness.Kernel.Json.Web)!;
@@ -196,6 +208,13 @@ public sealed class FakeControlPlane : HttpMessageHandler
                 ("POST", var p) when p.StartsWith("/internal/ideas/", StringComparison.Ordinal) && p.EndsWith("/decision", StringComparison.Ordinal) => Decide(body!.AsObject()),
                 ("GET", var p) when p == run + "/suggestion-context" => SuggestionContext is { } sc ? Json(sc) : Problem(HttpStatusCode.Conflict, "conflict", "That run does not suggest ideas."),
                 ("POST", var p) when p == run + "/suggestions" => RecordSuggestions(body!.AsObject()),
+                ("GET", var p) when p == run + "/attachments" => RunAttachments(query["taskType"]),
+                // An earlier run (a conversation's previous turn): finished, with no parent of its own.
+                ("GET", var p) when p.StartsWith("/internal/runs/", StringComparison.Ordinal) && Guid.TryParse(p[15..], out var before) && EarlierRuns.ContainsKey(before) =>
+                    Json(new JsonObject { ["id"] = before.ToString(), ["scope"] = Run["scope"]?.DeepClone(), ["kind"] = Run["kind"]?.DeepClone(), ["status"] = "succeeded", ["title"] = "Earlier", ["lastSeq"] = EarlierRuns[before].Count, ["budgetExhausted"] = false }),
+                ("POST", "/internal/ideas") => StartIdea(body!.AsObject()),
+                ("POST", "/internal/apps/changes") => StartChange(body!.AsObject()),
+                ("POST", var p) when p.StartsWith("/internal/runs/", StringComparison.Ordinal) && p.EndsWith("/retry", StringComparison.Ordinal) => StartRetry(Guid.Parse(p[15..^6])),
                 ("GET", "/internal/ontology") => Json(new JsonObject { ["nodes"] = new JsonArray(Schedules.Select(n => (JsonNode)new JsonObject { ["id"] = $"schedule:{n}", ["type"] = "schedule", ["name"] = n }).ToArray()), ["edges"] = new JsonArray() }),
                 _ => Problem(HttpStatusCode.NotFound, "not_found", $"{request.Method} {path} is not served by the fake."),
             };
@@ -453,6 +472,35 @@ public sealed class FakeControlPlane : HttpMessageHandler
 
         Verdict = verdict.DeepClone().AsObject();
         return Json(new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["status"] = "awaiting_decision", ["verdict"] = verdict["outcome"]?.ToString() });
+    }
+
+    private HttpResponseMessage RunAttachments(string? taskType)
+    {
+        AttachmentTaskTypes.Add(taskType);
+        return Json(new JsonObject { ["runId"] = RunId.ToString(), ["imagesAccepted"] = ImagesAccepted, ["attachments"] = Attachments.DeepClone() });
+    }
+
+    // The control plane's answers (FactoryEndpoints): { idea, run, estimate } for an idea, { run, estimateCredits } for a change,
+    // and the new run itself for a try again.
+    private HttpResponseMessage StartIdea(JsonObject body)
+    {
+        var run = new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["kind"] = "research", ["title"] = body["text"]?.ToString(), ["status"] = "queued" };
+        Started.Add(run);
+        return Json(new JsonObject { ["idea"] = new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["title"] = body["text"]?.ToString().Split('\n')[0] }, ["run"] = run.DeepClone(), ["estimate"] = new JsonObject { ["credits"] = 1.5m } }, HttpStatusCode.Created);
+    }
+
+    private HttpResponseMessage StartChange(JsonObject body)
+    {
+        var run = new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["kind"] = "task", ["title"] = $"Change: {body["request"]}", ["status"] = "queued" };
+        Started.Add(run);
+        return Json(new JsonObject { ["run"] = run.DeepClone(), ["estimateCredits"] = 10m }, HttpStatusCode.Created);
+    }
+
+    private HttpResponseMessage StartRetry(Guid stopped)
+    {
+        var run = new JsonObject { ["id"] = Guid.NewGuid().ToString(), ["kind"] = "build", ["title"] = $"Build again ({stopped:N})", ["status"] = "queued" };
+        Started.Add(run);
+        return Json(run.DeepClone(), HttpStatusCode.Created);
     }
 
     private HttpResponseMessage Node(JsonObject body)
