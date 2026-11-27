@@ -5,7 +5,8 @@ import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { inputClass } from "@/components/ui/field";
+import { Input } from "@/components/ui/field";
+import { LINK } from "@/components/ui/layout";
 import { PageHeader, SECTION } from "@/components/ui/page";
 import { timeAgo } from "@/lib/format";
 import { RISE, stagger } from "@/lib/motion";
@@ -59,7 +60,7 @@ export function SecretsView() {
 
       {view === "no-organisation" ? (
         <Empty icon="organisation" title="There are no secrets until your organisation is named">
-          <Link href={paths.start()} className="font-semibold text-primary-link">
+          <Link href={paths.start()} className={LINK}>
             Start
           </Link>
         </Empty>
@@ -98,7 +99,7 @@ interface NoticeProps {
 function NoticeLine({ notice, at }: { notice: Notice; at: string }) {
   if (notice?.at !== at) return null;
   return (
-    <p role={notice.ok ? "status" : "alert"} data-state={notice.ok ? undefined : "failed"} className={cn("rounded-xs px-4 py-3 sm:col-span-2", notice.ok ? "bg-success-tint text-success-text" : "border border-attention-line bg-attention-tint text-attention-text")}>
+    <p role={notice.ok ? "status" : "alert"} data-state={notice.ok ? undefined : "failed"} className={cn("rounded-xs px-4 py-3", notice.ok ? "bg-success-tint text-success-text" : "border border-attention-line bg-attention-tint text-attention-text")}>
       {notice.text}
     </p>
   );
@@ -134,7 +135,7 @@ function SecretsBody({ list, tree, where, notice, onNotice }: { list: SecretList
             {list.setBelow.map((b) => (
               <li key={`${b.setAtPath}#${b.name}`} className="grid grid-cols-grow-end items-center gap-x-4 px-5 py-2.5">
                 <code className="break-all font-mono text-sm">{b.name}</code>
-                <Link href={paths.secrets(b.setAtPath)} className={cn("rounded-xs text-sm text-primary-link hover:text-primary-hover", TAP)}>
+                <Link href={paths.secrets(b.setAtPath)} className={cn("text-sm", LINK, TAP)}>
                   {nameOf(b.setAtPath)}
                 </Link>
               </li>
@@ -167,42 +168,44 @@ function SecretRow({ secret, scope, nameOf, notice, onNotice }: { secret: Secret
   };
 
   return (
-    <li className="grid grid-cols-1 items-center gap-x-4 gap-y-3 px-5 py-4 sm:grid-cols-grow-end">
-      <div className="flex min-w-0 flex-col gap-1">
-        <code className="break-all font-mono font-semibold">{secret.name}</code>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-muted">
-          {setHere ? (
-            <Badge tone="info">Set here</Badge>
-          ) : (
+    // The row, then — directly under it, in the same item — what its controls opened, anchored to them.
+    <li className="flex flex-col gap-3 px-5 py-4">
+      <div className="grid grid-cols-1 items-center gap-x-4 gap-y-3 sm:grid-cols-grow-end">
+        <div className="flex min-w-0 flex-col gap-1">
+          <code className="break-all font-mono font-semibold">{secret.name}</code>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-muted">
+            {setHere ? (
+              <Badge tone="info">Set here</Badge>
+            ) : (
+              <span>
+                Inherited from{" "}
+                <Link href={paths.secrets(secret.setAtPath)} className={cn(LINK, TAP)}>
+                  {nameOf(secret.setAtPath)}
+                </Link>
+              </span>
+            )}
             <span>
-              Inherited from{" "}
-              <Link href={paths.secrets(secret.setAtPath)} className={cn("rounded-xs font-medium text-primary-link hover:text-primary-hover", TAP)}>
-                {nameOf(secret.setAtPath)}
-              </Link>
+              {secret.setAtLevel.charAt(0).toUpperCase() + secret.setAtLevel.slice(1)} level · set {timeAgo(secret.setAt)}
             </span>
-          )}
-          <span>
-            {secret.setAtLevel.charAt(0).toUpperCase() + secret.setAtLevel.slice(1)} level · set {timeAgo(secret.setAt)}
-          </span>
+          </div>
+          {secret.overrides.length > 0 && <span className="text-sm text-ink-body">Replaces the one set at {secret.overrides.map(nameOf).join(", ")}.</span>}
         </div>
-        {secret.overrides.length > 0 && <span className="text-sm text-ink-body">Replaces the one set at {secret.overrides.map(nameOf).join(", ")}.</span>}
-      </div>
-      <div className="flex flex-wrap gap-2 sm:justify-end">
-        <Button size="sm" variant="secondary" onClick={() => setMode(mode === "replace" ? "idle" : "replace")} aria-expanded={mode === "replace"}>
-          {setHere ? "Replace" : "Set its own here"}
-        </Button>
-        {setHere && (
-          <Button size="sm" variant="quiet" disabled={removing.isLoading} onClick={() => setMode("remove")}>
-            Remove
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <Button size="sm" variant="secondary" onClick={() => setMode(mode === "replace" ? "idle" : "replace")} aria-expanded={mode === "replace"}>
+            {setHere ? "Replace" : "Set its own here"}
           </Button>
-        )}
+          {setHere && (
+            <Button size="sm" variant="danger-outline" disabled={removing.isLoading} onClick={() => setMode("remove")}>
+              Remove
+            </Button>
+          )}
+        </div>
       </div>
 
       <NoticeLine notice={notice} at={at} />
 
       {mode === "remove" && (
         <ConfirmCard
-          className="sm:col-span-2"
           label={`Confirm removing ${secret.name}`}
           question={secret.overrides.length > 0 ? `Remove ${secret.name} here?` : `Remove ${secret.name}?`}
           detail={secret.overrides.length > 0 ? `The one set at ${nameOf(secret.overrides[0] ?? "")} applies again.` : "Nothing here or beneath will have it, unless it sets its own."}
@@ -215,9 +218,7 @@ function SecretRow({ secret, scope, nameOf, notice, onNotice }: { secret: Secret
 
       {/* A replaced secret closes its form; the saved message stays on the row. */}
       {mode === "replace" && (
-        <div className="sm:col-span-2">
-          <SecretForm scope={scope} fixedName={secret.name} at={at} onNotice={onNotice} onSaved={() => setModeState("idle")} />
-        </div>
+        <SecretForm scope={scope} fixedName={secret.name} at={at} onNotice={onNotice} onSaved={() => setModeState("idle")} />
       )}
     </li>
   );
@@ -271,7 +272,7 @@ function SecretForm({ scope, fixedName, existing = [], at, onNotice, onSaved }: 
           <label htmlFor={nameId} className="font-medium">
             Name
           </label>
-          <input
+          <Input
             id={nameId}
             value={name}
             onChange={(e) => setName(e.target.value.toUpperCase().replace(/[\s-]/g, "_"))}
@@ -281,7 +282,7 @@ function SecretForm({ scope, fixedName, existing = [], at, onNotice, onSaved }: 
             placeholder="STRIPE_API_KEY"
             aria-invalid={touched && !!nameProblem}
             aria-describedby={touched && nameProblem ? `${nameId}-problem` : undefined}
-            className={cn(inputClass, "font-mono")}
+            className="font-mono"
           />
           {touched && nameProblem && (
             <span id={`${nameId}-problem`} className="text-sm text-attention-text">
@@ -294,14 +295,14 @@ function SecretForm({ scope, fixedName, existing = [], at, onNotice, onSaved }: 
         <label htmlFor={valueId} className="font-medium">
           {fixedName ? `New value for ${fixedName}` : "Value"}
         </label>
-        <input
+        <Input
           id={valueId}
           type="password"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           autoComplete="new-password"
           spellCheck={false}
-          className={cn(inputClass, "font-mono")}
+          className="font-mono"
         />
         {touched && value.length === 0 && !saving && <span className="text-sm text-attention-text">Type the value to store.</span>}
       </div>
