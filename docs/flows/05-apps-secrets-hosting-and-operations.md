@@ -231,7 +231,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Level:** Advanced · **Learn first:** CRED-03 · **What you learn:** an app can be held to its own cap, inside whatever holds the levels above it.
 - **Steps:**
   1. The card says what holds it: "<n> credits a month, set on <App>", "<n> credits a month, from <Level>", or "No cap on it or above it: only the organisation's balance and overdraft hold it."
-  2. Press **"Set one for <App>"** (or **"Change it"**), type into "Credits a month", press **"Save"**: "<App> may spend <n> credits a month here."
+  2. Press **"Set one for <App>"** (or **"Change it"**). A card opens in its place headed "Set its monthly cap"; type into "Credits a month" and press **"Save"** ("Not now" beside it): "<App> may spend <n> credits a month here."
   3. **"Remove it"** removes its own; the card then says which cap applies.
 - **You know it worked when:** the card and the "Cost this month" tile ("Its own cap: <n> credits a month", "No cap of its own; <Level>'s <n> credits applies", or "No cap on it or above it") agree.
 - **Variations and refusals:** "Type a number of credits." · refused: "It was not saved: <reason> It is as it was." · failed read: "Its cap could not be loaded". Below Admin: "An Admin or the Owner sets these."
@@ -244,7 +244,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **Starts at:** "What it may spend", card **"Its AI allowance"** ("What the app's own AI may spend a month. Once used, its AI answers stop until the month turns; the rest of the app keeps working.").
 - **Needs:** Admin.
 - **Level:** Advanced · **Learn first:** APP-11, KIT-13 · **What you learn:** an app's own AI has a limit of its own, apart from the work done on it.
-- **Steps:** as APP-11, for the setting `app_models.monthly_credits`. With none set: "None is set on it or above it, so FrostAura's standard allowance applies."
+- **Steps:** as APP-11, for the setting `app_models.monthly_credits`; the card is headed "Set its AI allowance". With none set: "None is set on it or above it, so FrostAura's standard allowance applies."
 - **You know it worked when:** the card reads "<n> credits a month, set on <App>".
 - **Variations and refusals:** as APP-11; failed read: "Its AI allowance could not be loaded".
 - **Where:** `AppManage.tsx`; `PUT/DELETE /api/cascade` (setting `app_models.monthly_credits`).
@@ -288,6 +288,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
   - It could not be built or started: "<App> could not be rebuilt. Its last version stays as it is; ask the builder to look." (technical mode shows the build error).
   - Nothing ever built: 409 "Nothing has been built for this app yet, so there is no version to publish again."
   - Below Builder the panel is not shown; the API refuses with 403.
+  - An app held by its budget is not stopped: it shows the amber "<App> is paused by its budget." panel with **"Raise the budget"** instead (HOST-03), never this panel.
 - **Where:** `AppManage.tsx` (RebuildAndRestart), `AppView.tsx`, `History.tsx`; `POST /api/apps/{id}/republish`; `AppVersionService.RepublishAsync`.
 - **Reachable from:** UI; API. No MCP tool.
 - **Covered by tests:** `AppManage.test.tsx` ("is offered when the app stopped working…", "says plainly when it could not be rebuilt"); `tests-e2e/manage.spec.ts`; `VersionsAndExportTests.Rebuild_and_restart_publishes_the_newest_version_again_without_touching_history_or_access`; `AuthorizationMatrixTests`.
@@ -1206,7 +1207,7 @@ Role names used throughout: Owner > Admin > Builder > Viewer. "Operator" means a
 - **You know it worked when:** visitors see the page below, and the app page's Health reads paused with "Paused: a monthly budget above it is spent. Raising the budget or the new month restores it." — on the chart too.
 - **Steps:**
   1. Edge serves "This app is paused" / "It has used this month’s budget. Nothing has been lost — it will be back as soon as the budget is raised or the month turns.", with **"Try again"** and "Is this your app? **Raise its budget in Endgame**". It never wakes the app.
-  2. The app page and its chart row read health `paused` (never "Healthy"), with `paused { reason: budget_exhausted, note }` — from the same routing table Edge serves. At the overdraft limit the reason is `overdraft_limit` and the note "Paused: the organisation reached its overdraft limit. A top-up restores it at once." (HOST-04).
+  2. The app page shows an amber panel, "<App> is paused by its budget.", with the paused note beneath it and **"Raise the budget"**, which opens Credits; it is never the red "stopped" panel and offers no "Rebuild and restart". The app page and its chart row read health `paused` (never "Healthy"), with `paused { reason: budget_exhausted, note }` — from the same routing table Edge serves. At the overdraft limit the reason is `overdraft_limit` and the note "Paused: the organisation reached its overdraft limit. A top-up restores it at once." (HOST-04).
   3. Raising or removing the budget (APP-11), a top-up, or the month turning restores the app. A person's budget, overdraft or top-up change has Edge read the new table before the request answers, so the app is back at once.
 - **Variations and refusals:** none.
 - **Where:** `AppGate.cs`; `ReadModels.AppAsync`

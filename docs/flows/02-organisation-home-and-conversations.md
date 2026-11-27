@@ -27,7 +27,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
      - the heading "Name your organisation, then describe your first idea.";
      - the text "Everything you make lives under it. Endgame researches the idea first, tells you plainly whether it is worth building, then builds and runs it.";
      - a white button, "Start".
-  4. The header shows only the "Endgame" wordmark, the "Normal" / "Technical" toggle, your account and "Sign out". There is no breadcrumb, conversation, bell or credits pill: those appear only once the person has an organisation.
+  4. The header shows only the "Endgame" wordmark, the "Normal" / "Technical" switch, your account and "Sign out" (below 1,100 px wide the switch and Sign out are in the account menu). There is no breadcrumb, conversation, bell or credits chip: those appear only once the person has an organisation.
   5. Pressing "Start" goes to `/start` (ORG-02).
 - **You know it worked when:** you see the heading "Name your organisation, then describe your first idea." and a "Start" button.
 - **Variations and refusals:** a FrostAura operator with no organisation sees the God-mode panel instead (ORG-17).
@@ -51,7 +51,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
   5. The person presses "Research this idea". While it works, the button reads "Starting research…".
   6. The console first calls `POST /api/organisations {name, slug}`. The control plane validates the slug, checks it against reserved names, creates the organisation, makes the caller its Owner, and adds the standing Security reviewer employee. Its answer carries `balance` 0 and `creditsNote` "{Name} has no credits until FrostAura tops it up: its first piece of work waits for budget until then." — Endgame invents no starter credits, so `/api/credits` and the chart read `neverToppedUp: true` until the first top-up. It then calls `POST /api/ideas`.
   7. The browser goes to the research run at `/runs/{id}`. From here on it is the ideas and runs flows (RUN-01).
-- **You know it worked when:** you land on the research run's page, and the header gains the organisation's name and the credits pill.
+- **You know it worked when:** you land on the research run's page, and the header gains the organisation's name and the credits chip.
 - **Variations and refusals:**
   - Name hint in red: "Use at least two letters or digits." The button stays disabled.
   - A reserved name (for example `www`, `api`, `admin`, `operator`) is not checked in the browser. The server refuses it with "'{slug}' is reserved and cannot name an organisation." The page shows "Research did not start: {reason} Nothing was charged."
@@ -89,15 +89,15 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Needs:** an organisation exists and the person holds a role in it.
 - **Level:** Foundation · **Learn first:** ORG-02 · **What you learn:** the band totals the whole organisation and is live.
 - **Steps:**
-  1. The header shows:
-     - the mark and "Endgame";
-     - the breadcrumb "{organisation} / Whole organisation";
-     - the "Normal" / "Technical" toggle;
-     - the organisation switcher, for someone in two or more organisations (ID-09);
-     - the credits pill "{n} credits left", which links to `/credits` and polls every 30 seconds;
+  1. The header is one bar that never wraps (SHL-03). It shows:
+     - the mark ("Endgame" beside it from 1,280 px wide);
+     - the breadcrumb "{organisation} / Whole organisation", in the bar from 1,280 px wide and on its own row beneath it below that;
+     - the "Normal" / "Technical" switch, from 1,100 px wide;
+     - the organisation switcher **"Working in"**, always in the bar, for someone in two or more organisations (ID-09);
+     - the balance: a neutral chip reading **"Credits"**, the figure and a small status dot, which links to `/credits`, is read out as "{n} credits left" and polls every 30 seconds;
      - the bell (NOTE-01);
-     - "Your account" (a person icon, ID-09);
-     - "Sign out".
+     - in technical mode, from 1,100 px wide, **"System"**, an icon link to system status;
+     - "Your account" (a person icon, ID-09) and "Sign out" from 1,100 px wide; below that one account menu, **"Your account, the mode and signing out"**, holds your account, the mode, System status (technical mode) and Sign out.
 
      There is also a hidden "Skip to the content" link for keyboard users.
   2. The band shows:
@@ -110,8 +110,8 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
   3. Every 15 seconds the tree is fetched again while the tab is in focus, so status, spend and who is working stay live.
 - **You know it worked when:** the band shows your organisation's name and its four figures.
 - **Variations and refusals:**
-  - The credits pill turns amber when the balance is at or below zero.
-  - "Balance unavailable", in the amber failure style, appears only when the credits read fails. Someone with no role at the organisation itself has the balance read at their own level (as on Credits), so the pill shows the organisation's balance for them too.
+  - The chip itself stays neutral; only its dot changes: green with room to spend, amber below zero, red only when nothing is left to spend (overdraft included), grey for an organisation FrostAura has never topped up. The read-out adds ", below zero", ", at its limit" or ", never topped up".
+  - "Credits unavailable" appears only when the credits read fails. Someone with no role at the organisation itself has the balance read at their own level (as on Credits), so the chip shows the organisation's balance for them too.
   - Someone whose role is only on part of the tree sees no organisation-level worker chips, and spend summed from the divisions they can see (ORG-19).
   - The summary line's employee count is for the whole organisation, but the "employees" figure counts only the employees visible in the tree. For a person who sees only part of the tree, the two can disagree.
 - **Where:** `HomeView.tsx` (`Organisation`), `shell/AppShell.tsx`, `treeModel.ts` (`orgFigures`, `countTree`); `GET /api/tree`, `GET /api/credits`.
@@ -192,7 +192,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **You know it worked when:** the breadcrumb's last step and the conversation heading "Talking to {name}" both show what you selected.
 - **Variations and refusals:**
   - **An app cannot be selected.** App rows are links to the app page (ORG-10), so the conversation is never scoped to an app from home. **Spec mismatch:** the spec says the conversation can be scoped to "an app" and that "Selecting a node opens it". Selecting a division or project only re-scopes; each has its "Manage" link instead (TREE-13).
-  - On a phone the header names the level selected, with the levels above it in small type; **"Up to {level}"** selects the level above, and tapping the name lists every level (SHL-03). Each division on the chart opens folded, the first one open: its header says how many projects and apps it holds, and its chevron shows or folds them.
+  - On a phone the header names the level above the one selected while the page's title is in view, then the level selected once the title scrolls under it; **"Up to {level}"** selects the level above, and tapping the name lists every level (SHL-03). Each division on the chart opens folded, the first one open: its header says how many projects and apps it holds, and its chevron shows or folds them.
   - A selection that no longer exists in the tree resets to where home starts.
   - An employee chip shown on a project card can belong to one of its apps, but the selection made is the project plus that employee.
 - **Where:** `HomeView.tsx` (`crumbsFor`), `OrgChart.tsx`, `shell/AppShell.tsx` (`Breadcrumb`), `store/uiSlice.ts` (`selected`).
@@ -231,7 +231,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Steps:**
   1. The card shows its name (a selection button) and "Manage".
   2. A stage chip appears unless the project is live with apps. The stages the server sends are "Researching", "Reviewing", "Building", "Planning", "Live" and "Paused".
-  3. Under its name the card shows its stage chip and "{credits} this month" (an amount below 0.1 reads "0 credits this month"), then an optional note: "Waiting for your approval.", "Work here is paused.", "The last piece of work failed." or "Archived.". A live project with apps has no chip at all. A project that is one app of the same name, with the same spend, says its name and spend once: the app's row carries its chips, **"Open the app"** and its two figures.
+  3. Under its name the card shows its stage chip and "{credits} this month" (by the one number rule: "0.05 credits this month", "<0.01 credits this month" for under a hundredth, "1 credit this month" only for exactly 1), then an optional note: "Waiting for your approval.", "Work here is paused.", "The last piece of work failed." or "Archived.". A live project with apps has no chip at all. A project that is one app of the same name, with the same spend, says its name and spend once: the app's row carries its chips, **"Open the app"** and its two figures. An app with no version yet (never built, or its build stopped before anything was published) has nothing to open there: the row says a muted "No version yet" in place of "Open the app".
   4. If work is under way: "{stage}, step {x} of {y}" — {x} the step under way, counted from 1 (`progress.step`) — (just "{stage}" until a step of the plan has begun: never "step 0 of {y}"), then "{spent} of an estimated {estimate}" (or "{spent} so far" when there is no estimate, or an estimate of 0), a moving progress bar once there is a plan, filled by the finished steps (`progress.done`), and the link "Watch the work", which goes to `/runs/{id}`.
   5. Below that: its apps (ORG-10) and its people (ORG-11).
 - **You know it worked when:** "Watch the work" opens the live run.
@@ -367,7 +367,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
 - **Needs:** operator; no membership.
 - **Level:** Operator · **Learn first:** ID-02 · **What you learn:** an operator works across organisations, and every entry is logged where that organisation's Owner can read it.
 - **Steps:**
-  1. A coral band "God mode" sits above the header on every screen: "You are a FrostAura operator. Entering an organisation is logged where its Owner can read it." with the link "Every organisation".
+  1. One slim coral bar, "God mode", sits above the header on every screen, with "You are a FrostAura operator. Entering an organisation is logged where its Owner can read it." on one line, the link "Every organisation" and a chevron, "What God mode means", that opens the full sentence (SHL-05).
   2. Home shows the panel "God mode", "You run Endgame for FrostAura. Every organisation is one step away.", and "List them, set one up for an invited Owner, top one up or enter it. Each entry is written where that organisation’s Owner can read it."
   3. The button "Every organisation" goes to `/operator` (OP-01).
   4. Beside it, every organisation at a glance: "Organisations", "Top-ups asked for" (with "Waiting for your answer" when any are) and "Below zero" ("—" until they are read).
@@ -406,7 +406,7 @@ Throughout, "the dock" means the conversation panel. It is in `ConversationDock.
   3. The levels above their grant are names on the way down: the organisation in the breadcrumb is not a button, and the organisation's name in the band takes them back to their own level.
   4. "Who works on what" and "How data flows" ask at the level selected (`GET /api/ontology?scope={selection}`), never at the organisation.
 - **You know it worked when:** the conversation heading reads "Talking to {their level}" with no error, and both graph tabs draw.
-- **Variations and refusals:** someone with grants in two divisions starts at the first; selecting the other works too. The credits pill shows the organisation's balance, read at their own level (`GET /api/credits?scope={their level}`), never at the organisation where they hold no role.
+- **Variations and refusals:** someone with grants in two divisions starts at the first; selecting the other works too. The credits chip shows the organisation's balance, read at their own level (`GET /api/credits?scope={their level}`), never at the organisation where they hold no role.
 - **Where:** `HomeView.tsx` (`homeSelection`, `selectable`), `lib/roles.ts` (`roleInTree`), `ConversationDock.tsx`, `OntologyView.tsx`; `GET /api/tree` (each node's `role`).
 - **Reachable from:** UI.
 - **Covered by tests:** `HomeView.test.tsx` "starts someone granted only a division at that division, and asks the conversation and the graphs there"; `ScreensAndRolesTests.The_tree_carries_each_nodes_effective_role_and_archived_levels_are_marked_and_not_served`; `TreeEndpointTests` / `AuthorizationMatrixTests`.
@@ -453,7 +453,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Core · **Learn first:** ORG-07, TREE-13 · **What you learn:** a node's address is made from its name once, when it is made, and never changes.
 - **Steps:**
   1. On the chart's header row, beside the view tabs, **"Add a division"**.
-  2. It opens "Manage" with the organisation chosen and the form "A new division in {organisation}" open, with **"Name"** and **"Its address"**.
+  2. It opens "Manage" with the organisation chosen and the form "A new division in {organisation}" open as a card headed by those words, with **"Name"** and **"Its address"**, and **"Add the division"** beside an outlined **"Not now"** of the same size.
   3. Type the name. "Its address" fills itself from it (`Field Trips` → `field-trips`); its hint reads "{organisation}/{slug}. It cannot be changed once it is made." You may change the address before pressing the button.
   4. Press **"Add the division"**. The new division is listed in "Every part of the organisation" and chosen.
   5. On its next refresh the org chart shows its column: "No projects in {name} yet."
@@ -475,7 +475,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Core · **Learn first:** TREE-02 · **What you learn:** a project is always under exactly one division.
 - **Steps:**
   1. The division's "Manage" link opens "Manage" with the division chosen.
-  2. Press **"Add a project"**: the form "A new project in {division}".
+  2. Press **"Add a project"**: a card opens under it headed "A new project in {division}", with **"Add the project"** and **"Not now"**.
   3. Type the name; "Its address" fills itself ("{division path}/{slug}").
   4. Press **"Add the project"**. It is listed under its division in the outline, and chosen.
   5. On the chart it is a card in its division with the stage chip "Planning".
@@ -492,7 +492,7 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Advanced · **Learn first:** TREE-03 · **What you learn:** an app node exists before anything is built into it, and it is the deepest level.
 - **Steps:**
   1. Choose the project in the outline.
-  2. Press **"Add an app"**: the form "A new app in {project}".
+  2. Press **"Add an app"**: a card opens under it headed "A new app in {project}", with **"Add the app"** and **"Not now"**.
   3. Type the name; "Its address" fills itself.
   4. Press **"Add the app"**. The app is chosen, with the link **"The app’s page"**. It starts as a draft.
   5. Its page says "Not published yet." Building it is the factory's work.
@@ -608,8 +608,8 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 - **Level:** Core · **Learn first:** TREE-13 · **What you learn:** what you say at a level is read by everything beneath it unless a lower level says it differently.
 - **Steps:**
   1. The panel reads "What {name} is, said once. Everything beneath it reads this, unless a lower level says it differently."
-  2. Press **"Say something about {name}"**. Fill **"What it is about"** (hint "For example: Purpose, Audience, House style.") and **"What it says"**.
-  3. Press **"Add it"**. It shows at once with the badge "Said here".
+  2. Press **"Say something about {name}"**. A card opens under it headed "Say something about {name}". Fill **"What it is about"** (hint "For example: Purpose, Audience, House style.") and **"What it says"**.
+  3. Press **"Add it"** ("Cancel" beside it). It shows at once with the badge "Said here".
   4. An entry inherited from above shows "From {level name}"; **"Say it differently here"** replaces it at this level. An entry said here offers **"Change"** and **"Remove it"**.
 - **You know it worked when:** the entry is listed with "Said here".
 - **Variations and refusals:**
@@ -1231,7 +1231,8 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
      - "Answered" (green) when what it asked is already answered — or "Closed" (grey) for an approval whose work ended before anyone answered it; such a row has no dot and no "Mark read", and its title is plain;
      - "Also e-mailed" when it was;
      - in technical mode, the raw kind;
-     - at the row's end, how long ago, and "Mark read" when unread (on a phone, at the end of the tag line).
+     - "Mark read", a quiet button at the end of the tag line, when unread — at every width;
+     - how long ago, in its own column at the row's end (on a phone and in the bell's list, at the end of the tag line, before "Mark read").
   5. An aside "What you are told about" (on a phone a folded row, "Verdicts, approvals, hires, budgets, credits, apps and security") lists: "A verdict waiting for your call", "An approval the work is waiting on", "A hire proposed", "A budget at 80% and at its cap", "Credits at zero, halfway to the overdraft limit, and at it", "An app that stopped working", "A security review that found a problem", "For FrostAura’s operators: an Owner asking for a top-up". It adds: "Owners and Admins are told about what their grant covers; others see an empty feed."
 - **You know it worked when:** the page lists your notices, newest first.
 - **Variations and refusals:** the UI asks for at most 50. A verdict, approval or hire that has been answered (by anyone) comes back resolved and read, its title saying what happened — "You approved “Accept this plan?”", "Theo was hired as Software engineer", "Dean chose to build: …", "Auto-mode chose to build: …" (a verdict auto-mode acted on) — and it no longer counts as unread. An approval whose run ended before anyone answered it is closed with the run (expired, never "declined") and reads "No longer waiting: “{question}” — the work ended before it was answered"; it is not on the "Needs you" strip, and its row reads "Closed" rather than "Answered". Such a row has no unread dot and no "Mark read", here and in the bell's popover.
@@ -1344,15 +1345,15 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 
 ### SYS-01 Switch between normal and technical mode
 - **Who:** anyone signed in.
-- **Starts at:** the header toggle, "Normal" / "Technical".
+- **Starts at:** the mode switch, "Normal" / "Technical": in the header bar from 1,100 px wide, in the account menu ("Your account, the mode and signing out") below that, under **More** on a phone.
 - **Needs:** —
 - **Level:** Core · **Learn first:** ORG-04 · **What you learn:** technical detail is available, never in the way.
 - **Steps:**
-  1. Select "Technical". The toggle marks it pressed, and a "System" link (a health icon) appears beside it.
+  1. Select "Technical". The switch marks it pressed, and "System" appears: in the bar, an icon link (a health icon) of its own outside the switch; in the account menu and in More, a "System status" row.
   2. Technical wording appears across screens: "MCP access", raw notification kinds, internal service names, context keys. The choice is remembered in this browser.
-- **You know it worked when:** "Technical" is pressed and the "System" link appears.
+- **You know it worked when:** "Technical" is pressed and "System" appears.
 - **Variations and refusals:** in a private window that refuses storage, the mode holds for the session only.
-- **Where:** `AppShell.tsx` (`ModeToggle`), `store/uiSlice.ts`.
+- **Where:** `shellControls.tsx` (`ModeToggle`, `SystemLink`, `AccountMenu`), `store/uiSlice.ts`.
 - **Reachable from:** UI.
 - **Covered by tests:** `App.test.tsx`: "keeps system status behind technical mode, and remembers the mode".
 
@@ -1372,12 +1373,12 @@ The cascade carries six kinds of value: `permission`, `secret`, `budget`, `rule_
 
 ### SYS-03 Read system status
 - **Who:** anyone in technical mode.
-- **Starts at:** "System" in the header, or `/system`.
+- **Starts at:** "System" in the header (in the account menu below 1,100 px wide, under More on a phone), or `/system`.
 - **Needs:** technical mode.
 - **Level:** Advanced · **Learn first:** SYS-01 · **What you learn:** each service is asked directly, and the whole is healthy only if every part is.
 - **Steps:**
   1. Heading "System status", with "Every service, asked directly whether it is healthy." and a "Check again" button. On first load: "Checking every service…".
-  2. A white summary card across the page shows "All services healthy" with a green tick and the tag "Healthy", or "{n} of {m} services unhealthy" with a warning sign and the tag "Needs attention", and "Checked at {hh:mm:ss}".
+  2. A white summary card across the page shows "All services healthy" with a green tick and the tag "Healthy", or "{n} of {m} services unhealthy" with a warning sign and the tag "Needs attention", and "Checked at {hh:mm:ss}", on the 24-hour clock ("Checked at 14:05:09").
   3. Beneath it, one card per configured service (two, three or four across as the screen widens), in this order: "Control plane", "Edge", "Runner", "Dock", "Database", "Console", "Cloudflare and backups", "Telemetry collector", then any extras. Each shows its latency ("{n} ms" or "{n.n} s"), a "Healthy" / "Unhealthy" badge, and any detail.
   4. The page re-checks every 10 seconds while focused. "Check again" forces a check, spinning while it runs.
 - **You know it worked when:** "All services healthy" with one card per service.

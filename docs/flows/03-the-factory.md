@@ -359,7 +359,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **What you learn:** you can overrule research, and the overrule is recorded and counted.
 - **Steps:**
   1. Press **"Overrule and build anyway"**.
-  2. The confirmation reads "Build it against the verdict? This is recorded as an overrule." with **"Yes"** / **"No"**.
+  2. A card opens under the row of choices: "Build it against the verdict?" and "This is recorded as an overrule.", with **"Yes"** and an outlined **"No"** of the same size. Pressing the button again, "No" or Escape closes it.
   3. Press **"Yes"**. A build run starts and you are taken to it.
 - **You know it worked when:** the idea page shows a tinted panel "You overruled the verdict and chose to build it on {date}." and "The project carries a note that research advised against it." The idea joins "When you overruled".
 - **Variations and refusals:** "build" over a do-not-build gives 409 ("…takes an explicit overrule…"); an overrule of a build verdict gives 409. Auto-mode never overrules.
@@ -374,8 +374,8 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Foundation. **Learn first:** VERD-03.
 - **What you learn:** dropping ends the idea and keeps its record.
 - **Steps:**
-  1. Press **"Drop the idea"**.
-  2. The confirmation reads "Drop this idea?" with **"Yes"** / **"No"**.
+  1. Press **"Drop the idea"**, an outlined destructive button in the same row of choices as the others, the same size.
+  2. A card opens under the row: "Drop this idea?", with a destructive **"Yes"** and an outlined **"No"** of the same size.
   3. Press **"Yes"**. You stay on the page.
 - **You know it worked when:** the panel reads "You dropped the idea on {date}."
 - **Variations and refusals:** no run follows. A dropped idea cannot be revived.
@@ -429,7 +429,7 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Core. **Learn first:** VERD-02.
 - **What you learn:** a failed research run records no verdict and nothing is built; it can be started again, its cost shown first.
 - **Steps:**
-  1. The idea page shows the alert **"Research did not finish"**, "No verdict could be reached.", "Research stopped before it reached a verdict. The trace shows where." and **"See what happened"**.
+  1. The idea page shows the tag **"Research did not finish"**, "No verdict could be reached.", "Research stopped before it reached a verdict. The trace shows where." and **"See what happened"**. The tag says how it stopped: a failure is drawn in the failure's red (and announced as an alert); research a person cancelled reads a neutral **"Research cancelled"**, and research its budget stopped reads "Research did not finish" in the paused-by-budget colour — neither is drawn as a fault.
   2. Below it the panel says why ("This work stopped before it finished. What was finished is kept.", "This work was cancelled. What was finished is kept." or "The credit budget ran out, so this work stopped…") with **"Try again"** and "It picks up where this stopped; you see what it costs first."
   3. Press **"Try again"** ("Working it out…"). It reads "Research starts again with the same idea, and you see the verdict before anything is built.", **"Estimated {credits}"** and the basis.
   4. Press **"Start it again"** ("Starting…") or **"Not now"**. You are taken to the new research run (VERD-01), with the same idea, constraints and change.
@@ -551,8 +551,8 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Core. **Learn first:** RUN-01.
 - **What you learn:** cancelling ends the work for good, releases the credits it was holding, and closes every contractor it briefed.
 - **Steps:**
-  1. Press **"Cancel"**.
-  2. The confirmation reads "Stop this work for good?" with **"Yes, cancel it"** / **"Keep going"**.
+  1. Press **"Cancel"** (outlined, in the attention colour). The actions stay where they are.
+  2. A card opens straight under the run's header, anchored to the right edge under "Cancel" (on a phone it comes first, above the run's actions): "Stop this work for good?" with **"Yes, cancel it"** and an outlined **"Keep going"** of the same size.
   3. Press **"Yes, cancel it"**. The badge changes to "Cancelled" and the step "Cancelled" is logged.
 - **You know it worked when:** the control buttons disappear and the badge reads "Cancelled".
 - **Variations and refusals:**
@@ -571,11 +571,11 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Core. **Learn first:** RUN-01, AUTO-03.
 - **What you learn:** a checkpoint pauses the work for your word, your note goes back to the work, and declining is told truthfully.
 - **Steps:**
-  1. The card shows the badge **"Needs you"**, what will happen if you approve, in plain words, and under it why it asks ("Your rules for this stage ask for your sign-off before this is done. …", "This waits for your sign-off before it is done. …", "{h} credits are left in the budget."). In technical mode the tool line is added ("change_app: … Checkpoint: change_app."). An approval asked before the plain words existed reads the same way: its stored tool line is served as the technical detail, the plain sentence takes its place, and a setting change is titled by what approving does (`OlderApprovals`), on the card, in "Needs you", in its notice and in the run's log.
+  1. The card shows the tag **"Needs you"** (a hand, in the waiting blue, never the alarm red), what will happen if you approve, in plain words, and under it why it asks ("Your rules for this stage ask for your sign-off before this is done. …", "This waits for your sign-off before it is done. …", "{h} credits are left in the budget."). In technical mode the tool line is added ("change_app: … Checkpoint: change_app."). An approval asked before the plain words existed reads the same way: its stored tool line is served as the technical detail, the plain sentence takes its place, and a setting change is titled by what approving does (`OlderApprovals`), on the card, in "Needs you", in its notice and in the run's log.
   2. Optionally type into **"Add a note (optional)"**.
   3. Under the buttons: "Declining skips only this step; the work goes on without it." or, for the start and plan checkpoints, "Declining stops this work."
   4. Press **"Approve"** or **"Decline"**. The card reads "Approved. Sending…" or "Declined. Sending…", then "Approved. The work carries on from here.", "Declined. It was not done; the work continues without it." or "Declined. It was not done, so the work has stopped."
-  5. The step "You answered: approved" or "declined" is logged, with your note beneath it; the note is given back to the agent ("Their note: …").
+  5. The step "You answered: approved" or "declined" is logged, with your note beneath it; the note is given back to the agent ("Their note: …"). In the steps an approval is marked with a hand, never a red shield: the asking step "Asked for your approval" in the waiting blue, the answer in a neutral grey.
 - **You know it worked when:** the card disappears from the list and the badge leaves "Waiting for you".
 - **Variations and refusals:**
   - A failed answer: "Your answer was not recorded: {reason}" and the buttons come back. A second answer gives 409. A note is at most 2000 characters.
@@ -682,9 +682,9 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **What you learn:** an estimate is shown first and scored against what the work really cost.
 - **Steps:**
   1. **"Estimate"** shows "Not yet made" or the figure shown before the work began, with "Shown before the work began"; once the plan re-estimates it, a second line reads "{n} once planned" (the first figure is never replaced). The server gives the two apart (`firstEstimateCredits`, `planEstimateCredits`; `estimateCredits` is the latest); an older run without them reads them from its log.
-  2. **"Spent so far"** shows what the work was charged, a bar and "{p}% of" the figure it is held against: "the estimate shown before the work began", or, once planned, "the {n} estimated once planned". It is the run's own cost: the billable settlements in its log, counted as the ledger counts them, so a free repair is not in it and the figure matches "cost {y}" once scored. The percentage is the true one ("130% of the estimate"); the bar stops at full and turns to the attention colour above 100%. A small amount is never rounded to 0: it keeps two decimals ("0.05 credits") or reads "<0.01 credits".
+  2. While the work runs, **"Spent so far"** shows what it has been charged, a bar and "{p}% of" the figure it is held against: "the estimate shown before the work began", or, once planned, "the {n} estimated once planned". Once the work has finished the tile says **"Spent"**, with the same caption and no bar. It is the run's own cost: the billable settlements in its log, counted as the ledger counts them, so a free repair is not in it and the figure matches "cost {y}" once scored. The percentage is the true one ("130% of the estimate"); the bar stops at full and turns to the attention colour only above 100%. Against an estimate under 1 credit there is no percentage and no bar: the caption reads "Under 1 credit, as estimated", or "Estimated under 1 credit" if the work went past a credit. Every figure follows the one number rule: whole from 10, up to two decimals below 10 ("7.47", "0.05"), "<0.01" for under a hundredth, so a small amount never reads 0, and "1 credit" only when exactly 1 is shown.
   3. While running, **"Held for calls in flight"** shows "Reserved before each call, released when it settles".
-  4. When finished, **"Estimate against actual"** shows "on the estimate", "{n}% over" or "{n}% under", with "Against {which estimate}: cost {y}" — "the {x} estimated once planned", "the estimate shown before the work began" — and **"Not charged"** shows the credits the work used repairing its own mistakes, "Repairs of the work’s own mistakes, never billed".
+  4. When finished, **"Estimate against actual"** shows "Exact" (caption "On the estimate. Against …"), "{n}% over" or "{n}% under", with "Against {which estimate}: cost {y}" — "the {x} estimated once planned", "the estimate shown before the work began". Against an estimate under 1 credit it shows "—", with "Under 1 credit, as estimated: cost {y}" (or "Estimated under 1 credit: cost {y}"). **"Not charged"** shows the credits the work used repairing its own mistakes, "Repairs of the work’s own mistakes, never billed".
   5. The aside **"Where the credits go"** says "Credits are held before each step and settled from what it really cost. Repairing a mistake of its own is never billed." with **"See credits"**.
   6. Free repairs are named in the steps: "Sent back for repair, at no charge: …", and "Fixed what the security review found, at no charge".
 - **You know it worked when:** "Estimate against actual" appears on a finished run.
@@ -940,7 +940,7 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
   1. The heading reads "How much {name} does on its own", with "Set once for the organisation, narrowed for a division, project or app. The credit budget is the limit that is always on."
   2. Pick a level under **"Level"** (indented with "— ").
   3. Each value says "Set here", "Inherited from {name}", "Not set anywhere: auto-mode by default" or "Not set anywhere: off".
-  4. "Rules for each stage" is one table: a row per stage ("Every stage", "Research", "Planning", "Building", "Checking the work", "Security review", "The conversation") and a column each for "May not", "Asks you first" and "May do", with where the stage's rules were set under its name. A tool with several rules in a list is one line ("Run commands and tests, limited"); technical mode lists each rule beneath it as the harness reads it. A list with nothing in it shows "—"; a stage with no rules at all reads "No rules set for this stage".
+  4. "Rules for each stage" is one table with the columns "Stage", "May not", "Asks you first" and "May do": a row per stage ("Every stage", "Research", "Planning", "Building", "Checking the work", "Security review", "The conversation"), with where the stage's rules were set under its name. Where its column is narrow the rows become a list of cards, each list named beside its rules. A tool with several rules in a list is one line ("Run commands and tests, limited"); technical mode lists each rule beneath it as the harness reads it. A list with nothing in it shows "—"; a stage with no rules at all reads "No rules set for this stage" under its name, with "—" in each of its three lists. An Admin sees one action at the end of each row: **"Change"** where rules are set at this level, **"Set rules here"** where they are not.
   5. The side panel: "One rule, used everywhere", and "What never changes": "The credit budget is always on.", "No one may make an app public but a person.", "Nothing is built over a red line.", "Repairing its own mistake is never billed."
 - **You know it worked when:** the origin labels show.
 - **Variations and refusals:** non-admins see "You can read these. An Admin or the Owner sets them." and disabled controls. Loading and failure: "The autonomy settings could not be loaded".
@@ -1006,12 +1006,12 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 - **Level:** Advanced. **Learn first:** AUTO-01.
 - **What you learn:** a stage's own rules add to those for every stage, and the nearest level's rules win.
 - **Steps:**
-  1. Press **"Set rules here"**, or **"Change"** if rules are already set here, at the end of the stage's row. Its editor opens across the row.
+  1. Press **"Set rules here"**, or **"Change"** if rules are already set here — the row's one action, at its end. Its editor opens across the row, under it.
   2. In each of the lists **"May not"**, **"Asks you first"** and **"May do"**:
      - in normal mode, pick a tool from **"Choose…"** and press **"Add"**;
      - in technical mode, type `tool` or `tool(pattern)` (each list's placeholder is an example: "run(rm -rf *)", "run(npm install*)", "edit_file") and press **"Add"** or Enter;
      - remove a rule with the × chip.
-  3. Press **"Save for {level}"**, or **"Cancel"**.
+  3. Press **"Save for {level}"**, or **"Cancel"**. Where rules are set at this level, **"Remove here"** sits on the same line, at its end (AUTO-06).
 - **You know it worked when:** the stage's row shows your rules and "Set here". Overriding a higher level shows "Replaces the rules set at …".
 - **What it changes:** every agent's permission check at that stage. "May not" is refused whatever else applies. "May do" is allowed.
 - **Variations and refusals:**
@@ -1024,12 +1024,12 @@ Each of these happens inside one build run "Build: {title}" and is followed on i
 
 ### AUTO-06 Remove the rules set here
 - **Who:** Admin.
-- **Starts at:** **"Remove here"** at the end of a stage's row.
+- **Starts at:** **"Remove here"**, inside the form that **"Change"** opens on a stage's row (AUTO-05); it is shown only where rules are set at this level.
 - **Needs:** rules set at this level.
 - **Level:** Advanced. **Learn first:** AUTO-05.
 - **What you learn:** removing rules lets the inherited ones apply again.
 - **Steps:**
-  1. Press **"Remove here"**. There is no confirmation.
+  1. Press **"Change"** on the stage's row, then **"Remove here"** at the end of the form's buttons. There is no confirmation.
   2. The row shows the inherited rules or "No rules set for this stage".
 - **You know it worked when:** "Set here" disappears.
 - **Variations and refusals:** refused: "Not removed: …"; 404 if nothing is set.
