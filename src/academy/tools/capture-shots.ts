@@ -4,7 +4,7 @@ import path from "node:path";
 import { chromium, type Browser, type Page } from "@playwright/test";
 import { serve } from "./serve.ts";
 import { cropFor, printedPoints, type Box, type Scene } from "./print-crop.ts";
-import { PRINT_SHOT } from "../src/theme/tokens.ts";
+import { PRINT_SHOT, printMmPerPx } from "../src/theme/tokens.ts";
 import type { DemoStep, ScriptStep, StepScript } from "../src/content/scripts.ts";
 
 /**
@@ -27,7 +27,7 @@ import type { DemoStep, ScriptStep, StepScript } from "../src/content/scripts.ts
  * in a PDF once. A print copy all but identical to the step before's is that picture.
  *
  *   node tools/capture-shots.ts [demoDir]     ACADEMY_FLOWS=APP,ASK limits it to those flows;
- *   SHOTS_OUT=<dir> writes elsewhere; PRINT_SCALE / PRINT_QUALITY try other print copies;
+ *   SHOTS_OUT=<dir> writes elsewhere; PRINT_TEXT_PX / PRINT_QUALITY try other print copies;
  *   PRINT_DEBUG=<dir> writes each print crop's screen reading there, to see why a crop fell where it did.
  */
 
@@ -42,15 +42,20 @@ const QUALITY = Number(process.env.SHOTS_QUALITY ?? 0.72);
 /** The demo's clock for anything it dates: one fixed moment, so "3 days ago" never drifts between runs. */
 const NOW = new Date("2026-11-25T10:00:00Z");
 /**
- * Print copies: JPEG quality, and pixels per CSS pixel. The screen is captured at twice its pixels
- * and drawn down to this, which keeps the type's edges clean; at the PDFs' one scale (PRINT_SHOT)
- * one pixel per CSS pixel is about 123 dpi, sharp enough for the console's text at 7 pt and up,
- * and what keeps academy.pdf a download rather than a payload.
+ * Print copies: JPEG quality, and how many pixels the smallest text in each gets. The screen is
+ * captured at twice its pixels and drawn down so its smallest text is `PRINT_TEXT_PX` pixels high
+ * (never more than one pixel per CSS pixel, never under 0.7): 12 px console text keeps 10.5 px, as
+ * crisp as it reads on a screen, and a crop whose smallest text is 14 px is drawn at three
+ * quarters. That is what keeps academy.pdf a download rather than a payload.
  */
-const PRINT_QUALITY = Number(process.env.PRINT_QUALITY ?? 0.6);
-const PRINT_SCALE = Number(process.env.PRINT_SCALE ?? 1);
-/** Bumped when the print copies change shape: every one is then captured again. */
-const PRINT_FORMAT = 4;
+const PRINT_QUALITY = Number(process.env.PRINT_QUALITY ?? 0.5);
+const PRINT_TEXT_PX = Number(process.env.PRINT_TEXT_PX ?? 10.5);
+export const printScale = (font: number) => (font > 0 ? Math.min(1, Math.max(0.7, PRINT_TEXT_PX / font)) : 0.8);
+/**
+ * The print copies' shape: the crop rules, the print scale and the encoding. When any of them
+ * changes, every print copy is captured again rather than reused.
+ */
+const printFormat = () => sha(Buffer.from([readFileSync(path.join(import.meta.dirname, "print-crop.ts"), "utf8"), JSON.stringify(PRINT_SHOT), PRINT_QUALITY, PRINT_TEXT_PX, PAPER_HIDES].join("\n"))).slice(0, 12);
 /** What a print copy never shows: the caption bubble, the soft cursor and the ring's number — on paper the step's own words sit beside it. */
 const PAPER_HIDES = "[data-demo-note], [data-demo-cursor], [data-demo-marker] { visibility: hidden !important; }";
 const SCALE = 2;
@@ -69,7 +74,7 @@ interface Play {
 
 export interface ShotIndex {
   format: 1;
-  printFormat?: number;
+  printFormat?: number | string;
   viewport: { width: number; height: number };
   shots: Record<string, string>;
   /** Each picture's print copy: its JPEG under print/, whether it goes under the step's words (wider than sits beside them), its size in CSS pixels and its smallest text. */
@@ -272,10 +277,23 @@ async function readScene(page: Page): Promise<Scene> {
     for (const { doc, dx, dy } of docs) {
       const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.nodeValue?.trim() && n.parentElement && !n.parentElement.closest("script, style, title") && shown(n.parentElement) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) });
       const range = doc.createRange();
+      // Text a box clips (an ellipsis, a scroller) shows only inside that box: its rects are cut to it.
+      const clips = new Map<Element, DOMRect | null>();
+      const clipOf = (el: Element): DOMRect | null => {
+        if (clips.has(el)) return clips.get(el) ?? null;
+        const cs = getComputedStyle(el);
+        const own = cs.overflowX !== "visible" || cs.overflowY !== "visible" ? el.getBoundingClientRect() : null;
+        const up = el.parentElement ? clipOf(el.parentElement) : null;
+        const clip = own && up ? new DOMRect(Math.max(own.left, up.left), Math.max(own.top, up.top), Math.max(0, Math.min(own.right, up.right) - Math.max(own.left, up.left)), Math.max(0, Math.min(own.bottom, up.bottom) - Math.max(own.top, up.top))) : (own ?? up);
+        clips.set(el, clip);
+        return clip;
+      };
       for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         const font = parseFloat(getComputedStyle(n.parentElement as Element).fontSize) || 0;
+        const clip = clipOf(n.parentElement as Element);
         range.selectNodeContents(n);
-        for (const r of range.getClientRects()) {
+        for (const raw of range.getClientRects()) {
+          const r = clip ? new DOMRect(Math.max(raw.left, clip.left), Math.max(raw.top, clip.top), Math.min(raw.right, clip.right) - Math.max(raw.left, clip.left), Math.min(raw.bottom, clip.bottom) - Math.max(raw.top, clip.top)) : raw;
           const box = rectOf(r, dx, dy);
           if (box.width < 1 || box.height < 1 || box.x >= vw || box.y >= vh || box.x + box.width <= 0 || box.y + box.height <= 0) continue;
           lines.push({ ...box, font });
@@ -345,11 +363,11 @@ async function capture(browser: Browser, play: Play, base: string, index: ShotIn
         await hide.evaluate((el) => (el as Element).remove());
         if (previous?.paper && (await nearlySame(encoder, previous.paper, paper))) print = previous.print;
         else {
-          const jpeg = await encode(encoder, paper, "image/jpeg", PRINT_QUALITY, Math.round(crop.box.width * PRINT_SCALE));
+          const jpeg = await encode(encoder, paper, "image/jpeg", PRINT_QUALITY, Math.round(crop.box.width * printScale(crop.font)));
           const name = `print/${sha(jpeg).slice(0, 16)}.jpg`;
           mkdirSync(path.join(out, "print"), { recursive: true });
           if (!existsSync(path.join(out, name))) writeFileSync(path.join(out, name), jpeg);
-          print = { file: name, whole: crop.box.width > PRINT_SHOT.besidePx, width: crop.box.width, height: crop.box.height, font: crop.font };
+          print = { file: name, whole: crop.box.width * printMmPerPx(crop.box.width, crop.font) > PRINT_SHOT.besideMm, width: crop.box.width, height: crop.box.height, font: crop.font };
         }
       }
       index.shots[key] = file;
@@ -387,9 +405,9 @@ async function main() {
   const old: ShotIndex | null = existsSync(indexFile) ? (JSON.parse(readFileSync(indexFile, "utf8")) as ShotIndex) : null;
   const sameShape = old?.viewport.width === VIEWPORT.width && old.viewport.height === VIEWPORT.height;
   // Print copies of an older shape are captured again; the current shape's are reused while their screen has not changed.
-  const samePrint = old?.printFormat === PRINT_FORMAT;
+  const samePrint = old?.printFormat === printFormat();
   const earlier: Record<string, PrintCopy> = sameShape && samePrint ? (old.print ?? {}) : {};
-  const index: ShotIndex = { format: 1, printFormat: PRINT_FORMAT, viewport: VIEWPORT, shots: filtered && sameShape ? { ...old.shots } : {}, print: filtered && sameShape ? { ...(old.print ?? {}) } : {}, hashes: sameShape && samePrint && old ? { ...old.hashes } : {} };
+  const index: ShotIndex = { format: 1, printFormat: printFormat(), viewport: VIEWPORT, shots: filtered && sameShape ? { ...old.shots } : {}, print: filtered && sameShape ? { ...(old.print ?? {}) } : {}, hashes: sameShape && samePrint && old ? { ...old.hashes } : {} };
   if (filtered) {
     index.shots = Object.fromEntries(Object.entries(index.shots).filter(([k]) => !list.some((p) => k.startsWith(`${p.flow}/`))));
     index.print = Object.fromEntries(Object.entries(index.print ?? {}).filter(([k]) => !list.some((p) => k.startsWith(`${p.flow}/`))));

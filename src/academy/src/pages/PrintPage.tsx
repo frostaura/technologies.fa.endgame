@@ -9,13 +9,14 @@ import { Breakable } from "../components/Breakable.tsx";
 import { stepOf } from "../bridge/player.ts";
 import { sentence } from "../content/text.ts";
 import type { ScriptStep } from "../content/scripts.ts";
-import { PRINT_SHOT } from "../theme/tokens.ts";
+import { PRINT_SHOT, printMmPerPx } from "../theme/tokens.ts";
 
 /** A step's print picture: its file under ./shots/, and (from `make academy-shots`) its size in the console's CSS pixels. */
 interface Paper {
   file: string;
   whole: boolean;
   width?: number;
+  font?: number;
 }
 
 /** The page numbers each flow landed on, set by `tools/render-pdf.ts` on its second pass (`window.__pages`). */
@@ -33,17 +34,18 @@ function paperImage(flowId: string, key: number | string, own?: string): Paper |
 }
 
 /**
- * A captured picture at the one print scale (`PRINT_SHOT`), so the console's text prints the same
- * size in every picture: beside its words when narrow, under them, set in under the step's number
- * where the column has the room, when wide. A script's own image fills the column.
+ * A captured picture at its print size (`printMmPerPx`): its smallest text at the same size in
+ * every picture, beside its words when narrow, under them — set in under the step's number where
+ * the column has the room — when wide. A script's own image fills the column.
  */
+const printedMm = (pic: Paper) => (pic.width ? pic.width * printMmPerPx(pic.width, pic.font ?? 0) : undefined);
 function Shot({ pic, alt }: { pic: Paper; alt: string }) {
-  const mm = pic.width ? pic.width * PRINT_SHOT.mmPerPx : undefined;
+  const mm = printedMm(pic);
   return <img src={`./shots/${pic.file}`} alt={alt} className={`${mm ? "max-w-full" : "w-full"} rounded-xs border`} style={mm ? { width: `${mm.toFixed(1)}mm` } : undefined} loading="eager" />;
 }
-const beside = (pic: Paper) => !!pic.width && pic.width <= PRINT_SHOT.besidePx;
+const beside = (pic: Paper) => (printedMm(pic) ?? Infinity) <= PRINT_SHOT.besideMm;
 /** The step's number column (2.25 rem, about 9.5 mm): a picture under the words sits in from it when it still fits the column. */
-const indented = (pic: Paper) => !pic.width || pic.width * PRINT_SHOT.mmPerPx <= PRINT_SHOT.columnMm - 9.5;
+const indented = (pic: Paper) => (printedMm(pic) ?? 0) <= PRINT_SHOT.columnMm - 9.5;
 
 const json = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v, null, 2));
 
@@ -165,7 +167,7 @@ export function PrintPage({ operator }: { operator: boolean }) {
                     </div>
                   );
                   if (!pic) return <li key={st.n} className="break-inside-avoid">{words}</li>;
-                  // A narrow picture sits beside its step; a wide one goes under it, at the same scale.
+                  // A narrow picture sits beside its step; a wide one goes under it.
                   return beside(pic) ? (
                     <li key={st.n} className="grid break-inside-avoid grid-cols-print-step items-start gap-5">
                       {words}
@@ -200,9 +202,9 @@ export function PrintPage({ operator }: { operator: boolean }) {
                   </ul>
                 </div>
               )}
-              {/* As on the site: a light card, a hairline, the one accent for its eyebrow. */}
+              {/* As on the site: a light card, a hairline, the one accent for its eyebrow; never alone at the top of a page. */}
               {f.workedWhen && (
-                <div className="mt-5 break-inside-avoid rounded-md border bg-surface p-4">
+                <div className="mt-5 break-before-avoid break-inside-avoid rounded-md border bg-surface p-4">
                   <p className="text-eyebrow font-semibold uppercase text-primary">You know it worked when</p>
                   <p className="mt-1 text-sm text-ink-body"><Inline text={f.workedWhen} plainIds /></p>
                 </div>

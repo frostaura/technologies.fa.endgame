@@ -19,13 +19,20 @@ export const SHORT_QUERY = "(max-height: 600px)";
 export const MOUSE_QUERY = "(hover: hover) and (pointer: fine)";
 
 /**
- * The PDFs' step pictures (`tools/print-crop.ts`, `PrintPage`): every picture prints at one scale,
- * `mmPerPx` millimetres to the console's CSS pixel, so its 12 px text prints at 7 pt. `columnMm` is
- * the page's text column (A4 less its two 12.7 mm margins); a crop is never wider than the column
- * holds at that scale, nor taller than `maxHeightPx`. A crop up to `besidePx` wide sits beside its
- * step's words; a wider one goes under them.
+ * The PDFs' step pictures (`tools/print-crop.ts`, `PrintPage`). Each prints so its smallest text
+ * comes out at `smallestPt`, never larger than `mmPerPx` millimetres to the console's CSS pixel
+ * (at which 12 px text prints at 7 pt) and never wider than the page's text column `columnMm`
+ * (A4 less its two 12.7 mm margins). A crop is never wider than `maxWidthPx` nor taller than
+ * `maxHeightPx`, the most the column holds at `mmPerPx`. A picture up to `besideMm` wide sits
+ * beside its step's words; a wider one goes under them.
  */
-export const PRINT_SHOT = { mmPerPx: 0.206, columnMm: 184, maxWidthPx: 890, maxHeightPx: 640, besidePx: 500 } as const;
+export const PRINT_SHOT = { mmPerPx: 0.206, smallestPt: 7.5, columnMm: 184, maxWidthPx: 890, maxHeightPx: 640, besideMm: 100 } as const;
+
+/** The millimetres one CSS pixel of a step picture prints at, from its width and its smallest text (with no text, the `mmPerPx` cap). */
+export function printMmPerPx(width: number, font: number): number {
+  const forText = font > 0 ? (PRINT_SHOT.smallestPt * 25.4) / 72 / font : PRINT_SHOT.mmPerPx;
+  return Math.min(PRINT_SHOT.mmPerPx, forText, PRINT_SHOT.columnMm / width);
+}
 
 export const academy = {
   fontSize: {

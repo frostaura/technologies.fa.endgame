@@ -1,4 +1,4 @@
-import { PRINT_SHOT } from "../src/theme/tokens.ts";
+import { PRINT_SHOT, printMmPerPx } from "../src/theme/tokens.ts";
 
 /**
  * Where a step's print picture is cut from the screen (`make academy-shots`): the whole component
@@ -57,8 +57,8 @@ export const CROP = {
   /** Breathing room around the card. */
   pad: 24,
   /** Never smaller than this: a small card keeps enough of its screen to be found again. */
-  minWidth: 440,
-  minHeight: 240,
+  minWidth: 360,
+  minHeight: 160,
   /** A card smaller than this is a control, not a component: the next card out is taken. */
   cardWidth: 160,
   cardHeight: 56,
@@ -116,8 +116,9 @@ export function snap(crop: Box, lines: Line[], keep: Box, vw: number, vh: number
  */
 function snapText(crop: Box, lines: Line[], keep: Box, vw: number, vh: number): Box {
   let c = crop;
+  const given = new Set<Line>();
   for (let round = 0; round < 24; round++) {
-    const cut = lines.find((l) => intersects(c, l) && !contains(c, l, 0.5));
+    const cut = lines.find((l) => !given.has(l) && intersects(c, l) && !contains(c, l, 0.5));
     if (!cut) break;
     const options: Box[] = [];
     if (bottom(cut) + 2 <= keep.y) options.push(box(c.x, bottom(cut) + 2, right(c), bottom(c)));
@@ -125,6 +126,11 @@ function snapText(crop: Box, lines: Line[], keep: Box, vw: number, vh: number): 
     if (right(cut) + 2 <= keep.x) options.push(box(right(cut) + 2, c.y, right(c), bottom(c)));
     if (cut.x - 2 >= right(keep)) options.push(box(c.x, c.y, cut.x - 2, bottom(c)));
     const fair = options.filter((o) => o.width > 0 && o.height > 0).sort((a, b) => b.width * b.height - a.width * a.height);
+    // A line wider or taller than any crop, or running off the screen, cannot be taken in whole: it is let be.
+    if (!fair[0] && (cut.width > MAX.width || cut.height > MAX.height || cut.x < 0 || cut.y < 0 || right(cut) > vw || bottom(cut) > vh)) {
+      given.add(cut);
+      continue;
+    }
     c = fair[0] ?? box(Math.max(0, Math.min(c.x, cut.x - 4)), Math.max(0, Math.min(c.y, cut.y - 2)), Math.min(vw, Math.max(right(c), right(cut) + 4)), Math.min(vh, Math.max(bottom(c), bottom(cut) + 2)));
   }
   return c;
@@ -183,13 +189,19 @@ export function cardFor(subject: Box, ancestors: Scene["ancestors"]): Box | null
   return card ? card.box : null;
 }
 
-export function cropFor(scene: Scene): Crop {
+export function cropFor(input: Scene): Crop {
+  let scene = input;
   const { width: vw, height: vh } = scene.viewport;
   const screen = box(0, 0, vw, vh);
   const ringed = scene.target && scene.ring ? union(scene.target, scene.ring) : (scene.target ?? scene.ring);
   // A dialog open over the ringed control is what the screen shows: the dialog is the picture.
   const subject = ringed && scene.dialog && !contains(scene.dialog, ringed) ? null : ringed;
   const fits = (c: Box) => c.width <= MAX.width && c.height <= MAX.height;
+  // Under a dialog the page is a dimmed backdrop: only what is inside the dialog keeps the crop's edges off it.
+  if (scene.dialog && (!subject || contains(scene.dialog, subject))) {
+    const dialog = scene.dialog;
+    scene = { ...scene, lines: scene.lines.filter((l) => contains(dialog, l)), boxes: (scene.boxes ?? []).filter((x) => contains(dialog, x)) };
+  }
   let focus: Box;
   if (subject) {
     // The card when it fits on paper; else the control itself, with its surroundings.
@@ -213,11 +225,16 @@ export function cropFor(scene: Scene): Crop {
       return finish(window, focus, scene, vw, vh);
     }
   }
+  // A subject wider or taller than prints legibly (a whole band, a whole panel): from where it starts,
+  // as much as prints; only its first corner must stay whole, so what crosses the far edges is left out.
+  const oversized = focus.width > MAX.width - 2 * CROP.pad || focus.height > MAX.height - 2 * CROP.pad;
+  focus = box(focus.x, focus.y, focus.x + Math.min(focus.width, MAX.width - 2 * CROP.pad), focus.y + Math.min(focus.height, MAX.height - 2 * CROP.pad));
+  const corner = box(focus.x, focus.y, focus.x + Math.min(focus.width, CROP.minWidth), focus.y + Math.min(focus.height, CROP.minHeight));
   const width = Math.min(MAX.width, vw, Math.max(CROP.minWidth, focus.width + 2 * CROP.pad));
   const height = Math.min(MAX.height, vh, Math.max(CROP.minHeight, focus.height + 2 * CROP.pad));
   const [x0, x1] = span(focus.x, right(focus), width, [focus.x, right(focus)]);
   const [y0, y1] = span(focus.y, bottom(focus), height, [focus.y, bottom(focus)]);
-  return finish(clampToScreen(box(x0, y0, x1, y1), vw, vh), focus, scene, vw, vh);
+  return finish(clampToScreen(box(x0, y0, x1, y1), vw, vh), oversized ? corner : focus, scene, vw, vh);
 }
 
 function finish(placed: Box, focus: Box, scene: Scene, vw: number, vh: number): Crop {
@@ -230,6 +247,5 @@ function finish(placed: Box, focus: Box, scene: Scene, vw: number, vh: number): 
 
 /** The size, in points, that text of `font` CSS pixels prints at when a crop `width` pixels wide is set on the page. */
 export function printedPoints(font: number, width: number): number {
-  const mmPerPx = Math.min(PRINT_SHOT.mmPerPx, PRINT_SHOT.columnMm / width);
-  return (font * mmPerPx * 72) / 25.4;
+  return (font * printMmPerPx(width, font) * 72) / 25.4;
 }

@@ -37,6 +37,12 @@ describe("a step's print crop", () => {
     expect(contains(crop.box, target)).toBe(true);
   });
 
+  it("takes a ringed band wider than the page from where it starts, never wider than prints legibly", () => {
+    const crop = cropFor(scene({ target: b(32, 64, 1116, 44), ring: b(24, 60, 1132, 56), ancestors: [{ box: b(0, 0, 1180, 121), card: true }] }));
+    expect(crop.box.width).toBeLessThanOrEqual(MAX.width);
+    expect(crop.box.x).toBe(0);
+  });
+
   it("with no ring, takes the open dialog", () => {
     const dialog = b(320, 294, 760 - 320 + 300, 313);
     const crop = cropFor(scene({ dialog, main: b(0, 60, 1180, 700) }));
