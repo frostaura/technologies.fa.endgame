@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MessageCircle } from "lucide-react";
 import { Sheet } from "@/components/Sheet";
-import { useViewport } from "@/lib/useViewport";
+import { useMinWidth, useViewport, useWideHeader } from "@/lib/useViewport";
+import { breakpoints } from "@/lib/tokens";
 import { Link } from "@/components/Link";
 import { Icon } from "@/components/Icon";
-import { paths } from "@/lib/router";
+import { navigate, paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { useFitsScreen } from "@/components/ui/page";
 import { crumbShort, normaliseCrumbs } from "./crumbs";
@@ -15,10 +16,10 @@ import { GodModeBand } from "./GodModeBand";
 import { NotificationsBell } from "./NotificationsBell";
 import { OrganisationSwitcher } from "@/features/account/OrganisationSwitcher";
 import { PhoneHeader, PhoneNav } from "./PhoneShell";
-import { CreditsPill, ModeToggle, SignOut } from "./shellControls";
+import { AccountMenu, CreditsPill, ModeToggle, SignOut, SystemLink } from "./shellControls";
 import { Talk } from "./talk";
 import { DockLayoutContext, useDockState } from "../conversation/dockLayout";
-import { ShellTalkContext, takeOpenTalkOnArrival } from "./talkContext";
+import { askToOpenTalkOnArrival, ShellTalkContext, takeOpenTalkOnArrival } from "./talkContext";
 
 export interface Crumb {
   label: string;
@@ -61,6 +62,9 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
   // Only a phone moves the conversation into a sheet; a tablet keeps it in the page, as a desktop does.
   const compact = phone;
   const tablet = viewport === "tablet";
+  const wideHeader = useWideHeader();
+  // From xl the trail sits in the header's row; below it, on a row of its own. One trail either way.
+  const trailInRow = useMinWidth(breakpoints.xl);
 
   // The conversation's sheet, and the pages' conversations that draw into it.
   // "Talk" pressed on a page with none: the org chart opens its conversation as it arrives, once it has one.
@@ -114,53 +118,63 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
 
   return (
     <ShellTalkContext.Provider value={shell}>
-      {/* A phone on its side (`rail:`): the bar becomes a rail at the left, and the page and its side panel sit side by side. */}
+      {/* A phone on its side (`rail:`): the bar becomes a rail at the left, and the page is one full-width column beside it. */}
       <div data-shell={viewport} className={cn("flex min-h-dvh flex-col", phone && "pb-nav-safe rail:pb-0 rail:pl-rail")}>
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-xs focus:bg-surface focus:px-4 focus:py-2">
           Skip to the content
         </a>
-        <div ref={chrome} className={cn(docked && "sticky top-0 z-30")}>
+        <div ref={chrome} className={docked ? "sticky top-0 z-30" : "contents"}>
         {me?.isOperator && <GodModeBand />}
         {phone ? (
           <PhoneHeader crumbs={trail} signedIn={!!me} />
         ) : (
           <header className="border-b bg-surface">
             {/*
-              Tablet and narrow desktop: the bar — the mark, then every control at the right — with where
-              you are on a full-width row of its own beneath. Wide desktop (xl): one row, where you are
-              between the mark and the controls. Every control is one height (44px). Where you are is always
-              one line; a step is cut short only when the row is too narrow, the middle steps first. Below
-              xl, Sign out and System are icons, so the bar never wraps.
+              Tablet and desktop: one bar that never wraps — the mark, where you are (on its own row below xl),
+              and the controls, every one 44px. From hd (1,100) the mode switch and Sign out sit in the bar;
+              below it they are in the account menu. The organisation switcher is always in the bar, and the
+              set of icons is the same on every page.
             */}
-            <div className="mx-auto flex w-full max-w-frame flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3 sm:px-8 xl:gap-x-3">
-              <Link href={paths.home()} aria-label="Endgame home" className="mr-1 flex min-h-touch shrink-0 items-center gap-2.5 rounded-xs text-ink">
+            <div className="mx-auto flex w-full max-w-frame flex-nowrap items-center gap-2 px-4 py-3 sm:px-8 xl:gap-3">
+              <Link href={paths.home()} aria-label="Endgame home" className="mr-1 flex min-h-touch min-w-touch shrink-0 items-center gap-2.5 rounded-xs text-ink">
                 <img src="/brand/endgame-mark.svg" alt="" width={30} height={30} className="size-8" />
                 <span className={cn("font-display text-lg font-bold tracking-tight", trail.length > 0 && "hidden xl:inline")}>Endgame</span>
               </Link>
-              {trail.length > 0 && (
-                <div className="flex min-w-0 flex-1 sm:order-last sm:basis-full xl:order-none xl:basis-0">
+              {trail.length > 0 && trailInRow && (
+                <div className="flex min-w-0 flex-1">
                   <Breadcrumb crumbs={trail} />
                 </div>
               )}
-              <div className="order-last flex w-full items-center justify-between gap-2 sm:order-none sm:ml-auto sm:w-auto sm:justify-end xl:gap-3">
-                <ModeToggle />
-                {me && <OrganisationSwitcher compact />}
+              <div className="ml-auto flex min-w-0 shrink items-center justify-end gap-2 xl:gap-3">
+                {wideHeader && <ModeToggle />}
+                {me && <OrganisationSwitcher compact className="min-w-0 max-w-56 shrink" />}
                 {creditsScope && <CreditsPill scope={creditsScope} />}
+                {tablet && <TalkHere label={talkLabel} />}
+                {org && <NotificationsBell organisation={org.slug} />}
+                {wideHeader && <SystemLink />}
+                {me &&
+                  (wideHeader ? (
+                    <>
+                      <Link href={paths.account()} aria-label="Your account" title="Your account" className="flex size-11 shrink-0 items-center justify-center rounded-xs text-ink-muted hover:bg-ground hover:text-ink">
+                        <Icon name="employee" className="size-5" />
+                      </Link>
+                      <SignOut compact />
+                    </>
+                  ) : (
+                    <AccountMenu />
+                  ))}
               </div>
-              {tablet && talkLabel && <TalkHere label={talkLabel} />}
-              {org && <NotificationsBell organisation={org.slug} />}
-              {me && (
-                <Link href={paths.account()} aria-label="Your account" title="Your account" className="flex size-11 shrink-0 items-center justify-center rounded-xs text-ink-muted hover:bg-ground hover:text-ink">
-                  <Icon name="employee" className="size-5" />
-                </Link>
-              )}
-              {me && <SignOut compact />}
             </div>
+            {trail.length > 0 && !trailInRow && (
+              <div className="mx-auto flex w-full max-w-frame px-4 pb-2.5 sm:px-8">
+                <Breadcrumb crumbs={trail} />
+              </div>
+            )}
           </header>
         )}
         </div>
         {/* The device's safe area (a notch, in landscape) is kept clear of the page, outside its own gutter. */}
-        <div className="mx-auto flex w-full max-w-frame flex-1 flex-col pl-safe-l pr-safe-r lg:flex-row rail:flex-row rail:pl-0">
+        <div className="mx-auto flex w-full max-w-frame flex-1 flex-col pl-safe-l pr-safe-r lg:flex-row rail:pl-0">
           {/*
             Docked (ARCH-012): the page column and the conversation pane side by side. Inside the page column, a page's side
             cards sit beside the page from 3xl (1,600 px: the page keeps at least 640 px beside a wide pane and the cards) and
@@ -168,7 +182,7 @@ export function AppShell({ crumbs, aside, talk, children }: { crumbs: Crumb[]; a
           */}
           <div
             data-page-column=""
-            className={cn("flex min-w-0 flex-1 flex-col", !docked && "lg:flex-row rail:flex-row", docked && (dock.collapsed ? "lg:flex-row" : "3xl:flex-row"), docked && dock.full && "hidden")}
+            className={cn("flex min-w-0 flex-1 flex-col", !docked && "lg:flex-row", docked && (dock.collapsed ? "lg:flex-row" : "3xl:flex-row"), docked && dock.full && "hidden")}
           >
             <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col gap-6 px-4 py-6 outline-none max-sm:gap-5 max-sm:py-5 sm:px-8 sm:py-8 lg:py-10 rail:gap-4 rail:px-5 rail:py-4">
               {children}
@@ -227,16 +241,19 @@ function SidePanel({ children, beside = "lg", below = false }: { children: React
     <aside
       aria-label="Beside this page"
       className={cn(
-        "min-w-0 px-4 pb-8 sm:px-8 rail:w-aside rail:shrink-0 rail:py-4 rail:pl-0 rail:pr-5",
+        "min-w-0 px-4 pb-8 sm:px-8 rail:px-5",
         beside === "lg" ? "lg:w-aside lg:shrink-0 lg:py-10 lg:pl-0 3xl:w-aside-wide" : "3xl:w-aside-wide 3xl:shrink-0 3xl:py-10 3xl:pl-0",
       )}
     >
       <div ref={ref} data-side-panel="" className={cn(
-          "flex flex-col gap-5 md:max-lg:grid md:max-lg:grid-cols-2 md:max-lg:items-start rail:!flex rail:gap-4",
+          // A tablet, and a phone on its side (one full-width column beside the rail): the cards under the page, two across.
+          "flex flex-col gap-5 md:max-lg:grid md:max-lg:grid-cols-2 md:max-lg:items-start rail:gap-4",
           // Under the page beside the docked conversation (lg to 3xl): two across, as on a tablet.
           beside === "3xl" && "lg:max-3xl:grid lg:max-3xl:grid-cols-2 lg:max-3xl:items-start",
           // Every block a page puts here is drawn as a card that ends with its content.
           "[&>*]:min-w-0 [&>*]:rounded-md [&>*]:border [&>*]:bg-surface [&>*]:p-5 [&>*]:shadow-card max-sm:[&>*]:p-4",
+          // A fold is its own card: no padding around it. A lone card under the page takes the whole row.
+          "[&>[data-fold]]:!p-0 [&>*:only-child]:col-span-full",
           // A fieldset's legend would sit on the card's edge: it is the card's title instead.
           "[&>fieldset>legend]:float-left [&>fieldset>legend]:mb-3 [&>fieldset>legend]:w-full [&>fieldset>legend+*]:clear-both",
           fits && (below ? "3xl:sticky 3xl:top-chrome" : beside === "lg" ? "lg:sticky lg:top-6" : "3xl:sticky 3xl:top-6"),
@@ -248,17 +265,26 @@ function SidePanel({ children, beside = "lg", below = false }: { children: React
 }
 
 
-/** A tablet's "Talk": the conversation is on the page, further down; this brings it into view, ready to type. */
-function TalkHere({ label }: { label: string }) {
+/**
+ * A tablet's "Talk": the conversation is on the page, further down; this brings it into view, ready to type. On
+ * a page with no conversation it opens the org chart's, as the phone's bar does — so the header's icons are the
+ * same on every page.
+ */
+function TalkHere({ label }: { label: string | null }) {
   const go = () => {
     const anchor = document.querySelector<HTMLElement>("[data-talk-anchor] section[aria-label='Conversation']");
-    if (!anchor) return;
+    if (!anchor) {
+      askToOpenTalkOnArrival();
+      navigate(paths.home());
+      return;
+    }
     anchor.scrollIntoView({ behavior: "smooth", block: "start" });
     anchor.querySelector<HTMLInputElement>("form input")?.focus({ preventScroll: true });
   };
+  const name = label ?? "Talk: open the conversation on the org chart";
   return (
     // An icon, as the bell beside it is: the bar has no room for another word on a tablet.
-    <button type="button" onClick={go} aria-label={label} title={label} className="flex min-h-touch min-w-touch items-center justify-center rounded-xs text-primary-link hover:bg-ground">
+    <button type="button" onClick={go} aria-label={name} title={name} className="flex size-11 shrink-0 items-center justify-center rounded-xs text-ink-muted hover:bg-ground hover:text-ink">
       <MessageCircle aria-hidden className="size-5" />
     </button>
   );

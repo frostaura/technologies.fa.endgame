@@ -32,6 +32,8 @@ function pretend(next: Size | null) {
       const s = size ?? { width: 1440, height: 900 };
       if (query === viewportQueries.phone) return s.width < breakpoints.sm || (s.height < breakpoints.short && s.width > s.height && s.width >= breakpoints.railMin && s.width < breakpoints.lg);
       if (query === viewportQueries.desktop) return s.width >= breakpoints.lg;
+      const min = /^\(min-width: (\d+)px\)$/.exec(query);
+      if (min) return s.width >= Number(min[1]);
       return false;
     },
     addEventListener: () => undefined,
@@ -335,7 +337,7 @@ describe("the shell on a phone", () => {
     expect(screen.queryByRole("button", { name: "Talk to Court booking" })).toBeNull();
   });
 
-  it("on a tablet, keeps the conversation in the page, and the header's Talk brings it into view", () => {
+  it("on a tablet, keeps the conversation in the page, and the header's Talk brings it into view", async () => {
     pretend(TABLET);
     stub();
     const scrolled = vi.fn();
@@ -345,7 +347,11 @@ describe("the shell on a phone", () => {
         <p>Page</p>
       </AppShell>,
     );
+    // Below 1,100 px the mode switch and Sign out are in the account menu, so the header never wraps.
+    expect(screen.queryByRole("group", { name: "Mode" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Your account, the mode and signing out" }));
     expect(screen.getByRole("group", { name: "Mode" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
     const box = screen.getByLabelText("Message Acme");
     fireEvent.click(screen.getByRole("button", { name: "Talk to Acme" }));
