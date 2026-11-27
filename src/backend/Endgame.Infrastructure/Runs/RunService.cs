@@ -706,7 +706,7 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
     /// </summary>
     private async Task WithdrawUnbuiltHiresAsync(Guid org, Guid run, string outcome, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        var build = await db.Runs.AsNoTracking().Where(r => r.OrganisationId == org && r.Id == run).Select(r => new { r.Kind, r.AppId }).SingleAsync(cancellationToken);
+        var build = await db.Runs.AsNoTracking().Where(r => r.OrganisationId == org && r.Id == run).Select(r => new { r.Kind, r.AppId, r.CreatedAt }).SingleAsync(cancellationToken);
         if (build.Kind != RunKinds.Build)
         {
             return;
@@ -715,7 +715,7 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
         var app = build.AppId is { } placed
             ? await db.Apps.AsNoTracking().Where(a => a.OrganisationId == org && a.Id == placed).Select(a => new { a.Name, a.PublishedAt }).SingleOrDefaultAsync(cancellationToken)
             : null;
-        if (app?.PublishedAt is not null)
+        if (!PublishedNothing(app?.PublishedAt, build.CreatedAt))
         {
             return;
         }
@@ -750,10 +750,19 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
         var place = await (from a in db.Apps.AsNoTracking()
                            join p in db.Projects.AsNoTracking() on new { a.OrganisationId, Id = a.ProjectId } equals new { p.OrganisationId, p.Id }
                            where a.OrganisationId == org && a.Id == appId
-                           select new { AppId = a.Id, ProjectId = p.Id, p.DivisionId }).SingleOrDefaultAsync(cancellationToken);
+                           select new { AppId = a.Id, ProjectId = p.Id, p.DivisionId, a.Name, a.PublishedAt, a.CurrentVersion }).SingleOrDefaultAsync(cancellationToken);
         if (place is null)
         {
             return;
+        }
+
+        var build = await db.Runs.AsNoTracking().Where(r => r.OrganisationId == org && r.Id == run).Select(r => new { r.Kind, r.IdeaId }).SingleAsync(cancellationToken);
+        if (build.Kind == RunKinds.Build && await PlacementTakenAsync(org, run, build.IdeaId, appId, place.PublishedAt is not null || place.CurrentVersion is not null, cancellationToken))
+        {
+            var refused = new EndgameProblem(409, PlacementRefusals.Taken, "That app is not this build's",
+                $"{place.Name} already exists and is not this idea's: a build from an idea always makes a new app. A change to {place.Name} is asked for from the app itself.");
+            refused.Extensions["appId"] = appId;
+            throw refused;
         }
 
         await db.Runs
@@ -766,6 +775,31 @@ public sealed class RunService(EndgameDbContext db, TenantSession session, Scope
                 .SetProperty(r => r.ProjectId, place.ProjectId)
                 .SetProperty(r => r.AppId, place.AppId), cancellationToken);
     }
+
+    /// <summary>
+    /// Whether a build may not be placed in this app (R9-1): a build starts from an idea, so its app must be new. The app is
+    /// another's when any other piece of work was ever on it — a change, a task, a conversation, or another idea's build —
+    /// or when it was published, has a version or holds end users' data and no earlier attempt of this same idea made it.
+    /// Only an earlier attempt of the same idea ("Try again") may find its own app again.
+    /// </summary>
+    private async Task<bool> PlacementTakenAsync(Guid org, Guid run, Guid? ideaId, Guid appId, bool built, CancellationToken cancellationToken)
+    {
+        var others = db.Runs.AsNoTracking().Where(r => r.OrganisationId == org && r.AppId == appId && r.Id != run);
+        if (await others.AnyAsync(r => r.Kind != RunKinds.Build || ideaId == null || r.IdeaId != ideaId, cancellationToken))
+        {
+            return true;
+        }
+
+        var holdsData = built || await db.AppEndUsers.AsNoTracking().AnyAsync(u => u.OrganisationId == org && u.AppId == appId, cancellationToken);
+        return holdsData && !await others.AnyAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Whether a build that ended published nothing itself (D81): its app was never published, or was published before the build
+    /// began — by other work, as an app a build from before R9-1 was wrongly placed in. Its hires were for work that did not happen.
+    /// </summary>
+    public static bool PublishedNothing(DateTimeOffset? appPublishedAt, DateTimeOffset buildCreatedAt) =>
+        appPublishedAt is not { } published || published < buildCreatedAt;
 
     private async Task SetStatusAsync(Guid org, Guid run, string status, DateTimeOffset now, CancellationToken cancellationToken) =>
         await db.Runs.Where(r => r.OrganisationId == org && r.Id == run)

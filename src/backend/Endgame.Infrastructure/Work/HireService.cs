@@ -469,7 +469,7 @@ public sealed class HireService(
         var runIds = open.Select(h => h.RaisedByRunId).OfType<Guid>().Distinct().ToList();
         var builds = await db.Runs.AsNoTracking()
             .Where(r => runIds.Contains(r.Id) && r.Kind == RunKinds.Build && (r.Status == RunStatuses.Failed || r.Status == RunStatuses.Cancelled))
-            .Select(r => new { r.Id, r.Status, r.AppId }).ToListAsync(cancellationToken);
+            .Select(r => new { r.Id, r.Status, r.AppId, r.CreatedAt }).ToListAsync(cancellationToken);
         var appIds = builds.Select(b => b.AppId).OfType<Guid>().ToList();
         var apps = await db.Apps.AsNoTracking().Where(a => appIds.Contains(a.Id)).Select(a => new { a.Id, a.Name, a.PublishedAt }).ToDictionaryAsync(a => a.Id, cancellationToken);
         var tidied = 0;
@@ -477,7 +477,7 @@ public sealed class HireService(
         {
             string? note = null;
             if (builds.FirstOrDefault(b => b.Id == hire.RaisedByRunId) is { } build
-                && (build.AppId is not { } placed || !apps.TryGetValue(placed, out var app) || app.PublishedAt is null))
+                && (build.AppId is not { } placed || !apps.TryGetValue(placed, out var app) || Runs.RunService.PublishedNothing(app.PublishedAt, build.CreatedAt)))
             {
                 note = Runs.RunService.WithdrawnReason(build.Status, build.AppId is { } a && apps.TryGetValue(a, out var named) ? named.Name : null);
             }

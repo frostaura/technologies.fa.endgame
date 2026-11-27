@@ -11,7 +11,9 @@
 
 ## Main flow
 
-1. **Placement.** The verdict's proposed project and app (or the idea's own words) are created in the tree.
+1. **Placement.** A new project and a new app are created in the tree, named from the verdict's proposal (or the idea's
+   own words). A build from an idea is always a new app: a proposed project slug that is taken gets the next free one, and
+   the control plane refuses a placement in an app that is not new (ARCH-006, *Placement*). The owner is told where it goes.
    **Hiring from the ontology:** a division created here raises a division lead (trigger `division`); the project entering
    its build and its evaluation raises a software engineer and a QA engineer (trigger `stage`, reporting to the lead). In
    auto-mode within budget each is hired at once; a hire that waits for the owner never stops the work (it goes ahead
