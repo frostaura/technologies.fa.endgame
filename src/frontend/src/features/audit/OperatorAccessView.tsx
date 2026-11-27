@@ -1,10 +1,9 @@
-import { Icon } from "@/components/Icon";
+import { PageHeader } from "@/components/ui/page";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { formatCredits, formatDate, formatTime } from "@/lib/format";
 import { RISE } from "@/lib/motion";
 import { viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
-import { cn } from "@/lib/utils";
 import { useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { useAppSelector } from "@/store";
 import { useGetOperatorAccessQuery } from "@/store/api";
@@ -64,15 +63,12 @@ export function OperatorAccessView() {
 
   return (
     <AppShell crumbs={[...(org ? [{ label: org.name, href: paths.home() }] : []), { label: "Operator access" }]}>
-      <header className={cn("flex flex-col gap-1.5", RISE)}>
-        <h1 className="flex items-center gap-3 text-3xl font-semibold max-sm:text-2xl">
-          <Icon name="god-mode" tinted className="size-7" />
-          Operator access
-        </h1>
-        <p className="max-w-prose text-ink-body">
-          Every time someone from FrostAura entered {org?.name ?? "your organisation"} or acted on it, newest first. It is never silent, and only the Owner can read it.
-        </p>
-      </header>
+      <PageHeader
+        className={RISE}
+        icon="god-mode"
+        title="Operator access"
+        lead={`Every time someone from FrostAura entered ${org?.name ?? "your organisation"} or acted on it, newest first. It is never silent, and only the Owner can read it.`}
+      />
 
       {!active.isLoading && !org ? (
         <Empty icon="organisation" title="There is no log until your organisation is named" />
@@ -96,27 +92,30 @@ export function OperatorAccessView() {
                   If anyone does, it is written here first.
                 </Empty>
               ) : (
-                <ol aria-label="Operator log" className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                  {view.data.map((entry) => (
-                    <li key={entry.id} className="flex flex-col gap-1.5 rounded-md border bg-surface px-5 py-4 shadow-card">
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <span className="font-semibold">{describeAction(entry)}</span>
-                        <time dateTime={entry.at} className="text-sm text-ink-muted">
+                // One list, newest first, every entry on the same grid: when, then what was done and by whom.
+                <ol aria-label="Operator log" className="flex flex-col overflow-hidden rounded-md border bg-surface shadow-card">
+                  {[...view.data]
+                    .sort((x, y) => Date.parse(y.at) - Date.parse(x.at))
+                    .map((entry) => (
+                      <li key={entry.id} className="grid grid-cols-1 gap-x-6 gap-y-1 border-b px-5 py-3.5 last:border-b-0 sm:grid-cols-time-grow lg:grid-cols-time-grow-who">
+                        <time dateTime={entry.at} className="whitespace-nowrap text-sm tabular-nums text-ink-muted sm:pt-px">
                           {formatDate(entry.at)}, {formatTime(entry.at)}
                         </time>
-                      </div>
-                      <span className="text-ink-body">
-                        {entry.operator.displayName || "A FrostAura operator"}
-                        {entry.operator.email ? ` · ${entry.operator.email}` : ""}
-                      </span>
-                      {technical && (
-                        <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xs bg-ground px-3 py-2 font-mono text-xs text-ink-body">
-                          {entry.action}
-                          {entry.detail ? ` ${JSON.stringify(entry.detail)}` : ""}
-                        </pre>
-                      )}
-                    </li>
-                  ))}
+                        <div className="flex min-w-0 flex-col gap-1">
+                          <span className="break-words font-semibold">{describeAction(entry)}</span>
+                          {technical && (
+                            <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xs bg-ground px-3 py-2 font-mono text-xs text-ink-body">
+                              {entry.action}
+                              {entry.detail ? ` ${JSON.stringify(entry.detail)}` : ""}
+                            </pre>
+                          )}
+                        </div>
+                        <span className="min-w-0 break-words text-sm text-ink-body sm:col-start-2 lg:col-start-3 lg:pt-px">
+                          {entry.operator.displayName || "A FrostAura operator"}
+                          {entry.operator.email ? ` · ${entry.operator.email}` : ""}
+                        </span>
+                      </li>
+                    ))}
                 </ol>
               )}
             </>

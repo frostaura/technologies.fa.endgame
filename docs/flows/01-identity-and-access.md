@@ -442,7 +442,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
   1. The heading reads **"Let an AI assistant work with your organisation"** (technical: **"MCP access tokens"**).
   2. The lead reads: "Give an assistant a key and it can do what you can do here — read the org chart, start ideas, look after apps — but never more than the role you give it. It can never make an app public, change the overdraft, top up or download an app."
   3. In technical mode the lead instead names `egp_…` tokens, `/mcp` and `/mcp/apps/{appId}`, and says "God mode is never available through one."
-  4. The side panel **"The addresses to give it"** (technical: **"Endpoints"**) shows **"The whole organisation"** (technical: **"Control plane"**) with `{origin}/mcp` and one line per app with `{origin}/mcp/apps/{id}`. Each has **"Copy"**, which reads **"Copied"** afterwards.
+  4. The side panel **"The addresses to give it"** (technical: **"Endpoints"**) shows **"The whole organisation"** (technical: **"Control plane"**) with `{origin}/mcp` and one line per app with `{origin}/mcp/apps/{id}`. Each address is shown whole, breaking only after a "/", under its name and **"Copy"**, which reads **"Copied"** afterwards.
   5. The footnote reads "The organisation's address lets it do what you do in the console; an app's address lets it use that app the way its people do." (technical: "Streamable HTTP, stateless; no OAuth — the token is made here.")
 - **You know it worked when:** a copied address reads **"Copied"**.
 - **Variations and refusals:**
@@ -454,7 +454,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 
 ### AST-02 Make a key for an assistant
 - **Who:** any member
-- **Starts at:** the **"Make a key"** panel (technical: **"New token"**)
+- **Starts at:** the **"Make a key"** panel (technical: **"New token"**), at the top of the page, its three fields side by side on a wide screen
 - **Needs:** a role somewhere in the organisation
 - **Level:** Advanced
 - **Learn first:** AST-01, PPL-01 (roles)
@@ -483,8 +483,8 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **Learn first:** AST-02
 - **What you learn:** you can see when each key was last used, and shut one out at once.
 - **Steps:**
-  1. Each row shows the name, "{Role} in {Organisation} · made {date} · ends/ended {date}" (or "· never ends"; a revoked key "· revoked {date}"), "Last used {time ago}" or "Never used", and a badge: **"Active"**, **"Expired"** or **"Revoked"**. Technical mode adds the prefix and id.
-  2. The person clicks **"Revoke"**. A confirmation shows: "The assistant using it is shut out at once. This cannot be undone; make a new key to let it back in.", with **"Revoke it"** and **"Keep it"**.
+  1. Each row shows the name, "{Role} in {Organisation} · made {date} · ends/ended {date}" (or "· never ends"; a revoked key "· revoked {date}"), "Last used {time ago}" or "Never used", and a badge: **"Active"**, **"Expired"** or **"Revoked"**. Technical mode adds the prefix and id. Live keys come first; a revoked or expired key is drawn quietly, greyed, after them.
+  2. The person clicks **"Revoke"**, at the end of the row. A confirmation shows: "The assistant using it is shut out at once. This cannot be undone; make a new key to let it back in.", with **"Revoke it"** and **"Keep it"**.
   3. They click **"Revoke it"**. The badge becomes **"Revoked"** at once, and the key's next call gets 401.
 - **You know it worked when:** the badge reads **"Revoked"** and **"Revoke"** has gone.
 - **Variations and refusals:**

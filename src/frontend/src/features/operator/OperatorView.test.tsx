@@ -60,7 +60,8 @@ describe("God mode", () => {
     stub({ "POST /api/operator/organisations/acme/enter": json({ organisationId: "o1", organisation: "acme", role: "admin", enteredAt: new Date().toISOString(), logged: "in Acme's operator log, which its Owner reads" }) });
     renderWithStore(<OperatorView />);
     const card = (await screen.findByRole("list", { name: "Organisations" })).querySelector('[data-org="acme"]') as HTMLElement;
-    expect(within(card).getByText(/Entering is logged where Acme’s Owner can read it/)).toBeTruthy();
+    // Said once, above every organisation, rather than on each card.
+    expect(screen.getByText("Entering one is logged where its Owner can read it.")).toBeTruthy();
     fireEvent.click(within(card).getByRole("button", { name: "Enter Acme" }));
     expect(await within(card).findByText("Logged: in Acme's operator log, which its Owner reads")).toBeTruthy();
     expect(within(card).getByRole("link", { name: "Open its org chart" }).getAttribute("href")).toBe("/?organisation=acme");
