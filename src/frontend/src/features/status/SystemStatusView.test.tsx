@@ -60,6 +60,8 @@ describe("SystemStatusView", () => {
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
     expect(within(list).getAllByText("Healthy")).toHaveLength(2);
     expect(screen.getByText("Engine 29.9.3 reachable.")).toBeTruthy();
+    // The time is the console's one format: 24-hour, en-GB, never "7:00:00 PM".
+    expect(screen.getByText(/^Checked at \d{2}:\d{2}:\d{2}$/)).toBeTruthy();
   });
 
   it("names the unhealthy service and why", async () => {

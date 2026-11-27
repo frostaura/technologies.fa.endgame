@@ -1,5 +1,6 @@
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import type { SerializedError } from "@reduxjs/toolkit";
+import { formatDuration } from "@/lib/format";
 import { errorStatus } from "@/lib/queryState";
 import type { SystemStatus } from "@/store/api";
 
@@ -40,13 +41,7 @@ export function toViewState(query: {
   return { kind: "loading" };
 }
 
+/** How long a service took to answer, as every duration in the console is written. */
 export function formatLatency(ms: number): string {
-  return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
-}
-
-export function formatCheckedAt(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? iso
-    : date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return formatDuration(ms);
 }
