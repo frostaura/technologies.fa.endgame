@@ -7,7 +7,7 @@ import { ui } from "../components/ui.ts";
 /** The closing page: the address, its QR code and a link to copy, composed in one card to hand the academy on. */
 export function Finish() {
   return (
-    <Page>
+    <Page className="lg:grid lg:min-h-player lg:content-center">
       <div className="grid gap-10 lg:grid-cols-12 lg:items-center lg:gap-16">
         <div className="lg:col-span-7">
           <Eyebrow>Thank you</Eyebrow>

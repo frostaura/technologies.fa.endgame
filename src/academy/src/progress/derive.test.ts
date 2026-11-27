@@ -73,3 +73,11 @@ describe("milestones", () => {
     expect(all.find((x) => x.id === "path-all")?.earned).toBe(true);
   });
 });
+
+describe("the next flow", () => {
+  it("is never the flow being read, even when it is the open prerequisite of the next one", () => {
+    // F-2 needs F-1 first; reading F-1, the way on is F-2 itself, not F-1 again.
+    expect(nextUp(empty(), t("Foundation"), cat, "F-1")?.flow.id).toBe("F-2");
+    for (const f of flows) expect(nextUp(empty(), cat.tracks.find((x) => x.level === f.level), cat, f.id)?.flow.id).not.toBe(f.id);
+  });
+});

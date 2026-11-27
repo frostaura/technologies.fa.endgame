@@ -214,6 +214,15 @@ opening) and find it once shown, so a lesson written at desktop size needs no ph
 ring, the cursor and the note are fixed to the frame's viewport above every sheet and the bottom
 bar (`z-50`), so they stay on screen and legible when the target is inside a sheet or the bar.
 
+**How the marks look** (`overlay.ts`, `placement.ts`). The note is set where it covers neither the
+ring nor the page's words (covering a pixel of words or a control costs eight pixels of distance),
+with a small pointer on the side facing the ring, aimed at its middle. While something modal — a
+dialog, a sheet, the device's prompt — covers the ringed control, the ring and note are hidden, and
+return when it closes. The cursor is a small arrow, not a dot: its tip rests just inside the lower
+edge of the control it presses (`approach` in `bridge.ts`), so it never sits over the label, and it
+fades out after the press. It carries `data-demo-cursor`, the note `data-demo-note`, so a capture can
+leave both out (`make academy-shots` does, for the print copies).
+
 A target is a CSS `selector`, a `testId`, or visible `text` / accessible `label`, matched in that
 order of preference: buttons, links and other controls by accessible name (exact, then prefix,
 then contained, whole words before part of a word, and a control that deletes or ends something

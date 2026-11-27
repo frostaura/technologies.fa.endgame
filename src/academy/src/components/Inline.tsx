@@ -37,7 +37,8 @@ export function Inline({ text: raw, self, plainIds = false, tone = "light" }: { 
     if (at > last) out.push(text.slice(last, at));
     const t = m[0];
     if (t.startsWith("**")) out.push(<strong key={k++} className={style.strong}><Inline text={t.slice(2, -2)} self={self} plainIds={plainIds} tone={tone} /></strong>);
-    else if (t.startsWith("`")) out.push(<code key={k++} className={style.code}>{t.slice(1, -1)}</code>);
+    // A short path or command stays on one line; only one too long for a line may break, and then anywhere.
+    else if (t.startsWith("`")) out.push(<code key={k++} className={`${style.code} ${t.length <= 34 ? "whitespace-nowrap" : ""}`}>{t.slice(1, -1)}</code>);
     else if (t.startsWith("[")) {
       const lm = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(t);
       const to = lm ? link(lm[2] ?? "") : null;

@@ -49,7 +49,9 @@ export function Figures({ className = "" }: { className?: string }) {
 
 export function Cover() {
   return (
-    <section className={`${ui.container} grid gap-10 py-8 sm:py-12 lg:min-h-player lg:grid-cols-12 lg:content-center lg:gap-12 xl:gap-20`}>
+    // Three blocks: the introduction, the paths, the figures. On a phone the paths come straight after
+    // the introduction, in the first screen; on a wide screen they stand beside it.
+    <section className={`${ui.container} grid gap-10 py-8 sm:py-12 lg:min-h-player lg:grid-cols-12 lg:content-center lg:gap-x-12 lg:gap-y-10 xl:gap-x-20`}>
       <div className="min-w-0 animate-rise lg:col-span-7">
         <div className="flex items-center gap-3">
           <Mark className="hidden h-10 w-10 sm:block" />
@@ -64,16 +66,18 @@ export function Cover() {
           <a href={href("/learn")} className={`${ui.primary} px-6 text-base`}>Start learning</a>
           <a href={href("/demo")} className={`${ui.outline} px-6 text-base`}>Open the live demo</a>
         </div>
-        <Figures className="mt-10 max-w-read" />
-        <PdfLinks className="mt-8" />
       </div>
-      <div className="min-w-0 space-y-6 lg:col-span-5">
+      <div className="min-w-0 space-y-6 lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1 lg:self-center">
         <div>
           <h2 className="font-display text-xl font-semibold text-ink">Four paths, in order</h2>
           <p className="mt-1 text-sm text-ink-muted">Each puts every “learn first” ahead of the flow that needs it.</p>
           <PathRows className="mt-4" />
         </div>
         <ShareCard />
+      </div>
+      <div className="min-w-0 lg:col-span-7">
+        <Figures className="max-w-read" />
+        <PdfLinks className="mt-8" />
       </div>
     </section>
   );
