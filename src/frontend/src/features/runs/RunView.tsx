@@ -252,7 +252,7 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
         busy={controlState.isLoading}
         onConfirm={() => void act("cancel")}
         onCancel={() => setConfirmCancel(false)}
-        className="-mt-2 max-sm:-order-1"
+        className="max-sm:-order-1"
       />
     ) : null;
 
@@ -312,6 +312,7 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
           </div>
           {actions && <div className="shrink-0 max-sm:-order-1">{actions}</div>}
         </div>
+        {cancelCard}
         <div className="flex min-w-0 max-w-prose flex-col gap-2 max-sm:-order-3 max-sm:-mt-4">
           {request && <Request text={curlyQuotes(request)} />}
           <p className="text-sm text-ink-muted">
@@ -326,7 +327,6 @@ function RunBody({ run, refetch, inline }: { run: Run; refetch: () => void; inli
           )}
         </div>
       </header>
-      {cancelCard}
 
       {controlError && (
         <p role="alert" className="rounded-xs bg-attention-tint px-4 py-3 text-attention-text">

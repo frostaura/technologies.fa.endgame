@@ -29,7 +29,7 @@
       "act": [
         {
           "wait": {
-            "text": "Estimate against actual"
+            "text": "Against estimate"
           }
         }
       ],

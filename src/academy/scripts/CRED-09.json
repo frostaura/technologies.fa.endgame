@@ -14,7 +14,7 @@
         }
       ],
       "highlight": {
-        "text": "Held for calls in flight",
+        "text": "Held for calls",
         "note": "Before each AI call its worst case is held against every cap and the balance; it is settled at the reply's real cost."
       }
     },
