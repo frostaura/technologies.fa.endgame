@@ -33,12 +33,14 @@ export function HireView({ hireId }: { hireId: string }) {
   const tree = useActiveTree();
   const hire = view.kind === "loaded" ? view.data : null;
   const org = tree.data?.organisation;
+  // Editing happens on the page; the decision beside it waits while the proposal is being edited.
+  const [editing, setEditing] = useState(false);
   const crumbs: Crumb[] = [
     ...(org ? [{ label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() }, { label: "Hiring", href: paths.hires(hire?.scope ?? org.slug) }] : []),
     { label: hire ? nameWithRole(hire.name, hire.role).replace(", ", " · ") : "Hire proposal" },
   ];
   return (
-    <AppShell crumbs={crumbs} aside={hire ? <CostAside hire={hire} /> : undefined}>
+    <AppShell crumbs={crumbs} aside={hire ? <DecisionAside hire={hire} tree={tree.data} editing={editing} onEdit={() => setEditing(true)} /> : undefined}>
       {view.kind === "loading" && (
         <Loading label="Loading the hire proposal" className="flex flex-col gap-6">
           <Skeleton className="h-40 rounded-lg" />
@@ -50,7 +52,7 @@ export function HireView({ hireId }: { hireId: string }) {
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
           <ErrorBoundary name="The hire proposal">
-            <HireBody hire={view.data} tree={tree.data} />
+            <HireBody hire={view.data} tree={tree.data} editing={editing} onEditDone={() => setEditing(false)} />
           </ErrorBoundary>
         </>
       )}
@@ -59,14 +61,10 @@ export function HireView({ hireId }: { hireId: string }) {
 }
 
 
-function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
+function HireBody({ hire, tree, editing, onEditDone }: { hire: Hire; tree: Tree | undefined; editing: boolean; onEditDone: () => void }) {
   const mode = useAppSelector((s) => s.ui.mode);
-  const [editing, setEditing] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [decisionError, setDecisionError] = useState<string | null>(null);
   const job = hire.jobDescription;
-  const me = useGetMeQuery(undefined);
-  const admin = roleRank(effectiveRole(tree, me.data, hire.scope)) >= roleRank("admin");
   return (
     <>
       <section aria-label="The proposed hire" className={cn("flex flex-col gap-3 rounded-lg border bg-surface px-6 py-7 shadow-card sm:px-8", RISE)}>
@@ -81,7 +79,7 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
       </section>
 
       {editing ? (
-        <EditHire hire={hire} tree={tree} onDone={() => setEditing(false)} onError={setEditError} />
+        <EditHire hire={hire} tree={tree} onDone={onEditDone} onError={setEditError} />
       ) : (
         <Fold title="The drafted job description" summary={`${job.monthlyCreditLimit !== null ? `${formatCredits(job.monthlyCreditLimit)} a month` : "No cap of its own"} · reports to ${hire.reportsTo?.name ?? "you"}`}>
         <section aria-labelledby="jd-title" className={cn("flex flex-col gap-3.5", RISE, stagger(1))}>
@@ -105,21 +103,6 @@ function HireBody({ hire, tree }: { hire: Hire; tree: Tree | undefined }) {
           </dl>
         </section>
         </Fold>
-      )}
-
-      {decisionError && (
-        <p role="alert" className="rounded-xs bg-attention-tint px-4 py-3 text-attention-text">
-          {decisionError} The proposal is still waiting for you.
-        </p>
-      )}
-      {hire.status === "proposed" ? (
-        admin ? (
-          !editing && <Decide hire={hire} onEdit={() => setEditing(true)} onError={setDecisionError} />
-        ) : (
-          <p className="text-ink-muted">An Admin or the Owner decides on hires.</p>
-        )
-      ) : (
-        <Decided hire={hire} />
       )}
     </>
   );
@@ -153,7 +136,8 @@ function Decide({ hire, onEdit, onError }: { hire: Hire; onEdit: () => void; onE
 
   return (
     <section aria-label="Your decision" className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-2 max-sm:flex-col">
+      {/* The decision, one choice a row: the same in the narrow side column as under the page on a phone. */}
+      <div className="flex flex-col gap-2">
         <Button onClick={() => setConfirming("accept")} disabled={state.isLoading} aria-expanded={confirming === "accept"}>
           Hire {hire.name}
         </Button>
@@ -190,7 +174,7 @@ function Decide({ hire, onEdit, onError }: { hire: Hire; onEdit: () => void; onE
 function Decided({ hire }: { hire: Hire }) {
   const d = hire.decision;
   return (
-    <section role="status" className="flex flex-col gap-2 rounded-md border bg-surface px-6 py-5">
+    <section role="status" className="flex flex-col gap-2">
       {hire.withdrawn ? (
         <>
           <p className="text-base font-semibold">This proposal was withdrawn{d ? ` on ${formatDate(d.at)}` : ""}: nobody needs to answer it.</p>
@@ -294,13 +278,21 @@ function EditHire({ hire, tree, onDone, onError }: { hire: Hire; tree: Tree | un
   );
 }
 
-function CostAside({ hire }: { hire: Hire }) {
+/**
+ * Beside the proposal: what it costs and whether the budget has room, then the decision itself — as a verdict's
+ * decision sits beside the verdict (console-desktop 33), so it never floats on the page under the job.
+ */
+function DecisionAside({ hire, tree, editing, onEdit }: { hire: Hire; tree: Tree | undefined; editing: boolean; onEdit: () => void }) {
+  const me = useGetMeQuery(undefined);
+  const admin = roleRank(effectiveRole(tree, me.data, hire.scope)) >= roleRank("admin");
   const capped = expectedMonthly(hire) < hire.expectedMonthlyCredits;
   // Only a proposal still waiting is weighed against the budget: a withdrawn, declined or accepted one carries no budget warning.
   const open = hire.status === "proposed" && !hire.withdrawn;
+  // Kept here, not in the decision: a refused decision puts the proposal back, and its reason must outlive that.
+  const [error, setError] = useState<string | null>(null);
   return (
     <>
-      <SideCard label="What it costs" className={RISE}>
+      <SideCard label="What it costs" className={RISE} testId="hire-decision">
         <Stat plain size="lg" label="What it costs" value={formatNumber(expectedMonthly(hire))} caption={capped ? "credits a month, at most" : "credits a month, expected"} />
         {(open || capped) && (
           <div className="flex flex-col gap-1 border-t pt-3">
@@ -315,8 +307,24 @@ function CostAside({ hire }: { hire: Hire }) {
             )}
           </div>
         )}
+        <div className="flex flex-col gap-3 border-t pt-4">
+          {error && (
+            <p role="alert" className="rounded-xs bg-attention-tint px-4 py-3 text-sm text-attention-text">
+              {error} The proposal is still waiting for you.
+            </p>
+          )}
+          {hire.status !== "proposed" ? (
+            <Decided hire={hire} />
+          ) : !admin ? (
+            <p className="text-ink-muted">An Admin or the Owner decides on hires.</p>
+          ) : editing ? (
+            <p className="text-ink-muted">Save or cancel the edit to decide on it.</p>
+          ) : (
+            <Decide hire={hire} onEdit={onEdit} onError={setError} />
+          )}
+        </div>
       </SideCard>
-      <SideCard>
+      <SideCard title="If it has nothing to do">
         <p className="text-ink-body">An employee with nothing to do is flagged and let go, so an idle hire is never paid for. Its memory is kept, so a rehire is not a cold start.</p>
       </SideCard>
     </>

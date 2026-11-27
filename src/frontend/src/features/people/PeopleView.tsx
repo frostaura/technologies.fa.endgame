@@ -242,8 +242,9 @@ function MemberRow({
         </Select>
       </>
     ) : (
-      // A role that is not changed here is plain text in the same place as the field, at the field's height.
-      <span className="flex min-h-touch items-center text-ink">
+      // A role that is not changed here is plain text in the same place as the field, at the field's height, its
+      // words where the field's words start (the field's edge and padding, the edge left clear: console-desktop 44).
+      <span className="flex min-h-touch items-center border border-transparent px-3 text-sm text-ink touch:text-base">
         {ROLE_NAME[member.role]}
       </span>
     );
@@ -431,9 +432,10 @@ function RolesAside() {
       <h2 id="roles-title" className="text-base font-semibold">
         What each role may do
       </h2>
-      <dl className="flex flex-col divide-y">
+      {/* Under the page on a tablet the card is the page's width: the four roles two across (console-small 17). */}
+      <dl className="flex flex-col divide-y md:max-lg:grid md:max-lg:grid-cols-2 md:max-lg:gap-x-8 md:max-lg:gap-y-4 md:max-lg:divide-y-0">
         {[...ROLES].reverse().map((r) => (
-          <div key={r} className="flex flex-col gap-0.5 py-3 first:pt-0">
+          <div key={r} className="flex flex-col gap-0.5 py-3 first:pt-0 md:max-lg:py-0">
             <dt className="font-semibold">{ROLE_NAME[r]}</dt>
             <dd className="m-0 text-ink-body">{ROLE_MAY[r]}</dd>
           </div>

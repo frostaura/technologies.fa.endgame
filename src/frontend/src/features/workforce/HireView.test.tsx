@@ -19,6 +19,21 @@ afterEach(() => {
 });
 
 describe("HireView", () => {
+  it("puts the decision beside the proposal, under what it costs, and names every side card (console-desktop 33)", async () => {
+    stub(json(hireFixture()));
+    renderWithStore(<HireView hireId="h1" />);
+    const side = await screen.findByRole("complementary", { name: "Beside this page" });
+    expect(within(side).getByRole("button", { name: "Hire Lin" })).toBeTruthy();
+    expect(within(side).getByRole("button", { name: "Decline" })).toBeTruthy();
+    expect(within(side).getByRole("heading", { name: "If it has nothing to do" })).toBeTruthy();
+    expect(within(screen.getByRole("main")).queryByRole("button", { name: "Hire Lin" })).toBeNull();
+    // Editing waits the decision: it is made on the page, and the side card says so.
+    fireEvent.click(within(side).getByRole("button", { name: "Edit the proposal" }));
+    expect(await screen.findByRole("form", { name: "Edit the proposal" })).toBeTruthy();
+    expect(within(side).getByText("Save or cancel the edit to decide on it.")).toBeTruthy();
+  });
+
+
   it("loading, failed", async () => {
     stub("pending");
     const first = renderWithStore(<HireView hireId="h1" />);
@@ -145,6 +160,10 @@ describe("HiresView", () => {
     renderWithStore(<HiresView />);
     expect(await screen.findByRole("link", { name: /Lin, Engineer for Tools/ })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Decided" }).textContent).toContain("Ruth");
+    // A waiting proposal's state is whether it fits the budget; the section already says it waits (real-stack 47).
+    const waiting = screen.getByRole("region", { name: "Waiting for you" });
+    expect(within(waiting).getByText("More than the budget has room for")).toBeTruthy();
+    expect(within(waiting).queryByText("Waiting for you", { selector: "span" })).toBeNull();
     fireEvent.click(await screen.findByRole("button", { name: "Propose as a permanent hire" }));
     fireEvent.change(screen.getByLabelText("Name the new employee"), { target: { value: "Sam" } });
     fireEvent.click(screen.getByRole("button", { name: "Propose the hire" }));
