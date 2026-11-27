@@ -58,7 +58,7 @@ export function ContextPanel({ scope, name, level, canWrite, nameOf }: { scope: 
               {view.data.map((entry) =>
                 replacing?.key === entry.key ? (
                   <li key={entry.key}>
-                    <ContextForm scope={scope} entry={entry} onDone={() => setReplacing(null)} onRefused={setRefused} />
+                    <ContextForm scope={scope} name={name} entry={entry} onDone={() => setReplacing(null)} onRefused={setRefused} />
                   </li>
                 ) : (
                   <ContextRow key={entry.key} entry={entry} scope={scope} name={name} label={keyName(entry.key)} canWrite={canWrite} nameOf={nameOf} onChange={() => setReplacing(entry)} />
@@ -70,7 +70,7 @@ export function ContextPanel({ scope, name, level, canWrite, nameOf }: { scope: 
       )}
       {canWrite ? (
         adding ? (
-          <ContextForm scope={scope} onDone={() => setAdding(false)} onRefused={setRefused} />
+          <ContextForm scope={scope} name={name} onDone={() => setAdding(false)} onRefused={setRefused} />
         ) : (
           <Button variant="secondary" size="sm" className="self-start" onClick={() => setAdding(true)}>
             Say something about {name}
@@ -151,7 +151,7 @@ function ContextRow({ entry, scope, name, label, canWrite, nameOf, onChange }: {
             {here ? "Change" : "Say it differently here"}
           </Button>
           {here && (
-            <Button size="sm" variant="secondary" disabled={removing.isLoading} onClick={() => setConfirming(true)}>
+            <Button size="sm" variant="danger-outline" disabled={removing.isLoading} onClick={() => setConfirming(true)}>
               {replaced.length > 0 ? `Remove it; ${nameOf(replaced[0] ?? "")}'s applies again` : "Remove it"}
             </Button>
           )}
@@ -175,7 +175,7 @@ function ContextRow({ entry, scope, name, label, canWrite, nameOf, onChange }: {
   );
 }
 
-function ContextForm({ scope, entry, onDone, onRefused }: { scope: string; entry?: CascadeValue; onDone: () => void; onRefused: (reason: string | null) => void }) {
+function ContextForm({ scope, name, entry, onDone, onRefused }: { scope: string; name: string; entry?: CascadeValue; onDone: () => void; onRefused: (reason: string | null) => void }) {
   const [save, saving] = useSetCascadeMutation();
   const [label, setLabel] = useState(entry ? contextLabel(entry.key) : "");
   const [text, setText] = useState(entry ? contextText(entry.value) : "");
@@ -196,10 +196,17 @@ function ContextForm({ scope, entry, onDone, onRefused }: { scope: string; entry
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label={entry ? `Change ${contextLabel(entry.key)}` : "Say something about this level"} className="flex flex-col gap-3 rounded-sm border bg-ground p-4" noValidate>
-      {entry ? (
-        <p className="font-semibold">{contextLabel(entry.key)}</p>
-      ) : (
+    <ConfirmCard
+      label={entry ? `Change ${contextLabel(entry.key)}` : "Say something about this level"}
+      question={entry ? contextLabel(entry.key) : `Say something about ${name}`}
+      confirm={entry ? "Save it" : "Add it"}
+      cancel="Cancel"
+      destructive={false}
+      busy={!isContextKey(key) || !text.trim() || text.length > VALUE_LIMIT || saving.isLoading}
+      onSubmit={(e) => void submit(e)}
+      onCancel={onDone}
+    >
+      {entry ? null : (
         <Field id={ids.label} label="What it is about" hint="For example: Purpose, Audience, House style." problem={keyProblem}>
           <Input id={ids.label} value={label} onChange={(e) => setLabel(e.target.value)} aria-describedby={`${ids.label}-hint`} />
         </Field>
@@ -207,14 +214,6 @@ function ContextForm({ scope, entry, onDone, onRefused }: { scope: string; entry
       <Field id={ids.text} label="What it says" problem={text.length > VALUE_LIMIT ? `At most ${VALUE_LIMIT} characters.` : null}>
         <Textarea id={ids.text} rows={3} value={text} onChange={(e) => setText(e.target.value)} />
       </Field>
-      <span className="flex flex-wrap gap-2">
-        <Button type="submit" size="sm" disabled={!isContextKey(key) || !text.trim() || text.length > VALUE_LIMIT || saving.isLoading}>
-          {entry ? "Save it" : "Add it"}
-        </Button>
-        <Button size="sm" variant="quiet" onClick={onDone}>
-          Cancel
-        </Button>
-      </span>
-    </form>
+    </ConfirmCard>
   );
 }

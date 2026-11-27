@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ConfirmCard } from "@/components/ui/confirm";
 import { useCardNote } from "@/components/cardNote";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { isValidSlug, slugify } from "@/lib/format";
@@ -55,7 +56,7 @@ export function RenameNode({ level, id, name, slug, tree, onDone }: { level: Man
       <Field id={fieldId} label="Name" hint={`Its address stays ${slug}: an address never changes once it is made.`} problem={value.length > 0 ? problem : null}>
         <Input id={fieldId} value={value} maxLength={NAME_LIMIT + 1} onChange={(e) => setValue(e.target.value)} aria-describedby={`${fieldId}-hint`} aria-invalid={!!problem} />
       </Field>
-      <Button type="submit" size="sm" variant="secondary" className="self-start" disabled={!!problem || typed === name || state.isLoading}>
+      <Button type="submit" className="self-start" disabled={!!problem || typed === name || state.isLoading}>
         {state.isLoading ? "Saving…" : "Save the name"}
       </Button>
       {result && <Outcome ok={result.ok}>{result.text}</Outcome>}
@@ -147,19 +148,22 @@ export function DeleteNode({ level, id, name, tree, onDeleted }: { level: Manage
           onNo={() => setConfirming(false)}
         />
       ) : (
-        <Button size="sm" variant="secondary" className="self-start border-attention-text text-attention-text" disabled={state.isLoading} onClick={() => setConfirming(true)}>
+        <Button size="sm" variant="danger-outline" className="self-start" disabled={state.isLoading} onClick={() => setConfirming(true)}>
           Delete {name}
         </Button>
       )}
       {note && !note.ok && (
-        <div role="alert" className="flex flex-col gap-2 rounded-xs bg-attention-tint px-3 py-2 text-sm text-attention-text">
-          <span>{note.text}</span>
-          {note.archivable && (
-            <Button size="sm" variant="secondary" className="self-start" disabled={archiving.isLoading} onClick={() => void archiveInstead()}>
-              Archive it instead
-            </Button>
-          )}
-        </div>
+        <Alert
+          tone="bad"
+          title={note.text}
+          action={
+            note.archivable ? (
+              <Button size="sm" variant="secondary" disabled={archiving.isLoading} onClick={() => void archiveInstead()}>
+                Archive it instead
+              </Button>
+            ) : undefined
+          }
+        />
       )}
       {note?.ok && <Outcome ok>{note.text}</Outcome>}
     </div>
@@ -170,7 +174,7 @@ export function DeleteNode({ level, id, name, tree, onDeleted }: { level: Manage
  * Adds a division, project or app beneath a node. The address is made from the name and shown as it
  * will be; it can be changed until the node is made, never after.
  */
-export function CreateChild({ level, parent, parentName, onCreated, onCancel }: { level: ManagedLevel; parent: string; parentName: string; onCreated: (node: TreeNode) => void; onCancel?: () => void }) {
+export function CreateChild({ level, parent, parentName, onCreated, onCancel }: { level: ManagedLevel; parent: string; parentName: string; onCreated: (node: TreeNode) => void; onCancel: () => void }) {
   const [create, state] = useCreateNodeMutation();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
@@ -196,11 +200,17 @@ export function CreateChild({ level, parent, parentName, onCreated, onCancel }: 
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} aria-label={`Add a ${word(level)} to ${parentName}`} className="flex flex-col gap-4 rounded-md border bg-ground p-5 max-sm:p-4" noValidate>
-      <h3 className="font-display text-base font-semibold">
-        A new {word(level)} in {parentName}
-      </h3>
-      <div className="flex max-w-form flex-col gap-4">
+    <ConfirmCard
+      label={`Add a ${word(level)} to ${parentName}`}
+      question={`A new ${word(level)} in ${parentName}`}
+      confirm={state.isLoading ? "Adding…" : `Add the ${word(level)}`}
+      cancel="Not now"
+      destructive={false}
+      busy={!typed || !isValidSlug(shown) || typed.length > NAME_LIMIT || state.isLoading}
+      onSubmit={(e) => void submit(e)}
+      onCancel={() => onCancel?.()}
+    >
+      <div className="flex flex-col gap-4">
         <Field id={ids.name} label="Name" hint="What everyone reads. It can be renamed at any time." problem={typed.length > NAME_LIMIT ? `A name is at most ${NAME_LIMIT} characters.` : null}>
           <Input ref={first} id={ids.name} name="name" value={name} onChange={(e) => setName(e.target.value)} aria-describedby={`${ids.name}-hint`} />
         </Field>
@@ -219,18 +229,8 @@ export function CreateChild({ level, parent, parentName, onCreated, onCancel }: 
           />
         </Field>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" size="sm" disabled={!typed || !isValidSlug(shown) || typed.length > NAME_LIMIT || state.isLoading}>
-          {state.isLoading ? "Adding…" : `Add the ${word(level)}`}
-        </Button>
-        {onCancel && (
-          <Button size="sm" variant="quiet" onClick={onCancel}>
-            Not now
-          </Button>
-        )}
-      </div>
       {problem && <Outcome ok={false}>{problem}</Outcome>}
-    </form>
+    </ConfirmCard>
   );
 }
 

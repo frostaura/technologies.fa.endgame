@@ -5,6 +5,7 @@ import { Link } from "@/components/Link";
 import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { LINK } from "@/components/ui/layout";
 import { RISE } from "@/lib/motion";
 import { viewOf } from "@/lib/queryState";
 import { effectiveRole, roleRank } from "@/lib/roles";
@@ -82,7 +83,7 @@ export function ManageView() {
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
             {step !== "part" && <Outline nodes={nodes} selected={step === "outline" ? "" : selected.scope} onSelect={select} />}
             {step === "part" && (
-              <Link href={outlineHref} className="flex min-h-touch items-center gap-1 self-start rounded-xs font-semibold text-primary-link">
+              <Link href={outlineHref} className={cn(LINK, "flex min-h-touch items-center gap-1 self-start")}>
                 <ChevronLeft aria-hidden className="size-4" />
                 Every part of the organisation
               </Link>
