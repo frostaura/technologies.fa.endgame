@@ -114,7 +114,7 @@ export function SuggestionsView() {
                       <li key={x.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3">
                         <span className="min-w-0 break-words">{x.title}</span>
                         {x.status === "taken" && x.ideaId ? (
-                          <Link href={paths.idea(x.ideaId)} className="flex min-h-touch items-center rounded-xs font-semibold text-primary-link hover:text-primary-hover sm:min-h-0">
+                          <Link href={paths.idea(x.ideaId)} className="flex items-center rounded-xs font-semibold text-primary-link hover:text-primary-hover touch:min-h-touch">
                             Taken — see its research
                           </Link>
                         ) : (

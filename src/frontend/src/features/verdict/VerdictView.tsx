@@ -62,27 +62,19 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
   }
   crumbs.push({ label: idea?.title ?? "Idea" });
 
+  // Beside a verdict: the decision, in view all the way down, and how research reached it. Before there is
+  // a verdict there is nothing to decide, and research's record sits under the page as it does on a phone.
   const aside =
-    idea && desktop ? (
-      idea.verdict ? (
-        [
+    idea?.verdict && desktop
+      ? [
           <DecisionCard key="decision" idea={idea} verdict={idea.verdict} />,
-          idea.verdict.method && (
-            <SideCard key="method" label="How this was researched">
-              <ErrorBoundary name="The research record">
-                <Method idea={idea} />
-              </ErrorBoundary>
-            </SideCard>
-          ),
+          <SideCard key="method" label="How this was researched">
+            <ErrorBoundary name="The research record">
+              <Method idea={idea} />
+            </ErrorBoundary>
+          </SideCard>,
         ]
-      ) : (
-        <SideCard label="How often research says no">
-          <ErrorBoundary name="The research record">
-            <Refusals idea={idea} />
-          </ErrorBoundary>
-        </SideCard>
-      )
-    ) : undefined;
+      : undefined;
 
   return (
     <AppShell crumbs={crumbs} aside={aside}>
@@ -104,7 +96,7 @@ export function VerdictView({ ideaId }: { ideaId: string }) {
           ) : (
             <>
               <NoVerdictYet idea={view.data} />
-              {!desktop && <TrackRecord idea={view.data} />}
+              <TrackRecord idea={view.data} />
             </>
           )}
         </>
@@ -138,8 +130,8 @@ function NoVerdictYet({ idea }: { idea: Idea }) {
   const failed = idea.status === "failed";
   return (
     <section className={cn("flex flex-col items-start gap-4 rounded-lg border bg-surface px-6 py-7 shadow-card sm:px-8", RISE)} role={failed ? "alert" : "status"}>
-      <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <Badge tone={failed ? "bad" : "info"}>{failed ? "Research did not finish" : "Research in progress"}</Badge>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        <Badge tone={failed ? "bad" : "info"} className="px-3 py-1 text-sm uppercase tracking-wide">{failed ? "Research did not finish" : "Research in progress"}</Badge>
         <ResearchLine idea={idea} />
       </div>
       <h1 className={cn(TITLE, "max-w-prose")}>{failed ? "No verdict could be reached." : "The verdict is being worked out."}</h1>
@@ -373,7 +365,7 @@ function Hero({ idea, verdict, beside }: { idea: Idea; verdict: Verdict; beside?
               ))}
             </div>
           ) : (
-            <p ref={lines} className={cn("text-base text-ink-body", beside ? "max-sm:line-clamp-2" : "max-sm:line-clamp-3")}>
+            <p ref={lines} className={cn("text-base text-ink-body", beside ? "max-sm:line-clamp-2 rail:line-clamp-2" : "max-sm:line-clamp-3 rail:line-clamp-2")}>
               {short.text}
             </p>
           ))}
@@ -383,7 +375,7 @@ function Hero({ idea, verdict, beside }: { idea: Idea; verdict: Verdict; beside?
             aria-expanded={open}
             aria-controls="full-reasoning"
             onClick={() => setOpen((x) => !x)}
-            className="flex min-h-touch items-center self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover sm:min-h-0"
+            className="flex items-center self-start rounded-xs font-semibold text-primary-link hover:text-primary-hover touch:min-h-touch"
           >
             {open ? "Hide the full reasoning" : "Read the full reasoning"}
           </button>
@@ -619,7 +611,7 @@ function Decisions({ idea, verdict, redLine, stacked = false }: { idea: Idea; ve
       </div>
       {withChange && <p className="text-sm text-ink-muted">“Build it with this change” builds the idea with research’s change as part of what is asked for; “Build it as described” builds your own words.</p>}
       {confirming === "change" && (
-        <form onSubmit={changeSubmit} aria-label="Change the idea" className="flex max-w-prose flex-col gap-2 rounded-md border bg-surface p-4">
+        <form onSubmit={changeSubmit} aria-label="Change the idea" className={cn("flex max-w-prose flex-col gap-2", stacked ? "border-t pt-3" : "rounded-md border bg-surface p-4")}>
           <label htmlFor={`change-note-${idea.id}`} className="font-medium">
             What should change?
           </label>
@@ -724,7 +716,7 @@ function Method({ idea }: { idea: Idea }) {
 /** Research's track record here: how often it says no, and how each overrule turned out. */
 function TrackRecord({ idea }: { idea: Idea }) {
   return (
-    <ContentGrid label="Research's record">
+    <ContentGrid label="Research's record" className="md:grid-cols-2">
       <Fold title="How often research says no" summary={idea.record.total === 0 ? "The first verdict here" : `${formatNumber(idea.record.doNotBuild)} of ${formatNumber(idea.record.total)} verdicts said do not build`}>
         <section aria-label="How often research says no" className={cn("flex min-w-0 flex-col gap-3 rounded-md border bg-surface p-5 shadow-card", RISE)}>
           <Refusals idea={idea} />

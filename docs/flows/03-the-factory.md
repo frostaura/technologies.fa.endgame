@@ -272,18 +272,14 @@ Read from the code on 2026-11-25, one reader per area; nothing here was taken fr
 - **Level:** Foundation. **Learn first:** VERD-02.
 - **What you learn:** the verdict names the products it found and counts missing demand against building.
 - **Steps (top to bottom):**
-  1. The hero, on white: the tag "Verdict · {outcome}", the headline, and two sentences of the summary. **"Read the full reasoning"** / **"Hide the full reasoning"** opens the whole of it in place of those sentences when the summary is long. Beside it (under it below 1600 px): three figures — "Already sold", "Demand" and "Confidence" — or, over a red line, the red-line alert (VERD-10).
-  2. The decision (VERD-05 to VERD-09): on a desktop in the side card **"Your decision"**, which stays in view as the page scrolls; on a tablet or a phone straight under the hero.
-  3. The evidence, each section as tall as what it holds, two across from 1600 px:
-     - **"The case against, argued first"**. Left out when it is the summary the hero already shows whole.
-     - **"Who already does this"**: the first 5 products, each with what it does and its source (site name only in normal mode, cut to its card), plus **"Show all {n} products"** / **"Show fewer"**. Empty: "Research found nothing already sold that does this."
-     - **"What gap is left"**. Empty: "Research named no gap."
-     - **"Who would want it"**: paragraphs and the first 5 "Signals of demand" with sources, plus **"Show all {n} signals"**. If none were found: "No evidence of demand was found. That counts against building." (only "That counts against building." when research's own words already say none was found).
-     - Over a red line, where research looked at no market, these three are one section: **"The market was not researched"**.
-     - **"What to change"**, on a change verdict.
-     - **"What would change the verdict"**.
-     - **"No red line is crossed"**, with the reasoning.
-  4. Research's record (VERD-04) under the evidence.
+  1. The hero, on white: the tag "Verdict · {outcome}", the headline, and two sentences of the summary. **"Read the full reasoning"** / **"Hide the full reasoning"** opens the whole of it in place of those sentences when the summary is long. Beside it (under it below 1600 px), three figures — "Already sold", "Demand" and "Confidence".
+  2. A red-line alert, in the hero in place of those figures, when one is breached (VERD-10).
+  3. **"The case against, argued first"**. Left out when it is the summary the hero already shows whole. From here the evidence runs as sections each as tall as what it holds, two across from 1600 px.
+  4. **"Who already does this"**: the first 5 products, each with what it does and its source (site name only in normal mode, cut to its card), plus **"Show all {n} products"** / **"Show fewer"**; empty: "Research found nothing already sold that does this." **"What gap is left"**; empty: "Research named no gap." **"Who would want it"**: paragraphs and the first 5 "Signals of demand" with sources, plus **"Show all {n} signals"**; if none were found, "No evidence of demand was found. That counts against building." (only "That counts against building." when research's own words already say none was found). Over a red line, where research looked at no market, these three are one section: **"The market was not researched"**.
+  5. **"What to change"**, on a change verdict.
+  6. **"What would change the verdict"**.
+  7. **"No red line is crossed"**, with the reasoning. Then research's record (VERD-04).
+  8. The decision (VERD-05 to VERD-09), or the decision already taken (VERD-13): on a desktop in the side card **"Your decision"**, which stays in view as the page scrolls; on a tablet or a phone straight under the hero.
 - **You know it worked when:** the evidence sections and the decision buttons are visible.
 - **Variations and refusals:** normal mode strips repository names in brackets from product names. Technical mode shows full URLs. On a phone the order changes so the call comes first: the banner, a red line's alert, then the decision controls full width (a confirmation opens in place), then every other section as a folded row — "The case against, argued first" open, "Who already does this" ("{n} products"), "What gap is left", "Who would want it", "What to change", "What would change the verdict", "No red line is crossed", and VERD-04's three sections, each one tap to open.
 - **Where:** `VerdictView.tsx`, `verdictModel.ts`.
