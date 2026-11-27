@@ -165,8 +165,7 @@ function Row({ organisation, item, onNavigate, compact = false }: { organisation
           {technical && lines.technical && <code className="basis-full break-all font-mono text-xs text-ink-muted">{lines.technical}</code>}
           {/* "Mark read" ends the tag's line, at every width; narrow, the time joins it instead of taking a column of its own. */}
           {(inline || unread) && (
-            // The negative margin is the span's, not the button's: a button pulled outside its own box is cut to fit it ("Mark r…").
-            <span className="-mr-2 ml-auto flex shrink-0 items-center gap-1">
+            <span className="ml-auto flex shrink-0 items-center gap-1">
               {inline && <Time at={item.createdAt} />}
               {unread && <MarkRead onClick={() => void read()} />}
             </span>
@@ -192,7 +191,8 @@ function Time({ at }: { at: string }) {
 
 function MarkRead({ onClick }: { onClick: () => void }) {
   return (
-    <Button size="sm" variant="quiet" onClick={onClick}>
+    // Its words end on the row's edge: the quiet button's own padding is pulled outside it.
+    <Button size="sm" variant="quiet" className="-mr-2" onClick={onClick}>
       Mark read
     </Button>
   );
