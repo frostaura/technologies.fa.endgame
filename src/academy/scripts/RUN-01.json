@@ -72,8 +72,8 @@
       "step": 6,
       "kind": "demo",
       "highlight": {
-        "text": "Where the credits go",
-        "note": "From 1280 wide, “Tasks” and “Where the credits go” stand beside the page."
+        "selector": "section[aria-label='Cost']",
+        "note": "Where the page is wide enough, it is two columns: how it ended and “Step by step” at the left, the cost and “The plan” at the right."
       }
     }
   ]

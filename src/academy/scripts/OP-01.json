@@ -40,7 +40,7 @@
         }
       ],
       "highlight": {
-        "text": "You are inside Northwind as a FrostAura operator",
+        "selector": "[aria-label='God mode']",
         "note": "Inside an organisation the band names it, says you act as an Admin and that everything is logged — with “Leave Northwind”."
       }
     },

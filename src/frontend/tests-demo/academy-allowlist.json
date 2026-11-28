@@ -2,12 +2,6 @@
   "about": "Academy step-script steps allowed to fail against the demo, each with its reason. tests-demo/academy-scripts.spec.ts plays every script in src/academy/scripts against the built demo on the laptop's console and the phone's, and fails, naming flow, step and size, on any step that does not reach its screen, ring its subject whole or say something new — unless the step is listed here. An entry that no longer fails is itself a failure, so the list only ever holds what is still true. Format: { \"flow\": \"NOTE-02\", \"step\": 1, \"size\": \"phone\", \"reason\": \"...\" } (size: laptop or phone; none for both; variation: n for a variation's step).",
   "entries": [
     {
-      "flow": "CRED-02",
-      "step": 2,
-      "size": "phone",
-      "reason": "On a phone a level with no cap of its own shows only its spending; the meter of the cap above that holds it is drawn on a laptop's wider row."
-    },
-    {
       "flow": "IDEA-05",
       "step": 5,
       "size": "phone",
@@ -32,22 +26,28 @@
       "reason": "The bell's dropdown is a laptop's: a phone's Alerts in the bottom bar opens the notifications page itself, as NOTE-03 teaches."
     },
     {
-      "flow": "ONT-02",
-      "step": 5,
+      "flow": "ONT-03",
+      "step": 2,
       "size": "phone",
-      "reason": "The drawing of the organisation is a laptop's and a tablet's: a phone shows the same relations as a grouped list (ONT-04), with no edges to point at."
+      "reason": "On a phone “How data flows” is a card per app listing the services it uses (ONT-04 step 2), not the matrix: there are no columns, rows or cells to ring."
+    },
+    {
+      "flow": "ONT-03",
+      "step": 3,
+      "size": "phone",
+      "reason": "On a phone “How data flows” is a card per app listing the services it uses (ONT-04 step 2), not the matrix: there are no columns, rows or cells to ring."
+    },
+    {
+      "flow": "ONT-03",
+      "step": 4,
+      "size": "phone",
+      "reason": "On a phone “How data flows” is a card per app listing the services it uses (ONT-04 step 2), not the matrix: there are no columns, rows or cells to ring."
     },
     {
       "flow": "ORG-11",
       "step": 3,
       "size": "phone",
       "reason": "On a phone the working chip reads “3 contractors · researching”, so the words “contractor” only begin a word there; the laptop's chip is the word itself."
-    },
-    {
-      "flow": "RUN-05",
-      "step": 2,
-      "size": "phone",
-      "reason": "Caught up instantly, as the phone's check plays it, the resumed run has not yet ticked to “Working” when the spotlight looks; played live, as a learner plays it, it has (checked by hand at 390 × 640)."
     },
     {
       "flow": "RUN-07",
@@ -73,6 +73,30 @@
       "step": 3,
       "size": "phone",
       "reason": "The header's mark and breadcrumb are a laptop's: a phone's header is one row (Up to, where you are, your account), which step 5 and SHL-07 teach."
+    },
+    {
+      "flow": "TALK-01",
+      "step": 3,
+      "size": "phone",
+      "reason": "On a phone the conversation is a sheet whose header carries only whom it talks to; the hint under it and the “Also happening here” line are the docked pane's on a laptop (TALK-01 step 1, TALK-04 step 1)."
+    },
+    {
+      "flow": "TALK-01",
+      "step": 7,
+      "size": "phone",
+      "reason": "On a phone the conversation is a sheet whose header carries only whom it talks to; the hint under it and the “Also happening here” line are the docked pane's on a laptop (TALK-01 step 1, TALK-04 step 1)."
+    },
+    {
+      "flow": "TALK-04",
+      "step": 1,
+      "size": "phone",
+      "reason": "On a phone the conversation is a sheet whose header carries only whom it talks to; the hint under it and the “Also happening here” line are the docked pane's on a laptop (TALK-01 step 1, TALK-04 step 1)."
+    },
+    {
+      "flow": "TALK-06",
+      "step": 1,
+      "size": "phone",
+      "reason": "On a phone the conversation is a sheet whose header carries only whom it talks to; the hint under it and the “Also happening here” line are the docked pane's on a laptop (TALK-01 step 1, TALK-04 step 1)."
     },
     {
       "flow": "TALK-23",

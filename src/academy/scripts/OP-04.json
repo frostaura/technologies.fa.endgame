@@ -40,7 +40,7 @@
         }
       ],
       "highlight": {
-        "text": "You are inside Northwind as a FrostAura operator",
+        "selector": "[aria-label='God mode']",
         "note": "Northwind's own org chart, with the band naming it."
       }
     },
