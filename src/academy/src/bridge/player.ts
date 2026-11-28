@@ -32,9 +32,16 @@ export function personaAt(script: StepScript, n: number): StepScript["persona"] 
   return who;
 }
 
+/** The world at step n: the script's scenario, or the last one a step up to n opened. */
+export function scenarioAt(script: StepScript, n: number): StepScript["scenario"] {
+  let world = script.scenario;
+  for (const s of demoSteps(script, n)) if (s.scenario) world = s.scenario;
+  return world;
+}
+
 function opsFor(script: StepScript, s: DemoStep, catchUp: boolean): PlannedOp[] {
   const ops: PlannedOp[] = [];
-  const who = { persona: personaAt(script, s.step), scenario: script.scenario };
+  const who = { persona: personaAt(script, s.step), scenario: scenarioAt(script, s.step) };
   if (s.goto) ops.push({ op: "goto", args: { route: s.goto, ...who }, catchUp });
   if (s.clock) ops.push({ op: "clock", args: { ...s.clock }, catchUp });
   if (s.act) ops.push({ op: "act", args: { actions: s.act, ...(catchUp ? { instant: true } : {}) }, catchUp });

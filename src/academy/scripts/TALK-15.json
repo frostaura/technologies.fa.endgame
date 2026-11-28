@@ -98,9 +98,27 @@
       "step": 5,
       "kind": "demo",
       "highlight": {
-        "none": "This world’s run fails on the budget only; the other failure’s words are in the step."
+        "none": "No world here fails for a reason of its own; the stop notice shown when no reply comes at all is played under “The reply never came”, below."
       },
       "note": "Any other failure reads “I could not finish answering that. Please ask again.”"
+    }
+  ],
+  "variations": [
+    {
+      "title": "The reply never came",
+      "persona": "owner",
+      "scenario": "talk-reply-interrupted",
+      "start": "/",
+      "steps": [
+        {
+          "step": 1,
+          "kind": "demo",
+          "highlight": {
+            "text": "The reply was interrupted.",
+            "note": "The work stopped with no reply: the dock says so, that nothing more was charged, and offers “Try again”."
+          }
+        }
+      ]
     }
   ]
 }

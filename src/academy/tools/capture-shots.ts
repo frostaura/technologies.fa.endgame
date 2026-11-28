@@ -325,7 +325,7 @@ async function capture(browser: Browser, play: Play, base: string, index: ShotIn
     for (const [i, step] of demo.entries()) {
       try {
         // A step may hand the same world to someone else (the operator acts, the Owner reads), as the flow page plays it.
-        if (step.goto) await call("goto", { route: step.goto, ...(step.persona ? { persona: step.persona } : {}) });
+        if (step.goto) await call("goto", { route: step.goto, ...(step.persona ? { persona: step.persona } : {}), ...(step.scenario ? { scenario: step.scenario } : {}) });
         if (step.clock) await call("clock", step.clock);
         // Played as the learner's console plays it, not caught up: the picture is the step's own
         // moment ("Inviting…" while the server works, the device sheet waiting), the same moment

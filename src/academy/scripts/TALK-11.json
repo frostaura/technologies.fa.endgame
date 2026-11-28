@@ -32,10 +32,22 @@
     {
       "step": 4,
       "kind": "demo",
+      "goto": "/",
+      "scenario": "talk-long-history",
+      "act": [
+        {
+          "wait": 1500
+        },
+        {
+          "hover": {
+            "text": "The change has started."
+          }
+        }
+      ],
       "highlight": {
-        "none": "This history holds no files and no work cards; TALK-19 and TALK-21 show them."
-      },
-      "note": "Files sent with a message show with it, and work a turn started comes back as its card."
+        "selector": "[data-work-card]",
+        "note": "In a longer history, the work a turn started comes back as its card, in the state it is in now; it is read only once it scrolls into view."
+      }
     }
   ]
 }

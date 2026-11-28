@@ -46,6 +46,11 @@ export interface DemoStep {
   /** From this step on, someone else is signed in to the same world; needs a `goto`. */
   persona?: Persona;
   /**
+   * From this step on, another world: the step opens its `goto` in this scenario, built fresh (a
+   * state the flow's own world cannot reach, such as a long history or a reply that never came).
+   */
+  scenario?: Scenario;
+  /**
    * What the step is about, ringed in the console, with the caption shown under the frame.
    * `region`: the target is a region that shows the step's state (ringed as it is, not as the card
    * around it); `none`: the step has nothing to ring at all, and why.

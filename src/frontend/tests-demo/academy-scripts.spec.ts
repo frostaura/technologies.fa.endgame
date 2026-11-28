@@ -55,6 +55,8 @@ interface Step {
   goto?: string;
   /** From this step on, someone else is signed in to the same world. */
   persona?: string;
+  /** From this step on, another world: its goto opens in this scenario. */
+  scenario?: string;
   clock?: Record<string, unknown>;
   act?: unknown[];
   highlight?: Highlight;
@@ -154,7 +156,7 @@ for (const { script, variation, name } of plays) {
         let failed: string | null = null;
         const marker = step.step;
         try {
-          if (step.goto) await call("goto", { route: step.goto, ...(step.persona ? { persona: step.persona } : {}) });
+          if (step.goto) await call("goto", { route: step.goto, ...(step.persona ? { persona: step.persona } : {}), ...(step.scenario ? { scenario: step.scenario } : {}) });
           if (step.clock) await call("clock", step.clock);
           // The laptop plays each step as the learner watches it; the phone catches up to it, as a
           // link straight to a step does — a step is one moment however it is reached.
@@ -236,7 +238,7 @@ for (const { script, variation, name } of plays) {
       await call("goto", { route: script.start, persona: script.persona, scenario: script.scenario });
       for (const step of demoSteps) {
         try {
-          if (step.goto) await call("goto", { route: step.goto, ...(step.persona ? { persona: step.persona } : {}) });
+          if (step.goto) await call("goto", { route: step.goto, ...(step.persona ? { persona: step.persona } : {}), ...(step.scenario ? { scenario: step.scenario } : {}) });
           if (step.clock) await call("clock", step.clock);
           if (step.act) await call("act", step.act, true);
         } catch {
