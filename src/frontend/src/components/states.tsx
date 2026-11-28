@@ -6,6 +6,7 @@ import { Button, buttonVariants } from "./ui/button";
 import { Link } from "./Link";
 import { Icon } from "./Icon";
 import { METER_FILL } from "./ui/stat";
+import { TITLE } from "./ui/page";
 import type { IconName } from "./iconNames";
 
 /** A grey placeholder the shape of what is loading, so nothing moves when it arrives. */
@@ -148,7 +149,7 @@ export function NotFoundPage({ title, children, links }: { title: string; childr
     <section aria-label={title} className="flex flex-1 items-center justify-center py-10">
       <div className="flex w-full max-w-form flex-col items-start gap-4 rounded-lg border bg-surface px-8 py-10 shadow-card max-sm:px-5 max-sm:py-7">
         <img src="/brand/endgame-mark.svg" alt="" width={40} height={40} className="size-10" />
-        <h1 className="font-display text-3xl font-semibold leading-tight tracking-tight max-sm:text-2xl">{title}</h1>
+        <h1 className={TITLE}>{title}</h1>
         <div className="text-ink-body">{children}</div>
         <nav aria-label="Where to go instead" className="flex flex-wrap gap-2 pt-1">
           {to.map((l, i) => (

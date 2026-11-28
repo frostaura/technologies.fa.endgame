@@ -191,7 +191,7 @@ Checked against the screens again on 2026-11-25, when every flow here was script
 - **Learn first:** ID-02
 - **What you learn:** your roles are grants at places in the tree, possibly in more than one organisation, and the console works in one of them at a time.
 - **Steps:**
-  1. The page shows your avatar, name, e-mail and, for an operator, "FrostAura operator"; then three figures — Passkeys, Organisations and Roles — and, as rows of a settings page (what each part is on the left, the part itself on the right, one under the other on a phone), your passkeys (ID-08) and then your roles.
+  1. The page shows your avatar, name, e-mail and, for an operator, "FrostAura operator"; then three figures — Passkeys, Organisations and Roles — and, as rows of a settings page (what each part is on the left, the part itself on the right, one under the other on a phone), your passkeys (ID-08) and then your roles. On a phone your passkeys come first, straight under your name, and the figures follow them, so adding a passkey is on the first screen.
   2. "Your roles" lists each organisation as a card, with "Working in it now" on the active one, and each grant: "<Role> of the whole organisation" or "<Role> of a division, <path>", with what that role may do. An Admin or Owner sees "People in <Org>".
   3. In more than one organisation: "You belong to <n> organisations. The console shows one at a time." and **"Working in"** (the header carries the same drop-down on every screen). Choosing another opens its org chart; every screen then reads that organisation. The choice is kept on this device.
 - **You know it worked when:** "Working in it now" moves to the organisation chosen.
