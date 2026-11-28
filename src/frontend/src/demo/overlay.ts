@@ -140,7 +140,13 @@ export function subjectOf(el: HTMLElement, region = false): HTMLElement {
     rungs.push({ el: p, rung: { box: boxOf(p), card: isCard(p) } });
   }
   const chosen = chooseSubject(named, rungs.map((r) => r.rung), { width: window.innerWidth, height: window.innerHeight });
-  return rungs.find((r) => r.rung.box === chosen)?.el ?? el;
+  const found = rungs.find((r) => r.rung.box === chosen)?.el;
+  if (found) return found;
+  // Inside a card the lesson has already rung, a label is ringed with what it labels (its figure):
+  // the small group it heads, when it is no more than a few lines.
+  const group = avoid.length ? rungs[0] : undefined;
+  if (group && group.rung.box.bottom - group.rung.box.top <= Math.max(96, 3 * (named.bottom - named.top)) && group.rung.box.right - group.rung.box.left <= window.innerWidth * 0.6) return group.el;
+  return el;
 }
 
 /** Fixed or sticky bars that stand over the page (the console's header, a phone's bottom bar), unless they hold the element. */
@@ -152,13 +158,15 @@ function bars(el: Element): { top: number; bottom: number } {
     if (p.ownerDocument !== document) break;
     if (/fixed|sticky/.test(getComputedStyle(p).position)) return { top, bottom };
   }
-  const header = document.querySelector<HTMLElement>("body > div header, header");
   const nav = document.querySelector<HTMLElement>("[data-bottom-nav]");
-  // A header stands over the page only once it is stuck at the top: above it (a God-mode band at
-  // the page's top, before any scroll) the page is still seen.
-  if (header && !header.contains(el) && /sticky|fixed/.test(getComputedStyle(header).position)) {
-    const h = header.getBoundingClientRect();
-    if (h.top <= 1) top = Math.max(top, h.bottom);
+  // The console's own top bar: whatever stands stuck at the top of the window (the header, or the
+  // sticky box it sits in). It stands over the page only once stuck there: above it (a God-mode band
+  // at the page's top, before any scroll) the page is still seen.
+  let bar: Element | null = document.elementFromPoint(window.innerWidth / 2, 1);
+  while (bar && bar !== document.body && !/sticky|fixed/.test(getComputedStyle(bar).position)) bar = bar.parentElement;
+  if (bar && bar !== document.body && !bar.contains(el) && !bar.closest("[data-demo-chrome]")) {
+    const h = bar.getBoundingClientRect();
+    if (h.top <= 1 && h.height < window.innerHeight / 3) top = Math.max(top, h.bottom);
   }
   if (nav && !nav.contains(el)) {
     const r = nav.getBoundingClientRect();
