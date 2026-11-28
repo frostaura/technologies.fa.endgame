@@ -15,6 +15,7 @@ import { RISE, stagger } from "@/lib/motion";
 import { describeError, viewOf } from "@/lib/queryState";
 import { paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
+import { useViewport } from "@/lib/useViewport";
 import { effectiveRole, roleRank } from "@/lib/roles";
 import { useActiveOrganisation, useActiveTree } from "@/lib/useActiveOrganisation";
 import { useAppDispatch, useAppSelector } from "@/store";
@@ -35,12 +36,30 @@ export function HireView({ hireId }: { hireId: string }) {
   const org = tree.data?.organisation;
   // Editing happens on the page; the decision beside it waits while the proposal is being edited.
   const [editing, setEditing] = useState(false);
+  // The side panel is beside the page only on a desktop. Anywhere else it falls under the page, so the decision is
+  // drawn straight under the proposal's header card, before the job description — as a verdict's decision is.
+  const desktop = useViewport() === "desktop";
+  const decision = hire ? <DecisionCard hire={hire} tree={tree.data} editing={editing} onEdit={() => setEditing(true)} /> : null;
   const crumbs: Crumb[] = [
     ...(org ? [{ label: org.name, href: active.entered ? paths.homeOf(org.slug) : paths.home() }, { label: "Hiring", href: paths.hires(hire?.scope ?? org.slug) }] : []),
     { label: hire ? nameWithRole(hire.name, hire.role).replace(", ", " · ") : "Hire proposal" },
   ];
   return (
-    <AppShell crumbs={crumbs} aside={hire ? <DecisionAside hire={hire} tree={tree.data} editing={editing} onEdit={() => setEditing(true)} /> : undefined}>
+    <AppShell
+      crumbs={crumbs}
+      aside={
+        hire ? (
+          desktop ? (
+            <>
+              {decision}
+              <IdleCard />
+            </>
+          ) : (
+            <IdleCard />
+          )
+        ) : undefined
+      }
+    >
       {view.kind === "loading" && (
         <Loading label="Loading the hire proposal" className="flex flex-col gap-6">
           <Skeleton className="h-40 rounded-lg" />
@@ -52,7 +71,7 @@ export function HireView({ hireId }: { hireId: string }) {
         <>
           {view.stale && <Stale reason={view.stale.reason} />}
           <ErrorBoundary name="The hire proposal">
-            <HireBody hire={view.data} tree={tree.data} editing={editing} onEditDone={() => setEditing(false)} />
+            <HireBody hire={view.data} tree={tree.data} editing={editing} onEditDone={() => setEditing(false)} decision={desktop ? null : decision} />
           </ErrorBoundary>
         </>
       )}
@@ -61,7 +80,7 @@ export function HireView({ hireId }: { hireId: string }) {
 }
 
 
-function HireBody({ hire, tree, editing, onEditDone }: { hire: Hire; tree: Tree | undefined; editing: boolean; onEditDone: () => void }) {
+function HireBody({ hire, tree, editing, onEditDone, decision }: { hire: Hire; tree: Tree | undefined; editing: boolean; onEditDone: () => void; decision: ReactNode }) {
   const mode = useAppSelector((s) => s.ui.mode);
   const [editError, setEditError] = useState<string | null>(null);
   const job = hire.jobDescription;
@@ -77,6 +96,8 @@ function HireBody({ hire, tree, editing, onEditDone }: { hire: Hire; tree: Tree 
         </p>
         {hire.reason && <p className="max-w-prose text-base">{hire.reason}</p>}
       </section>
+
+      {decision}
 
       {editing ? (
         <EditHire hire={hire} tree={tree} onDone={onEditDone} onError={setEditError} />
@@ -279,10 +300,11 @@ function EditHire({ hire, tree, onDone, onError }: { hire: Hire; tree: Tree | un
 }
 
 /**
- * Beside the proposal: what it costs and whether the budget has room, then the decision itself — as a verdict's
- * decision sits beside the verdict (console-desktop 33), so it never floats on the page under the job.
+ * What it costs and whether the budget has room, then the decision itself: beside the proposal on a desktop — as a
+ * verdict's decision sits beside the verdict (console-desktop 33) — and straight under its header card anywhere else,
+ * so it never floats on the page under the job.
  */
-function DecisionAside({ hire, tree, editing, onEdit }: { hire: Hire; tree: Tree | undefined; editing: boolean; onEdit: () => void }) {
+function DecisionCard({ hire, tree, editing, onEdit }: { hire: Hire; tree: Tree | undefined; editing: boolean; onEdit: () => void }) {
   const me = useGetMeQuery(undefined);
   const admin = roleRank(effectiveRole(tree, me.data, hire.scope)) >= roleRank("admin");
   const capped = expectedMonthly(hire) < hire.expectedMonthlyCredits;
@@ -291,8 +313,7 @@ function DecisionAside({ hire, tree, editing, onEdit }: { hire: Hire; tree: Tree
   // Kept here, not in the decision: a refused decision puts the proposal back, and its reason must outlive that.
   const [error, setError] = useState<string | null>(null);
   return (
-    <>
-      <SideCard label="What it costs" className={RISE} testId="hire-decision">
+    <SideCard label="What it costs" className={RISE} testId="hire-decision">
         <Stat plain size="lg" label="What it costs" value={formatNumber(expectedMonthly(hire))} caption={capped ? "credits a month, at most" : "credits a month, expected"} />
         {(open || capped) && (
           <div className="flex flex-col gap-1 border-t pt-3">
@@ -323,10 +344,14 @@ function DecisionAside({ hire, tree, editing, onEdit }: { hire: Hire; tree: Tree
             <Decide hire={hire} onEdit={onEdit} onError={setError} />
           )}
         </div>
-      </SideCard>
-      <SideCard title="If it has nothing to do">
-        <p className="text-ink-body">An employee with nothing to do is flagged and let go, so an idle hire is never paid for. Its memory is kept, so a rehire is not a cold start.</p>
-      </SideCard>
-    </>
+    </SideCard>
+  );
+}
+
+function IdleCard() {
+  return (
+    <SideCard title="If it has nothing to do">
+      <p className="text-ink-body">An employee with nothing to do is flagged and let go, so an idle hire is never paid for. Its memory is kept, so a rehire is not a cold start.</p>
+    </SideCard>
   );
 }

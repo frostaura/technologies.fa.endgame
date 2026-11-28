@@ -17,6 +17,7 @@ import { ROLE_MAY, ROLE_NAME, roleRank } from "@/lib/roles";
 import { paths } from "@/lib/router";
 import { organisationsOf, useActiveOrganisation } from "@/lib/useActiveOrganisation";
 import { cn } from "@/lib/utils";
+import { useViewport } from "@/lib/useViewport";
 import { useGetMeQuery, usePasskeyRegisterCompleteMutation, usePasskeyRegisterOptionsMutation } from "@/store/api";
 import type { Me, Membership } from "@/store/types";
 import { describePasskeyError, passkeysSupported, registrationJson, toCreationOptions } from "../auth/webauthn";
@@ -46,6 +47,14 @@ export function AccountView() {
 function AccountBody({ me }: { me: Me }) {
   const organisations = organisationsOf(me);
   const active = useActiveOrganisation();
+  // On a phone your passkeys come straight under who you are, before the figures, so adding one is on the first
+  // screen; from a tablet up the figures sit on top and the passkeys are the first row of the settings.
+  const phone = useViewport() === "phone";
+  const passkeys = (
+    <ErrorBoundary name="Your passkeys">
+      <Passkeys me={me} />
+    </ErrorBoundary>
+  );
   return (
     <>
       <header className={cn("flex min-w-0 items-center gap-4", RISE)}>
@@ -59,8 +68,10 @@ function AccountBody({ me }: { me: Me }) {
         </div>
       </header>
 
+      {phone && passkeys}
+
       <StatRow cols={3} label="Your account at a glance" className={cn(RISE, stagger(1))}>
-        <Stat label="Passkeys" value={formatNumber(me.passkeys)} caption={me.passkeys === 0 ? "None yet: add one below" : me.passkeys === 1 ? "One device signs you in" : "Any of them signs you in"} />
+        <Stat label="Passkeys" value={formatNumber(me.passkeys)} caption={me.passkeys === 0 ? (phone ? "None yet: add one above" : "None yet: add one below") : me.passkeys === 1 ? "One device signs you in" : "Any of them signs you in"} />
         <Stat label="Organisations" value={formatNumber(organisations.length)} caption={organisations.length > 0 ? organisations.map((o) => o.name).join(", ") : "None yet"} />
         <Stat className="max-sm:col-span-2" label="Roles" value={formatNumber(me.memberships.length)} caption={me.memberships.length === 1 ? "One grant, where it was set" : "Each holds where it was set and beneath"} />
       </StatRow>
@@ -71,9 +82,7 @@ function AccountBody({ me }: { me: Me }) {
         an unequal, mostly empty neighbour. One column on a phone and a tablet.
       */}
       <div className="flex flex-col gap-10 max-sm:gap-8">
-        <ErrorBoundary name="Your passkeys">
-          <Passkeys me={me} />
-        </ErrorBoundary>
+        {!phone && passkeys}
         <section aria-labelledby="roles-title" className={cn(SETTING, RISE, stagger(3))}>
           <div className="flex flex-col gap-2">
             <h2 id="roles-title" className={SECTION}>

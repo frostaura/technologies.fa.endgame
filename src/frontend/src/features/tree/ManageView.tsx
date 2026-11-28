@@ -6,6 +6,7 @@ import { Empty, Failed, Loading, Skeleton, Stale } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { LINK } from "@/components/ui/layout";
+import { TITLE } from "@/components/ui/page";
 import { RISE } from "@/lib/motion";
 import { viewOf } from "@/lib/queryState";
 import { effectiveRole, roleRank } from "@/lib/roles";
@@ -66,7 +67,7 @@ export function ManageView() {
       ]}
     >
       <div className={cn("flex flex-col gap-2", RISE)}>
-        <h1 className="text-3xl font-semibold max-sm:text-2xl">{org ? `Manage ${view.kind === "loaded" ? (view.data.organisation?.name ?? org.name) : org.name}` : "Manage the organisation"}</h1>
+        <h1 className={TITLE}>{org ? `Manage ${view.kind === "loaded" ? (view.data.organisation?.name ?? org.name) : org.name}` : "Manage the organisation"}</h1>
         <p className="max-w-prose text-ink-body">Add divisions, projects and apps, rename them, say what each one is, and archive what you no longer use. A part&rsquo;s address is set when it is made and never changes.</p>
       </div>
 

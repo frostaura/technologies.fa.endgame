@@ -370,12 +370,25 @@ describe("a page's title is words only (ARCH-011)", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("draws every page's h1 in the one title size: `TITLE` (or `PageHeader`), never a hand-written class", () => {
+    const offenders = sources()
+      .filter((s) => s.file.endsWith(".tsx") && !s.file.startsWith("src/demo/"))
+      .flatMap((s) => [...s.text.matchAll(HAND_TITLE)].map((m) => `${s.file}: ${m[0].slice(0, 80)}`));
+    expect(offenders).toEqual([]);
+    expect('<h1 className="text-3xl font-semibold max-sm:text-2xl">'.match(HAND_TITLE)).not.toBeNull();
+    expect('<h1 className={cn("text-2xl font-semibold", x)}>'.match(HAND_TITLE)).not.toBeNull();
+    expect("<h1 className={cn(TITLE, \"break-words\")}>".match(HAND_TITLE)).toBeNull();
+  });
+
   it("would catch one", () => {
     expect(iconsInH1("x.tsx", 'import { Bell } from "lucide-react";\nconst A = () => <h1 className="t"><Bell /> Notifications</h1>;')).toEqual(["x.tsx:2"]);
     expect(iconsInH1("x.tsx", 'const A = () => <h1><span><Icon name="health" /></span>System</h1>;')).toEqual(["x.tsx:1"]);
     expect(iconsInH1("x.tsx", 'const A = () => <><Icon name="health" /><h1>System</h1></>;')).toEqual([]);
   });
 });
+
+/** An h1 whose size is a class written by hand: a string literal, or a `cn(` that opens with one. */
+const HAND_TITLE = /<h1\b[^>]*className=(?:"|\{cn\(")[^"]*\btext-(?:xl|2xl|3xl|4xl|5xl)\b/g;
 
 /** Where an icon is drawn inside an h1: the house `Icon` or anything the file imports from lucide. */
 function iconsInH1(file: string, text: string): string[] {

@@ -161,7 +161,8 @@ hero: build `good`, change `info`, do not build `bad`.
 - violet and teal may only fall; no gradient or aura; field edges at 3:1 and every tag at 4.5:1;
 - captions cut only from `sm` up; meters and bars never grow in from zero; the live dot animates opacity only, and
   every looping animation stops under reduced motion;
-- page titles: `PageHeader` takes no icon, and no `h1` anywhere draws an `Icon` or a lucide icon;
+- page titles: `PageHeader` takes no icon, no `h1` anywhere draws an `Icon` or a lucide icon, and no console `h1` sets its
+  size by a hand-written class (it is `TITLE` or `PageHeader`);
 - the page column is the container `page` with thresholds from `pageAt` only; no `4xl:` column switch in a feature; no
   arbitrary container query;
 - the token layer holds no dead track, animation, keyframe, colour role, width or height (console and academy read);
