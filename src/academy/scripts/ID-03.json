@@ -32,9 +32,9 @@
         }
       ],
       "highlight": {
-        "text": "Signing in…",
-        "note": "It sends an empty body, so the account named by ENDGAME_DEV_USER_EMAIL is signed in."
-      }
+        "none": "“Signing in…” shows only while the sign-in is answered, which is over before a ring could be drawn; the step says what it sends."
+      },
+      "note": "It sends an empty body, so the account named by ENDGAME_DEV_USER_EMAIL is signed in."
     },
     {
       "step": 4,

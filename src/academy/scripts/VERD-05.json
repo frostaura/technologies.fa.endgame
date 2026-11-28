@@ -16,9 +16,9 @@
         }
       ],
       "highlight": {
-        "text": "Build it",
-        "note": "No confirmation: your decision starts the factory."
-      }
+        "none": "“Build it” starts the factory at once and leaves the verdict page; the next step rings the build it starts."
+      },
+      "note": "No confirmation: your decision starts the factory."
     },
     {
       "step": 2,

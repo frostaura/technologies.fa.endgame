@@ -146,7 +146,25 @@
         "s3-change-failed",
         "s3-stage-rules",
         "s3-suggestions",
-        "s3-employee-paused"
+        "s3-employee-paused",
+        "talk-budget-stopped",
+        "talk-card-cancelled",
+        "talk-card-failed",
+        "talk-long-history",
+        "talk-many-parts",
+        "talk-midreply",
+        "talk-not-sent",
+        "talk-over-estimate",
+        "talk-part-states",
+        "talk-plan-approval-app",
+        "talk-plan-approval-employee",
+        "talk-plan-approval",
+        "talk-reply-interrupted",
+        "talk-retry-carried",
+        "talk-rich-replies-app",
+        "talk-rich-replies-employee",
+        "talk-rich-replies",
+        "talk-web-search-approval"
       ]
     },
     "start": {

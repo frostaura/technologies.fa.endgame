@@ -24,7 +24,7 @@
         }
       ],
       "highlight": {
-        "text": "Waiting for your device…",
+        "text": "Create a passkey for endgame.example?",
         "note": "This device makes a new passkey; approve it."
       }
     },
