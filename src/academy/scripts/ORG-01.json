@@ -10,9 +10,9 @@
       "kind": "demo",
       "goto": "/",
       "highlight": {
-        "selector": "main h1",
-        "note": "Kit Marlow is signed in on a fresh Endgame. Home asks for the tree; while it loads, grey placeholders stand in."
-      }
+        "none": "The skeletons show only while the tree loads, which is over before a ring could be drawn; step 3 rings what replaces them."
+      },
+      "note": "Kit Marlow is signed in on a fresh Endgame. Home asks for the tree; while it loads, grey placeholders stand in."
     },
     {
       "step": 2,

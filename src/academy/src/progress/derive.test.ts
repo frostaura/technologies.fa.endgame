@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Flow, Level, Track } from "../content/types.ts";
-import { milestones, nextUp, overallNext, trackStats, type Catalogue } from "./derive.ts";
+import { milestones, nextOwn, nextUp, overallNext, trackStats, type Catalogue } from "./derive.ts";
 import { empty, setDone, view, type Progress } from "./model.ts";
 
 const mk = (id: string, level: Level, learnFirst: string[] = []): Flow => ({ id, level, learnFirst, steps: [{ n: 1 }, { n: 2 }] }) as unknown as Flow;
@@ -79,5 +79,15 @@ describe("the next flow", () => {
     // F-2 needs F-1 first; reading F-1, the way on is F-2 itself, not F-1 again.
     expect(nextUp(empty(), t("Foundation"), cat, "F-1")?.flow.id).toBe("F-2");
     for (const f of flows) expect(nextUp(empty(), cat.tracks.find((x) => x.level === f.level), cat, f.id)?.flow.id).not.toBe(f.id);
+  });
+});
+
+describe("a path's own next", () => {
+  it("is the path's first flow not done, never a prerequisite from another path", () => {
+    // F-3 needs C-2 (Core) first; Foundation's own next is still F-3, and Core's is C-1.
+    expect(nextOwn(done("F-1", "F-2"), t("Foundation"), cat)?.id).toBe("F-3");
+    expect(nextOwn(empty(), t("Core"), cat)?.id).toBe("C-1");
+    expect(nextOwn(done("C-1"), t("Core"), cat)?.id).toBe("C-2");
+    expect(nextOwn(done("C-1", "C-2"), t("Core"), cat)).toBeUndefined();
   });
 });

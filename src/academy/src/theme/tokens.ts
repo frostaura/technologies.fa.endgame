@@ -18,6 +18,36 @@ export const SHORT_QUERY = "(max-height: 600px)";
 /** A device with a precise pointer that hovers: keyboard hints and the scan-to-follow QR are for it, not for a touch screen. */
 export const MOUSE_QUERY = "(hover: hover) and (pointer: fine)";
 
+/**
+ * The PDFs' step pictures (`tools/print-crop.ts`, `PrintPage`). Each prints so its smallest text
+ * comes out at `smallestPt`, never larger than `mmPerPx` millimetres to the console's CSS pixel
+ * (at which 12 px text prints at 7 pt) and never wider than the page's text column `columnMm`
+ * (A4 less its two 12.7 mm margins). A crop is never wider than `maxWidthPx` nor taller than
+ * `maxHeightPx`, the most the column holds at `mmPerPx`. A picture up to `besideMm` wide sits
+ * beside its step's words; a wider one goes under them.
+ */
+export const PRINT_SHOT = { mmPerPx: 0.206, smallestPt: 7.5, columnMm: 184, maxWidthPx: 890, maxHeightPx: 640, besideMm: 100 } as const;
+
+/** The millimetres one CSS pixel of a step picture prints at, from its width and its smallest text (with no text, the `mmPerPx` cap). */
+export function printMmPerPx(width: number, font: number): number {
+  const forText = font > 0 ? (PRINT_SHOT.smallestPt * 25.4) / 72 / font : PRINT_SHOT.mmPerPx;
+  return Math.min(PRINT_SHOT.mmPerPx, forText, PRINT_SHOT.columnMm / width);
+}
+
+/**
+ * The console in the academy's frame is always drawn at one of two fixed sizes and scaled to fit,
+ * so every lesson plays on the layout its script was written against and nothing reflows between
+ * steps: `desk`, a laptop's console (its conversation pane docked, every desktop control there),
+ * for every desktop and tablet window; `phone`, a phone's console (its bottom tab bar), for a
+ * phone held either way and for a flow about the phone itself. `chrome` is the frame's address bar
+ * (desk) and `bezel` the phone frame's edge, in screen pixels.
+ */
+export const CONSOLE = {
+  desk: { width: 1280, height: 800, chrome: 36, bezel: 1 },
+  phone: { width: 390, height: 640, chrome: 0, bezel: 4 },
+} as const;
+export type ConsoleSize = keyof typeof CONSOLE;
+
 export const academy = {
   fontSize: {
     cover: ["88px", { lineHeight: "0.98", letterSpacing: "-0.045em" }],
@@ -49,16 +79,34 @@ export const academy = {
     ring: "3.25rem",
     "ring-lg": "7rem",
     medal: "3.5rem",
+    /** The step controls' fixed places, so nothing in the row moves from step to step. */
+    prev: "7.5rem",
+    try: "10rem",
+    again: "10.25rem",
+    next: "9rem",
+    "next-sm": "5.5rem",
+    /** The phone frame of a phone on its side: the whole height, less the page's edge, at the console's shape (390 × 640) and its bezel. */
+    "phone-side": "calc((100dvh - 1rem) * 0.609 + 0.5rem)",
+    /** The search results panel under the header's box: wide enough for a title on two lines, never wider than the window. */
+    "search-panel": "min(37.5rem, calc(100vw - 2rem))",
   },
   /** The player: the console beside its side column, or on top of the steps on a phone. */
   gridTemplateColumns: {
     player: "minmax(0, 1fr) 26rem",
+    /** Under 1536 wide: a narrower column, so the console keeps the width. */
+    "player-sm": "minmax(0, 1fr) 22rem",
     "player-xl": "minmax(0, 1fr) 30rem",
     /** Cards that fill their row: as many as fit at this width, never an orphan stretched alone. */
     cards: "repeat(auto-fill, minmax(17rem, 1fr))",
     "cards-sm": "repeat(auto-fill, minmax(13rem, 1fr))",
+    /** A grid of flow ids: every cell one width, so the ids line up in columns. */
+    ids: "repeat(auto-fill, minmax(5.5rem, 1fr))",
+    /** A reading column beside a column that takes the rest (About). */
+    about: "minmax(0, 42rem) minmax(0, 1fr)",
     /** A contents line in the PDFs: the id, the title (hanging under itself when it wraps), the page. */
     contents: "4.5rem 1fr auto",
+    /** A step in the PDFs beside its picture: the words take what the picture, at its print size, leaves. */
+    "print-step": "minmax(0, 1fr) auto",
   },
   /** The PDF cover: the mark, the title block in the middle, the colophon at the foot. */
   gridTemplateRows: { cover: "auto 1fr auto" },
@@ -80,6 +128,10 @@ export const academy = {
     "frame-phone": "60svh",
     /** The frame's browser bar. */
     chrome: "2.25rem",
+    /** The caption strip under the frame: three lines of a step's words, the same height on every step. */
+    caption: "4.75rem",
+    /** On a phone: two lines, with "More" to read the rest. */
+    "caption-sm": "3.75rem",
     stage: "calc(100svh - 7rem)",
     "stage-short": "calc(100svh - 4.5rem)",
     "stage-sm": "50svh",
@@ -104,5 +156,5 @@ export const academy = {
     "sheet-b": "calc(1.5rem + env(safe-area-inset-bottom, 0px))",
   },
   /** `short:` — a phone on its side (or any window under 600 px tall): the stage's controls fold into one row. */
-  screens: { split: { raw: SPLIT_QUERY }, short: { raw: SHORT_QUERY }, mouse: { raw: MOUSE_QUERY }, touch: { raw: "(hover: none), (pointer: coarse)" } },
+  screens: { split: { raw: SPLIT_QUERY }, short: { raw: SHORT_QUERY }, mouse: { raw: MOUSE_QUERY }, touch: { raw: "(hover: none), (pointer: coarse)" }, tall: { raw: "(min-height: 1000px)" }, compact: { raw: "(max-height: 920px)" }, "phone-side": { raw: "(max-height: 600px) and (max-width: 1023px)" } },
 } as const;

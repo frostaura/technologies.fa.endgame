@@ -14,7 +14,7 @@ import { ui } from "./ui.ts";
  * The academy's frame: a slim header with the mark, the ways in, where the learner left off, search
  * and the live demo. On a phone the header is one row — the mark, the way back to where the learner
  * left off, search and a menu — and the rest opens as a sheet from the bottom edge, in reach of a
- * thumb. The operator handbook has its own header tone and never mixes into client navigation.
+ * thumb. The operator handbook is named in the header and never mixes into client navigation.
  */
 export function Shell({ children, operator = false, player = false }: { children: ReactNode; operator?: boolean; player?: boolean }) {
   const { parts } = useLocation();
@@ -33,20 +33,21 @@ export function Shell({ children, operator = false, player = false }: { children
         { to: "/progress", label: "Progress", on: here === "progress" },
         { to: "/demo", label: "Live demo", on: here === "demo" },
       ];
-  const pill = (on: boolean) => (operator ? (on ? "bg-surface/15" : "text-primary-ink-soft hover:bg-surface/10") : on ? "bg-primary-tint text-primary-link" : "text-ink-body hover:bg-ground");
-  const iconTone = operator ? "text-primary-ink hover:bg-surface/10" : "";
+  // The handbook is the same light page as the academy: its name in the header says where you are, not a second colour.
+  const pill = (on: boolean) => (on ? "bg-primary-tint text-primary-link" : "text-ink-body hover:bg-ground");
   return (
     <div className="flex min-h-screen flex-col bg-surface">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-ink">
         Skip to the content
       </a>
       {/* Opaque and a fixed height: nothing shows through it, and nothing under it moves when what it holds changes. */}
-      <header className={`sticky top-0 z-30 h-header-sm border-b md:h-header short:h-header-short ${operator ? "bg-night text-primary-ink" : "bg-surface"}`} data-print="hide">
+      {/* A phone on its side gives a lesson's frame the whole height: the player carries its own way back. */}
+      <header className={`sticky top-0 z-30 h-header-sm border-b md:h-header short:h-header-short bg-surface ${player ? "phone-side:hidden" : ""}`} data-print="hide">
         <div className={`${ui.container} flex h-full items-center gap-2 md:gap-5`}>
           <a href={href(operator ? "/operator" : "/")} className="flex min-h-touch shrink-0 items-center gap-2.5" aria-label={operator ? "Operator handbook home" : "The Endgame Academy, cover"}>
             <Mark className="h-8 w-8" />
             <span className="hidden font-display text-base font-semibold tracking-tight xl:block">
-              Endgame <span className={operator ? "text-live" : "text-primary"}>{operator ? "Operator handbook" : "Academy"}</span>
+              Endgame <span className="text-primary">{operator ? "Operator handbook" : "Academy"}</span>
             </span>
           </a>
           <nav aria-label="Academy" className="hidden items-center gap-1 md:flex">
@@ -56,13 +57,13 @@ export function Shell({ children, operator = false, player = false }: { children
               </a>
             ))}
           </nav>
-          <ResumePill operator={operator} />
-          <div className="ml-auto hidden w-52 shrink-0 text-ink md:block lg:w-search xl:w-search-lg"><Search scope={operator ? "operator" : "client"} /></div>
+          <ResumePill />
+          <div className="ml-auto hidden w-40 shrink-0 text-ink md:block lg:w-search xl:w-search-lg"><Search scope={operator ? "operator" : "client"} /></div>
           <div className="ml-auto flex items-center md:hidden">
-            <button type="button" className={`${ui.icon} ${iconTone}`} aria-label="Search the academy" aria-haspopup="dialog" onClick={() => setMenu("search")}>
+            <button type="button" className={ui.icon} aria-label="Search the academy" aria-haspopup="dialog" onClick={() => setMenu("search")}>
               <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2" /><path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
             </button>
-            <button type="button" className={`${ui.icon} ${iconTone}`} aria-label="Menu" aria-haspopup="dialog" aria-expanded={menu === "menu"} onClick={() => setMenu("menu")}>
+            <button type="button" className={ui.icon} aria-label="Menu" aria-haspopup="dialog" aria-expanded={menu === "menu"} onClick={() => setMenu("menu")}>
               <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
             </button>
           </div>
@@ -101,14 +102,15 @@ export function Shell({ children, operator = false, player = false }: { children
       <main id="main" tabIndex={-1} className="flex-1 focus:outline-none">{children}</main>
       {/* The player fills the window under the header on a wide screen; its footer would only be scrolled to by accident. */}
       <footer className={`border-t bg-ground ${player ? "split:hidden short:block" : ""}`} data-print="hide">
-        <div className={`${ui.container} flex flex-col gap-4 py-8 text-sm text-ink-muted sm:flex-row sm:items-center`}>
-          <span className="flex items-center gap-2"><Mark className="h-5 w-5" /> The Endgame Academy, built from the product's own flow documents.</span>
-          <span className="flex flex-wrap gap-x-5 gap-y-1 sm:ml-auto">
-            <a className={footLink} href={href("/progress")}>Your progress</a>
-            <a className={footLink} href={href("/about")}>About this academy</a>
-            <a className={footLink} href={href("/finish")}>Share it</a>
-            {operator ? <a className={footLink} href={href("/")}>Client academy</a> : <a className={footLink} href={href("/operator")}>Operator handbook (FrostAura)</a>}
-          </span>
+        {/* The brand line and the links share one top edge; on a narrow screen the links are a tidy two-column list. */}
+        <div className={`${ui.container} flex flex-col gap-4 py-6 text-sm text-ink-muted lg:flex-row lg:items-start lg:justify-between lg:gap-10`}>
+          <span className="flex min-h-touch items-center gap-2"><Mark className="h-5 w-5" /> The Endgame Academy, built from the product's own flow documents.</span>
+          <ul className="grid grid-cols-2 gap-x-6 sm:flex sm:flex-wrap sm:gap-x-6">
+            <li><a className={footLink} href={href("/progress")}>Your progress</a></li>
+            <li><a className={footLink} href={href("/about")}>About this academy</a></li>
+            <li><a className={footLink} href={href("/finish")}>Share it</a></li>
+            <li>{operator ? <a className={footLink} href={href("/")}>Client academy</a> : <a className={footLink} href={href("/operator")}>Operator handbook</a>}</li>
+          </ul>
         </div>
       </footer>
     </div>
@@ -121,7 +123,7 @@ const footLink = "-mx-2 inline-flex min-h-touch items-center rounded-full px-2 h
  * Back to the step last viewed, from any page but that flow itself: the flow's id and how far in,
  * one tap. Read before the first paint, so it never pushes the header about when it appears.
  */
-function ResumePill({ operator }: { operator: boolean }) {
+function ResumePill() {
   const { parts } = useLocation();
   const progress = useProgress();
   const { last } = progress;
@@ -136,7 +138,7 @@ function ResumePill({ operator }: { operator: boolean }) {
     <a
       href={href(next ? `/flow/${next.id}` : `/flow/${f.id}/step/${last.step}`)}
       aria-label={next ? `Next up: ${next.id} ${next.title}` : `Pick up where you left off: ${f.id} ${f.title}, step ${last.step} of ${f.steps.length}`}
-      className={`inline-flex min-h-touch shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3.5 text-sm font-medium md:border-l md:rounded-l-none md:pl-5 ${operator ? "border-primary-ink-soft/30 text-primary-ink-soft hover:text-primary-ink" : "text-primary-link hover:bg-primary-tint"}`}
+      className={`inline-flex min-h-touch shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3.5 text-sm font-medium md:border-l md:rounded-l-none md:pl-5 text-primary-link hover:bg-primary-tint`}
       data-testid="header-resume"
     >
       <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" aria-hidden="true"><path d="M5 3.5v9l7-4.5z" fill="currentColor" /></svg>

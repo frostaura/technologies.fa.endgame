@@ -153,6 +153,14 @@
         "selector": "li[data-org='harbour-watch']",
         "note": "Listed, with its standing security reviewer; its operator log records how it was screened, by whom, and that it was set up."
       }
+    },
+    {
+      "step": 9,
+      "kind": "demo",
+      "highlight": {
+        "text": "Top-ups made",
+        "note": "Its operator log records how it was screened, by whom and when, and that it was set up."
+      }
     }
   ],
   "variations": [

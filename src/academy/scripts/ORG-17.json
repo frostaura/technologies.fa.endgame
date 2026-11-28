@@ -43,6 +43,15 @@
         "text": "Every organisation",
         "note": "Every organisation opens the God-mode list (OP-01)."
       }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "goto": "/",
+      "highlight": {
+        "text": "Top-ups asked for",
+        "note": "Beside it, every organisation at a glance: organisations, top-ups asked for, and below zero."
+      }
     }
   ]
 }

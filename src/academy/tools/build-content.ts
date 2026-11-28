@@ -39,6 +39,16 @@ export function readPrints(dir = path.join(root, "public/shots")): Record<string
   return Object.fromEntries(Object.entries(index.print ?? {}).filter(([, p]) => existsSync(path.join(dir, p.file))));
 }
 
+/**
+ * The print pictures as the site carries them: one short row per step — the picture's name (its
+ * hash, when it is a `print/<hash>.jpg`), whole or detail, its size and its smallest text — since
+ * every byte of it is in the one script every page loads. `printFor` (lib/data.ts) reads them back.
+ */
+export function packPrints(prints: Record<string, { file: string; whole: boolean; width?: number; height?: number; font?: number }>): Record<string, [string, number, number, number, number]> {
+  const name = (file: string) => /^print\/[^/]+\.jpg$/.test(file) ? file.slice(6, -4) : file;
+  return Object.fromEntries(Object.entries(prints).map(([k, p]) => [k, [name(p.file), p.whole ? 1 : 0, p.width ?? 0, p.height ?? 0, p.font ?? 0]]));
+}
+
 export function readShots(dir = path.join(root, "public/shots")): Record<string, string> {
   const file = path.join(dir, "index.json");
   if (!existsSync(file)) return {};
@@ -78,7 +88,7 @@ function main() {
   writeFileSync(path.join(out, "content.json"), JSON.stringify(content));
   writeFileSync(path.join(out, "scripts.json"), JSON.stringify(scripts.scripts));
   writeFileSync(path.join(out, "shots.json"), JSON.stringify(shots));
-  writeFileSync(path.join(out, "prints.json"), JSON.stringify(readPrints()));
+  writeFileSync(path.join(out, "prints.json"), JSON.stringify(packPrints(readPrints())));
   writeFileSync(path.join(out, "search-index.json"), JSON.stringify(buildIndex(content.flows)));
   writeFileSync(
     path.join(out, "site.json"),

@@ -34,6 +34,15 @@
         "selector": "#chart-panel [aria-label='How data flows']",
         "note": "Where the matrix has no room — a phone, or a narrow frame — each app is a card listing the services it uses, with the same marks. A screen reader reads the matrix as a table, each cell as a sentence."
       }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "selector": "#chart-panel",
+        "region": true,
+        "note": "A screen reader reads the teams as nested lists, and the matrix as a table whose cells are sentences."
+      }
     }
   ]
 }

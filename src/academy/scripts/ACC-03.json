@@ -15,7 +15,10 @@
           }
         }
       ],
-      "note": "On the app's sign-in page, the member signs in with their Endgame passkey and approves on their device."
+      "highlight": {
+        "text": "Sign in to endgame.example with a passkey?",
+        "note": "On the app's sign-in page, the member signs in with their Endgame passkey and approves on their device."
+      }
     },
     {
       "step": 2,
@@ -25,7 +28,10 @@
           "wait": 1500
         }
       ],
-      "note": "It is the console's own sign-in, so the console session starts too."
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "It is the console's own sign-in, so the console session starts too."
+      }
     },
     {
       "step": 3,

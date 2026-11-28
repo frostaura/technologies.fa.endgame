@@ -23,7 +23,10 @@
           }
         }
       ],
-      "note": "“Sending a new code…” while the server replaces the code."
+      "highlight": {
+        "text": "It will not be shown again.",
+        "note": "“Sending a new code…” while the server replaces the code."
+      }
     },
     {
       "step": 3,

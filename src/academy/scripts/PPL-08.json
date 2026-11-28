@@ -65,7 +65,7 @@
         }
       ],
       "highlight": {
-        "text": "Waiting for your device…",
+        "text": "Create a passkey for endgame.example?",
         "note": "The server checks the code first; then his device makes the passkey."
       }
     },

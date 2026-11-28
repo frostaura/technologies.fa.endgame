@@ -62,17 +62,24 @@
           }
         }
       ],
-      "note": "The address it was shared with, an optional name, and the invitation code."
+      "highlight": {
+        "text": "Create a passkey for endgame.example?",
+        "note": "The address it was shared with, an optional name, and the invitation code."
+      }
     },
     {
       "step": 4,
       "kind": "demo",
-      "note": "The code is checked without being used up; then the device makes a passkey for this app alone.",
       "act": [
         {
           "wait": 900
         }
-      ]
+      ],
+      "highlight": {
+        "testId": "hosted-app-page",
+        "region": true,
+        "note": "The code is checked without being used up; then the device makes a passkey for this app alone."
+      }
     },
     {
       "step": 5,
@@ -82,7 +89,10 @@
           "wait": 1200
         }
       ],
-      "note": "Checked again and used up: the end user is created, with a 14-day session at this app."
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "Checked again and used up: the end user is created, with a 14-day session at this app."
+      }
     },
     {
       "step": 6,

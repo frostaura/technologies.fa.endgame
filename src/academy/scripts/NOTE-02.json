@@ -11,7 +11,7 @@
       "act": [
         {
           "click": {
-            "selector": "button[aria-label^='Notifications']"
+            "selector": "button[aria-label^='Notifications'], a[aria-label^='Alerts']"
           }
         }
       ],
@@ -29,7 +29,7 @@
         }
       ],
       "highlight": {
-        "selector": "button[aria-label^='Notifications']",
+        "selector": "button[aria-label^='Notifications'], a[aria-label^='Alerts']",
         "note": "Escape, or a click outside, closes it."
       }
     },
@@ -39,7 +39,7 @@
       "act": [
         {
           "click": {
-            "selector": "button[aria-label^='Notifications']"
+            "selector": "button[aria-label^='Notifications'], a[aria-label^='Alerts']"
           }
         },
         {

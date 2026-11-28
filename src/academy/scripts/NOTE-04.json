@@ -35,6 +35,23 @@
         "selector": "main h1",
         "note": "A budget notice with no record of its own leads to Credits."
       }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "none": "This world has no hire notice to follow; HIRE-01 shows the hiring page it would open."
+      },
+      "note": "A notice about a hire opens hiring at its level."
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "goto": "/notifications",
+      "highlight": {
+        "selector": "main h1",
+        "note": "Anything else stays on the notifications page."
+      }
     }
   ]
 }

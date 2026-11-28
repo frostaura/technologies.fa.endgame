@@ -111,8 +111,8 @@
             }
           ],
           "highlight": {
-            "text": "Try again",
-            "note": "On the failed run’s own page the same offer stands — until it has been tried once."
+            "selector": "main h1",
+            "note": "Tried once, a new run starts; the failed run no longer offers “Try again”."
           }
         }
       ]

@@ -24,9 +24,13 @@ export function shotFor(flowId: string, key: number | string): string | undefine
   return shots[`${flowId}/${key}`];
 }
 /** A step's print picture: a detail around what it rings, or the whole screen (`make academy-shots`). */
-const prints = printsJson as Record<string, { file: string; whole: boolean }>;
-export function printFor(flowId: string, key: number | string): { file: string; whole: boolean } | undefined {
-  return prints[`${flowId}/${key}`];
+const prints = printsJson as unknown as Record<string, [string, number, number, number, number]>;
+export function printFor(flowId: string, key: number | string): { file: string; whole: boolean; width: number; height: number; font: number } | undefined {
+  const p = prints[`${flowId}/${key}`];
+  if (!p) return undefined;
+  const [name, whole, width, height, font] = p;
+  // A bare name is a `print/<hash>.jpg` (tools/build-content.ts packPrints).
+  return { file: name.includes("/") || name.includes(".") ? name : `print/${name}.jpg`, whole: whole === 1, width, height, font };
 }
 
 export const site = siteJson as {

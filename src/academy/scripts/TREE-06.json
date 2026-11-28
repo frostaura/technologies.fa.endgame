@@ -48,7 +48,7 @@
         }
       ],
       "highlight": {
-        "selector": "nav[aria-label='Where you are']",
+        "selector": "nav[aria-label='Where you are'], button[aria-label^='Where you are']",
         "note": "The chart and the breadcrumb follow the new name."
       }
     }

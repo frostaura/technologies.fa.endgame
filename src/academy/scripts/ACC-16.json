@@ -30,6 +30,22 @@
         "testId": "hosted-not-found",
         "note": "Under a published app, Court booking: _platform is never served from the public side. 404."
       }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "A path under _platform, asked for from the public side: 404."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "none": "Declared webhooks are reached by other services, never by a page a person sees."
+      },
+      "note": "A declared webhook (POST hooks/{name}) reaches even a private app without a session."
     }
   ]
 }

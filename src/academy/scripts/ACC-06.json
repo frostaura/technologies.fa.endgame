@@ -15,7 +15,10 @@
           }
         }
       ],
-      "note": "An end user of Court booking signs in with the passkey made for it."
+      "highlight": {
+        "text": "Sign in to endgame.example with a passkey?",
+        "note": "An end user of Court booking signs in with the passkey made for it."
+      }
     },
     {
       "step": 2,
@@ -25,7 +28,10 @@
           "wait": 1200
         }
       ],
-      "note": "Verified for this app only, and the app may still be opened by them: a new 14-day session."
+      "highlight": {
+        "testId": "hosted-address",
+        "note": "Verified for this app only, and the app may still be opened by them: a new 14-day session."
+      }
     },
     {
       "step": 3,

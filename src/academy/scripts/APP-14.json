@@ -21,7 +21,7 @@
         }
       ],
       "highlight": {
-        "selector": "nav[aria-label=\"Where you are\"]",
+        "selector": "nav[aria-label='Where you are'], button[aria-label^='Where you are']",
         "note": "Nothing was ever built or run on it, so it is deleted, and the organisation opens."
       }
     }

@@ -9,7 +9,7 @@
       "step": 1,
       "kind": "demo",
       "highlight": {
-        "testId": "hosted-address",
+        "text": "Sign in to Court booking",
         "note": "Court booking is shared and nobody is signed in: Edge's check answered “sign in”."
       }
     },
@@ -44,6 +44,14 @@
         "text": "Sign in with your passkey",
         "note": "Shared or public only: the people it was shared with, with “Create your sign-in” for the new."
       }
+    },
+    {
+      "step": 6,
+      "kind": "demo",
+      "highlight": {
+        "none": "This sign-in is for an app shared with chosen people; a public app’s page, which ends with “Back to …”, is ACC-05’s."
+      },
+      "note": "For a public app only, the page ends with “Back to …”, the way to where the visitor was going."
     }
   ],
   "variations": [

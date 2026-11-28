@@ -59,31 +59,47 @@ src/academy/scripts/<ID>.json ─▶ tools/validate-scripts.ts ─┼─▶ src/
 - **A hand-over** (`persona` on a demo step, with its `goto`): from that step on someone else is
   signed in to the same world — an operator tops up or enters an organisation, then its Owner reads
   the operator log. The player keeps it for every later step (`personaAt`); a jump replays it.
-- **The site** (`src/academy/src/`) is React with hash routing and relative URLs, built as one
-  classic deferred script (iife) so it runs from `file://`. Content, scripts and the prebuilt search
-  index are bundled. Progress lives on the device (see **Progress** below).
+- **The site** (`src/academy/src/`) is React with hash routing and relative URLs, built as two
+  classic deferred scripts so it runs from `file://`: the code (iife, no code splitting) and, loaded
+  first, its content — flows, step scripts, the prebuilt search index, shot and print rows — as
+  `assets/academy-data-<hash>.js`, which sets `window.__academyData` (`vite.config.ts`
+  `academyData`; the code's bundle stays under its 2,400 kB limit). Progress lives on the device (see **Progress** below).
 - **The step is the address.** `#/flow/<ID>/step/<n>` is the one source of truth for the step being
   read: the highlighted card, "Step n of m", the console and its caption all follow it. Choosing a
   step and the arrow keys push an address (so Back and Forward walk the steps); scrolling the steps
   column replaces it with the step crossing its reading line; an address changed by hand moves the
   step.
-- **The player's three layouts** (`pages/FlowPage.tsx`, `stage/Stage.tsx`). On a wide screen
-  (`split:`, not `short:`) the player is one view under the header (`h-player`): a compact title
-  band, the console as the hero filling the remaining height and the width after a side column
-  (`grid-cols-player`, 26–30 rem), and Previous, the step bar, Next, "Try it yourself" and "Show me
-  again" pinned to the console's foot. The steps, "You know it worked when", "What else can happen"
-  and "About this flow" are in the side column, which scrolls on its own; the page does not scroll,
-  so the console never slides under the header, and the controls are in view on arrival at every
-  size from 1280×800 up. On a phone or tablet held upright, the console takes `60svh` with its
-  caption under it and the step's words in the bottom pager; on a short window (`short:`) the
-  console takes the whole height with a slim step bar over its foot. Terminal, request, code and
-  e-mail steps sit in the same frame chrome (`FrameChrome`) and are as tall as what they show.
-- **The caption is shown once.** A step's highlight note is drawn inside the console beside its ring
-  (wide and short layouts); the line under the console carries it only when it cannot be — a phone
-  held upright (the academy sends the highlight without its note), a highlight that found nothing
-  (`DemoFrame`'s `onSpotlight`), or a step's own `note`. The frame is named with `aria-label`, never
-  `title` (a browser draws a title as a tooltip over the page), and nothing is drawn over it while it
-  plays: the click shield that hands the console over is transparent.
+- **The console's two sizes** (`theme/tokens.ts` `CONSOLE`, `stage/geometry.ts`). The framed console
+  is always drawn at a fixed size and scaled to fit its frame, so a lesson plays on the layout its
+  script was written for and nothing in it reflows from step to step: a laptop's 1280 × 800 for every
+  desktop and tablet window (the conversation pane docked, every desktop control there), and a
+  phone's 390 × 640 — its bottom tab bar — in a phone-shaped frame for a phone held either way. A
+  script with `device: "phone"` (SHL-07, "Use the console on a phone") is taught on the phone's at
+  every size. The frame's size depends only on the window, never on the step: the largest frame of
+  the console's shape that fits the space, set at its top; a terminal, request, e-mail, code or
+  picture step fills the same frame from the top and says when it scrolls ("More below").
+- **The player's layouts** (`pages/FlowPage.tsx`, `stage/Stage.tsx`). On a wide screen (`split:`,
+  not a phone on its side) the player is one view under the header (`h-player`): a compact title
+  band, the frame as the hero beside a side column (`grid-cols-player-sm`, 22 rem, under 1536 wide;
+  30 rem from 1536) that scrolls on its own and fades at both ends, and under the frame the caption
+  strip and the controls. On a window of laptop height (`compact:`, 920 px or less) the lede moves to
+  the top of the side column and the strip is two lines, so the console keeps the height. On a phone
+  held upright the full title is above the frame and the phone frame is as tall as the screen allows;
+  on a tablet held upright the title, chips and lede are above the laptop's console across the page;
+  on both the controls are fixed to the bottom edge and the page keeps their height free. On a phone
+  on its side (`phone-side:`) the site's header steps aside, the frame takes the whole height, and a
+  strip beside it carries the way back, the title, the step's words and the controls.
+- **One caption, never over the console.** A step's caption is set in one fixed-height strip under
+  the frame at every size, starting with the step's number — the number the ring in the console
+  carries on its corner (ARCH-009). On a desk or tablet it is the highlight's note (or the step's own
+  `note`); on a phone, the step's own words, two lines, with "More" to read the rest and the note.
+  The academy sends a spotlight its number and never its words. The frame is named with
+  `aria-label`, never `title`.
+- **One row of controls.** Previous · where you are · Try it yourself · Show me again · Next, each in
+  a fixed place (`components/StepPager.tsx`): an action that does not apply to a step is disabled in
+  its place, never removed, so nothing in the row moves. "Try it yourself" clears the ring, gives the
+  frame an accent edge and the strip "You're driving — Back to the lesson"; the frame offers it on
+  hover and focus. On a phone, "Larger console" is a full-screen sheet with Close and the controls.
 - **Progress** (`src/progress/`) is plain data and pure functions (`model.ts`: seen, done, resume,
   clamp, merge, the streak, the export code; `derive.ts`: per-path counts, next up, milestones), a
   store over `localStorage` (`store.ts`), and one instance wired to the content (`lib/progress.ts`).
@@ -91,23 +107,17 @@ src/academy/scripts/<ID>.json ─▶ tools/validate-scripts.ts ─┼─▶ src/
   seen, or by "Mark as done". It is read synchronously before the first paint, so nothing that
   shows progress moves the page when it appears. Details under **Data**.
 - **Small screens.** Below the `split:` query (`theme/tokens.ts`: 1024 px wide, or a phone or small
-  tablet on its side) the console sits at the top of the page, and a step pager (the step's words,
-  then Previous, "Step n of m" with one segment per step, Next) is sticky to the bottom edge, above
-  the home indicator — so the step and the controls are always in reach of a thumb. Choosing a step
-  in the list below goes back up to the console. A sideways swipe over the stage or the steps walks
-  them (`lib/swipe.ts`; a mostly vertical stroke, a short one, or one that starts in a field or
-  something that scrolls sideways is left alone). "Larger console" grows the stage to everything
-  but the header and the pager. The stage's actions are labelled buttons in one style. On a
-  phone the header is the mark, the way back to where the learner left off, search and a menu; the
-  rest opens as a sheet from the bottom edge (`components/Sheet.tsx`, the browser's `<dialog>`).
-  Heights use `svh` (the stage never jumps as the address bar collapses), the full-screen demo
-  `dvh`; `viewport-fit=cover` with safe-area padding keeps content off the notch and the home
-  indicator. Every control is at least 44 px.
-- **The demo at phone width.** The frame is the stage's width, and the demo is the real console,
-  whose layout follows its own viewport: in a 360–400 px frame it is the console's phone layout,
-  with no parameter or message needed. Its spotlight, cursor and note are drawn inside the frame
-  (fixed to the frame's viewport, and `reveal` scrolls only the demo's own page), so they stay on
-  screen with it.
+  tablet on its side) a sideways swipe over the stage or the steps walks them (`lib/swipe.ts`; a
+  mostly vertical stroke, a short one, or one that starts in a field or something that scrolls
+  sideways is left alone). Choosing a step in the list goes back up to the frame. On a phone the
+  header is the mark, the way back to where the learner left off, search and a menu; the rest opens
+  as a sheet from the bottom edge (`components/Sheet.tsx`, the browser's `<dialog>`). Heights use
+  `svh` (the stage never jumps as the address bar collapses), the full-screen demo `dvh`;
+  `viewport-fit=cover` with safe-area padding keeps content off the notch and the home indicator.
+  Every control is at least 44 px.
+- **The demo at phone width.** The phone frame draws the real console at 390 × 640, which is its
+  phone layout with the bottom bar; its ring and cursor are drawn inside the frame (fixed to the
+  frame's viewport, and `reveal` scrolls only the demo's own page), so they stay on screen with it.
 - **Placeholders** in the flow text (`{Org}`, `{credits}`, `{reason}`) are set as a small variable
   token of what they stand for ("your organisation's name", "number of credits"; otherwise the word
   in the braces, de-camel-cased — `src/content/placeholders.ts`), on the site and in the PDFs. The
@@ -140,7 +150,7 @@ message only when `event.source` is the frame's own window and `source` is `"end
 | Academy → demo | Args | Answered by |
 | --- | --- | --- |
 | `goto` | `{ route, persona, scenario }` | an echo of `id` |
-| `highlight` | `{ selector? , testId? , text?, note? }` — `{}` clears | an echo of `id` |
+| `highlight` | `{ selector? , testId? , text?, marker?, region?, none? }` — `{}` clears | an echo of `id`, with `found` |
 | `act` | `{ actions: Action[], instant?: true }` | `step-done { id }` once every action has played (an echo before it is an acknowledgement) |
 | `clock` | `{ play: true }` · `{ pause: true }` · `{ seek: ms \| moment }` | an echo of `id` |
 | `reset` | `{}` | an echo of `id` |
@@ -163,7 +173,9 @@ Timeouts: no `ready` within 8 s marks the console unavailable for that page; an 
 that the live console could not be loaded, and every step still shows its text and facts.
 
 **Playback** (`src/bridge/player.ts`). Ops for a step go in the order goto, clock, act, highlight.
-Moving on by one step plays only that step. Jumping, going back, or "Show me again" sends `reset`,
+Moving on by one step plays only that step; a step the script leaves out, or one shown another way,
+sends only `highlight {}`, so no step shows the ring of another. Jumping, going back, or "Show me
+again" sends `reset`,
 `goto` the script's start, replays every earlier step's `goto`/`clock`/`act` with `instant: true`
 and no spotlight, then plays the target step in full. Requests play strictly in order; one
 superseded by a newer step still plays, instantly and without its spotlight, so the console never
@@ -200,7 +212,7 @@ project **Court booking**, and the Admin **Ada Lovelace**.
 | `make academy-pdf` | `site/academy.pdf` and `site/operator-handbook.pdf`, headless Chromium |
 | `make academy-e2e` | Playwright against `site/` served under `/technologies.fa.endgame/` |
 | `make academy-shots` | plays every step script against the built demo (fixed clock and viewport, reduced motion, each act played as the academy plays the step and awaited) and saves one WebP per demo step and per variation's last step under `public/shots/<FLOW-ID>/`, with `index.json`; a picture identical to the step before is named, not saved again, and unchanged files are not rewritten. `ACADEMY_FLOWS` limits it; `SHOTS_PORT` (default 5691) moves its server |
-| `make site` | shots, build, assemble, PDFs — the print version sets each step's picture beside its text: a detail around the ring at twice the pixels (its words print at 7 pt or more), or the whole screen across the page; never the caption bubble or the cursor. Each PDF page past the cover has a running header and its number, and the contents give each flow's page (`tools/render-pdf.ts` renders twice, reading the pages from the first pass's named destinations) |
+| `make site` | shots, build, assemble, PDFs — the print version sets each step's picture beside or under its text: a crop to the whole card the step rings, with padding, never cutting a line of words (`tools/print-crop.ts`), printed so its smallest words are 7.5 pt, or the whole screen; never the cursor or the step's number. Each picture is a JPEG named by its bytes, so one shared by several steps is embedded once; the PDFs carry an outline of every path and flow. Each PDF page past the cover has a running header and its number, and the contents give each flow's page (`tools/render-pdf.ts` renders twice, reading the pages from the first pass's named destinations) |
 | `npm run script:new -- <FLOW-ID>` | scaffolds `scripts/<FLOW-ID>.json` from the parsed flow |
 
 `DEMO_DIST` (default `src/demo/dist`) names the demo build that `site/demo/` is copied from.
@@ -267,7 +279,7 @@ The browser keeps `endgame-academy:progress:v2` in `localStorage`:
 
 | Decision | Why | Alternatives rejected |
 | --- | --- | --- |
-| Hash routing, one classic iife script, content bundled | Works under any sub-path, on Pages without rewrites, and from `file://`, where module scripts and `fetch` are refused | History routing (needs rewrites); fetching JSON at runtime (fails from `file://`) |
+| Hash routing, classic iife scripts (the code, and its content beside it) | Works under any sub-path, on Pages without rewrites, and from `file://`, where module scripts and `fetch` are refused | History routing (needs rewrites); fetching JSON at runtime (fails from `file://`) |
 | The README's track tables decide each flow's path and how it is reached | They are the documented academy path; the per-flow "Level" agrees with them | Deriving paths from the Level field alone |
 | A prebuilt MiniSearch index with ids and hyphenated words kept whole | Typing a flow id or a message seen on screen must find the flow | A runtime-built index; a hosted search service (a network call) |
 | The bridge is postMessage with an envelope and echoed ids | The demo is a separate build by another lane; a message contract can be diffed and tested from both sides | Reaching into the iframe's DOM (couples the academy to the console's markup) |
@@ -275,7 +287,8 @@ The browser keeps `endgame-academy:progress:v2` in `localStorage`:
 | PDFs rendered from the site's own print route | One source; the print version is a page like any other | A second, PDF-only template |
 | Progress per device, in `localStorage`, moved between devices by a file or a code | The site is static with no server, and makes no request beyond its own files; accounts would add a service and personal data for a learning aid | Accounts and a sync service; a URL that carries the progress (it would leak into history and shared links) |
 | On a wide screen the player is one view with the steps in a column that scrolls beside the console, rather than a long page with a sticky console | The console, the title and every control are in view on arrival at any size, the console never slides under the header, and on a 2560 screen the console gets the width | A long page with the console sticky beside the steps (controls fell below the fold; the console was capped at about 850 px) |
-| On a phone the console is on top at 60% of the height and the pager carries the step's words, rather than the steps as a sheet over a full-screen console | The console is what is taught and stays readable; the step's words and the controls are in reach of a thumb; "Larger console" gives the console the rest when wanted | A sticky half-height console with the steps scrolling under it (too small to teach with: 341×274 on a 375 phone) |
+| The console is drawn at one fixed size per device — a laptop's 1280 × 800, a phone's 390 × 640 — and scaled to a frame whose size depends only on the window | Every lesson plays on the layout its script was written and checked against, at every window size; the console never reflows, rewraps or changes zoom between steps; a phone learner sees the phone's real console, bottom bar and all | Drawing the console at whatever width the frame had (774–982 px on a laptop: the conversation stacked, desktop controls missing; a 341 × 449 phone frame showed the rail layout no phone shows) |
+| One caption strip under the frame, and the step's number on the ring | A caption never covers what it explains, never jumps between inside and outside the frame, and never changes the frame's height | A bubble placed beside the ring inside the console (it covered neighbouring content, drifted from its ring, and resized the frame when it moved out) |
 | `svh` for the stage, `dvh` only for the full-screen demo | The stage must not resize as the address bar collapses mid-scroll (the frame would reflow under the learner) | `vh` (too tall with the bar shown on iOS); `dvh` (jumps) |
 | Captured images are generated, not committed (`public/shots/*/` is git-ignored); the Pages workflow makes them | They are reproducible from the scripts and the demo, and committing hundreds of binaries would churn the repository on every screen change | Committing them (repository growth, stale pictures) |
 

@@ -69,7 +69,10 @@
           }
         }
       ],
-      "note": "“Making the key…” while the server makes it."
+      "highlight": {
+        "text": "Make the key",
+        "note": "“Making the key…” while the server makes it."
+      }
     },
     {
       "step": 5,
@@ -79,7 +82,10 @@
           "wait": 1500
         }
       ],
-      "note": "The server keeps only the key's hash: it can never be shown again."
+      "highlight": {
+        "text": "It will not be shown again.",
+        "note": "The server keeps only the key's hash: it can never be shown again."
+      }
     },
     {
       "step": 6,

@@ -136,6 +136,14 @@
         "text": "Read it",
         "note": "Finished: the verdict is ready to read."
       }
+    },
+    {
+      "step": 9,
+      "kind": "demo",
+      "highlight": {
+        "text": "The verdict is ready",
+        "note": "The run finishes: “The verdict is ready”, with “Read it”."
+      }
     }
   ],
   "variations": [

@@ -39,6 +39,23 @@
         "text": "Club Reading List",
         "note": "The org chart shows the new project."
       }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "none": "A rule the control plane enforces when the placement is recorded; no screen shows it."
+      },
+      "note": "Enforced below the model: a build is placed only in an app that is new."
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "selector": "section[aria-label='Organisation chart']",
+        "region": true,
+        "note": "From then on it is the app’s work: its project’s card shows it under way, and every model call is charged at the app."
+      }
     }
   ]
 }

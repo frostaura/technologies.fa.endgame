@@ -29,7 +29,8 @@
         }
       ],
       "highlight": {
-        "text": "Asking…",
+        "selector": "section[aria-label=\"Asking about this app\"]",
+        "region": true,
         "note": "Asking: a model writes one read-only query."
       }
     },
@@ -61,7 +62,7 @@
       "step": 5,
       "kind": "demo",
       "highlight": {
-        "text": "credits left",
+        "selector": "a[href='/credits']",
         "note": "The balance is read again: it fell by what the question cost."
       }
     }

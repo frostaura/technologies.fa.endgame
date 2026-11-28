@@ -14,12 +14,12 @@
         },
         {
           "click": {
-            "text": "credits left"
+            "selector": "a[href='/credits']"
           }
         }
       ],
       "highlight": {
-        "text": "Credits left",
+        "selector": "section[aria-label='Balance']",
         "note": "The balance, and how long it lasts at this month’s pace."
       }
     },
@@ -29,6 +29,22 @@
       "highlight": {
         "text": "Spent this month",
         "note": "Then this month's spending, split into AI work and hosting."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "highlight": {
+        "text": "On AI work",
+        "note": "Three figures: spent this month, on AI work, on hosting."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "text": "Top-ups",
+        "note": "Below the budgets: the month’s two figures and every top-up made, with its note and date."
       }
     }
   ],

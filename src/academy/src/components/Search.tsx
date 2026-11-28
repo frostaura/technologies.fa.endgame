@@ -3,7 +3,8 @@ import { searchFlows } from "../lib/data.ts";
 import { go, href } from "../lib/router.ts";
 import { snippet } from "../lib/snippet.ts";
 import { useProgress, stateOf } from "../lib/progress.ts";
-import { LevelBadge, ProgressDot } from "./Chips.tsx";
+import { LevelBadge, ProgressWord } from "./Chips.tsx";
+import { highlight } from "./highlight.tsx";
 import { Inline } from "./Inline.tsx";
 
 /**
@@ -64,7 +65,7 @@ export function Search({ scope = "client", autoFocus = false, inline = false, on
           aria-controls={listId}
           aria-autocomplete="list"
           aria-activedescendant={open && hits[active] ? `${listId}-${active}` : undefined}
-          placeholder={scope === "operator" ? "Search the handbook" : "Search flows"}
+          placeholder="Search flows"
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
@@ -95,7 +96,8 @@ export function Search({ scope = "client", autoFocus = false, inline = false, on
         <kbd className="hidden rounded-xxs border px-1.5 font-mono text-xs text-ink-muted mouse:block" aria-hidden="true">/</kbd>
       </div>
       {(open || inline) && q.trim().length >= 2 && (
-        <div className={inline ? "mt-3 overflow-hidden rounded-md border bg-surface" : "absolute inset-x-0 top-full z-40 mt-2 overflow-hidden rounded-md border bg-surface shadow-raised"}>
+        // Over the page, the panel is wider than the box (about 600 px, never wider than the window), held to the box's right edge.
+        <div className={inline ? "mt-3 overflow-hidden rounded-md border bg-surface" : "absolute right-0 top-full z-40 mt-2 w-search-panel overflow-hidden rounded-md border bg-surface shadow-raised"}>
           {hits.length ? (
             <ul id={listId} role="listbox" aria-label="Matching flows" className="py-1">
               {hits.map((h, i) => (
@@ -109,29 +111,15 @@ export function Search({ scope = "client", autoFocus = false, inline = false, on
                       onChoose?.();
                     }}
                     onMouseEnter={() => setActive(i)}
-                    className={`flex min-h-touch items-start gap-3 px-4 py-2.5 ${i === active ? "bg-ground" : ""}`}
+                    className={`flex min-h-touch items-start gap-3 px-4 py-3 ${i === active ? "bg-ground" : ""}`}
                   >
-                    <ProgressDot state={stateOf(progress, h.flow.id)} size="sm" className="mt-0.5" />
-                    {inline ? (
-                      // In the phone's sheet: the id and path above, the title on up to two lines, never cut to a word.
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-semibold text-primary-link">{h.flow.id}</span>
-                          <LevelBadge level={h.flow.level} />
-                        </span>
-                        <span className="mt-0.5 line-clamp-2 text-sm font-medium text-ink">{h.flow.title}</span>
-                        <span className="mt-0.5 line-clamp-1 text-xs text-ink-muted"><Inline text={snippet(h.flow, h.terms)} plainIds /></span>
-                      </span>
-                    ) : (
-                      <>
-                        <span className="mt-0.5 w-16 shrink-0 font-mono text-xs font-semibold text-primary-link">{h.flow.id}</span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium text-ink">{h.flow.title}</span>
-                          <span className="block truncate text-xs text-ink-muted"><Inline text={snippet(h.flow, h.terms)} plainIds /></span>
-                        </span>
-                        <span className="flex w-24 shrink-0 justify-end"><LevelBadge level={h.flow.level} /></span>
-                      </>
-                    )}
+                    {/* The id in a fixed column; the title on up to two lines with the words searched for marked; the line it matched; then its path and, once begun, how far. */}
+                    <span className="mt-0.5 w-16 shrink-0 font-mono text-xs font-semibold leading-5 text-primary-link">{h.flow.id}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 text-sm font-medium leading-5 text-ink">{highlight(h.flow.title, h.terms)}</span>
+                      <span className="mt-0.5 line-clamp-1 text-xs text-ink-muted"><Inline text={snippet(h.flow, h.terms)} plainIds mark={h.terms} /></span>
+                      <span className="mt-1.5 flex items-center gap-2"><LevelBadge level={h.flow.level} /><ProgressWord state={stateOf(progress, h.flow.id)} /></span>
+                    </span>
                   </a>
                 </li>
               ))}
@@ -142,7 +130,10 @@ export function Search({ scope = "client", autoFocus = false, inline = false, on
               </li>
             </ul>
           ) : (
-            <p className="px-4 py-3 text-sm text-ink-muted">No flow mentions “{q.trim()}”. Try a word from the screen, or a flow id such as ID-02.</p>
+            <div className="px-5 py-5">
+              <p className="font-medium text-ink">No flow mentions “{q.trim()}”</p>
+              <p className="mt-1 text-sm text-ink-muted">Try a word from the screen, a message you saw, or a flow id such as ID-02.</p>
+            </div>
           )}
         </div>
       )}
