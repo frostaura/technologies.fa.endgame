@@ -59,9 +59,11 @@ src/academy/scripts/<ID>.json ─▶ tools/validate-scripts.ts ─┼─▶ src/
 - **A hand-over** (`persona` on a demo step, with its `goto`): from that step on someone else is
   signed in to the same world — an operator tops up or enters an organisation, then its Owner reads
   the operator log. The player keeps it for every later step (`personaAt`); a jump replays it.
-- **The site** (`src/academy/src/`) is React with hash routing and relative URLs, built as one
-  classic deferred script (iife) so it runs from `file://`. Content, scripts and the prebuilt search
-  index are bundled. Progress lives on the device (see **Progress** below).
+- **The site** (`src/academy/src/`) is React with hash routing and relative URLs, built as two
+  classic deferred scripts so it runs from `file://`: the code (iife, no code splitting) and, loaded
+  first, its content — flows, step scripts, the prebuilt search index, shot and print rows — as
+  `assets/academy-data-<hash>.js`, which sets `window.__academyData` (`vite.config.ts`
+  `academyData`; the code's bundle stays under its 2,400 kB limit). Progress lives on the device (see **Progress** below).
 - **The step is the address.** `#/flow/<ID>/step/<n>` is the one source of truth for the step being
   read: the highlighted card, "Step n of m", the console and its caption all follow it. Choosing a
   step and the arrow keys push an address (so Back and Forward walk the steps); scrolling the steps
@@ -277,7 +279,7 @@ The browser keeps `endgame-academy:progress:v2` in `localStorage`:
 
 | Decision | Why | Alternatives rejected |
 | --- | --- | --- |
-| Hash routing, one classic iife script, content bundled | Works under any sub-path, on Pages without rewrites, and from `file://`, where module scripts and `fetch` are refused | History routing (needs rewrites); fetching JSON at runtime (fails from `file://`) |
+| Hash routing, classic iife scripts (the code, and its content beside it) | Works under any sub-path, on Pages without rewrites, and from `file://`, where module scripts and `fetch` are refused | History routing (needs rewrites); fetching JSON at runtime (fails from `file://`) |
 | The README's track tables decide each flow's path and how it is reached | They are the documented academy path; the per-flow "Level" agrees with them | Deriving paths from the Level field alone |
 | A prebuilt MiniSearch index with ids and hyphenated words kept whole | Typing a flow id or a message seen on screen must find the flow | A runtime-built index; a hosted search service (a network call) |
 | The bridge is postMessage with an envelope and echoed ids | The demo is a separate build by another lane; a message contract can be diffed and tested from both sides | Reaching into the iframe's DOM (couples the academy to the console's markup) |
