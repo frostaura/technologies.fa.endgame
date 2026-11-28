@@ -21,7 +21,7 @@ export const primitives = {
   slate: { 100: "#EEF0F7" },
   blue: { 50: "#EEF2FF", 500: "#2F5BFF", 700: "#1E3FCC" },
   violet: { 50: "#F3EEFF", 500: "#6B4BF0" },
-  teal: { 50: "#E3F8FB", 600: "#0B8FA6" },
+  teal: { 600: "#0B8FA6" },
   green: { 50: "#E9FBF1", 500: "#12A15E", 800: "#0E6B42" },
   amber: { 50: "#FFF4E0", 500: "#D98A00", 800: "#8A4B00" },
   red: { 50: "#FFF1EC", 700: "#B42318" },
@@ -44,7 +44,7 @@ export const roles = {
   quiet: { DEFAULT: p.slate[100], text: p.ink[500] },
   primary: { DEFAULT: p.blue[500], hover: p.blue[700], tint: p.blue[50], ink: p.white },
   violet: { DEFAULT: p.violet[500], tint: p.violet[50] },
-  teal: { DEFAULT: p.teal[600], tint: p.teal[50] },
+  teal: { DEFAULT: p.teal[600] },
   /** Finished well: done, confirmed, paid. */
   success: { DEFAULT: p.green[500], text: p.green[800], tint: p.green[50] },
   /** Waits on a person or is held: pending, waiting for you. Never a failure. */
