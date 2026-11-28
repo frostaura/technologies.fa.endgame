@@ -311,6 +311,13 @@ function place() {
     return;
   }
   const visible = intersect(box, clip);
+  // Shown, but cut by its scroll area's edge although it would fit (the page moved under it after
+  // it was scrolled to: a list folding its older rows): brought whole into view again, a few times at most.
+  const cut = (visible.bottom - visible.top) * (visible.right - visible.left) < 0.85 * (box.bottom - box.top) * (box.right - box.left);
+  if (cut && box.bottom - box.top <= clip.bottom - clip.top && keep && kept.times < 3 && now - kept.at > 500) {
+    kept = { times: kept.times + 1, at: now };
+    keep();
+  }
   ring.hidden = false;
   // The light outline is drawn outside the element's own box: the box is set one pixel inside the ring's.
   Object.assign(ring.style, {
