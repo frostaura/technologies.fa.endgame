@@ -59,6 +59,9 @@ src/academy/scripts/<ID>.json ─▶ tools/validate-scripts.ts ─┼─▶ src/
 - **A hand-over** (`persona` on a demo step, with its `goto`): from that step on someone else is
   signed in to the same world — an operator tops up or enters an organisation, then its Owner reads
   the operator log. The player keeps it for every later step (`personaAt`); a jump replays it.
+- **Another world** (`scenario` on a demo step, with its `goto`): from that step on the lesson plays
+  in that scenario, built fresh (`scenarioAt`) — a state the flow's own world cannot reach, such as
+  TALK-11's long history with its work cards.
 - **The site** (`src/academy/src/`) is React with hash routing and relative URLs, built as two
   classic deferred scripts so it runs from `file://`: the code (iife, no code splitting) and, loaded
   first, its content — flows, step scripts, the prebuilt search index, shot and print rows — as
