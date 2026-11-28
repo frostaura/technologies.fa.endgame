@@ -21,6 +21,11 @@
           "wait": {
             "text": "Built:"
           }
+        },
+        {
+          "clock": {
+            "pause": true
+          }
         }
       ],
       "highlight": {
@@ -32,6 +37,11 @@
       "step": 2,
       "kind": "demo",
       "act": [
+        {
+          "clock": {
+            "play": true
+          }
+        },
         {
           "wait": {
             "text": "In progress"

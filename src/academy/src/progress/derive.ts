@@ -79,6 +79,19 @@ export function nextUp(p: Progress, track: Track | undefined, cat: Catalogue, af
   return undefined;
 }
 
+/**
+ * The path's own next flow: the first in its order not done. What a path's card names as "Next" —
+ * never a "Learn first" from another path, which would make every card name the same flow.
+ */
+export function nextOwn(p: Progress, track: Track | undefined, cat: Catalogue): Flow | undefined {
+  for (const id of track?.flows ?? []) {
+    if (isDone(p, id)) continue;
+    const f = cat.flow(id);
+    if (f) return f;
+  }
+  return undefined;
+}
+
 /** The one thing to do next across the client paths: carry on in the path last read, else the first path not finished. */
 export function overallNext(p: Progress, cat: Catalogue, clientLevels: readonly Level[]): Next | undefined {
   const lastFlow = p.last ? cat.flow(p.last.flow) : undefined;

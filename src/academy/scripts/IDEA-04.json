@@ -42,12 +42,12 @@
         },
         {
           "wait": {
-            "text": "Working"
+            "text": "Resumed"
           }
         }
       ],
       "highlight": {
-        "text": "Resume",
+        "text": "Resumed",
         "note": "After a top-up or a budget raise, “Resume” picks it up again."
       }
     }

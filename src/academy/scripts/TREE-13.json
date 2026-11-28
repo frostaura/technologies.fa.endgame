@@ -65,7 +65,7 @@
       "kind": "demo",
       "goto": "/",
       "highlight": {
-        "selector": "nav[aria-label='Manage']",
+        "selector": "nav[aria-label='Manage'], [data-bottom-nav] [aria-label^='More']",
         "note": "Autonomy, hiring, people and secrets stay on their own screens, from the shortcut row; budgets on Credits."
       }
     }

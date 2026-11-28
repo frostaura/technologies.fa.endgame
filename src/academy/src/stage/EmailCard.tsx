@@ -1,11 +1,11 @@
 import type { EmailStep } from "../content/scripts.ts";
-import { FrameChrome } from "./DemoFrame.tsx";
+import { ScrollPane } from "./ScrollPane.tsx";
 
 /** An e-mail as it arrives in the reader's inbox. */
 export function EmailCard({ step }: { step: EmailStep }) {
   return (
-    <FrameChrome address={`inbox · ${step.to}`} fit>
-    <div className="flex min-h-0 items-start justify-center overflow-auto bg-ground p-4 sm:p-6" data-testid="email">
+    <ScrollPane className="bg-ground" testId="email">
+    <div className="flex items-start justify-center p-4 sm:p-6">
       <article className="w-full max-w-read animate-rise rounded-md border bg-surface shadow-card">
         <header className="border-b px-5 py-4">
           <p className="font-display text-lg font-semibold text-ink">{step.subject}</p>
@@ -19,6 +19,6 @@ export function EmailCard({ step }: { step: EmailStep }) {
         </div>
       </article>
     </div>
-    </FrameChrome>
+    </ScrollPane>
   );
 }

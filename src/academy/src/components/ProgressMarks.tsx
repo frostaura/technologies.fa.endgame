@@ -8,19 +8,19 @@ import { percent } from "../lib/format.ts";
 
 const R = 15.9155; // a circle whose circumference is 100, so a percentage is a dash length
 
-export function ProgressRing({ done, total, size = "md", label, tone = "light" }: { done: number; total: number; size?: "md" | "lg"; label?: string; tone?: "light" | "dark" }) {
-  // Any progress draws an arc long enough to see, not a lone dot at twelve o'clock.
-  const pct = total && done ? Math.max(4, Math.min(100, (100 * done) / total)) : 0;
+export function ProgressRing({ done, total, size = "md", label }: { done: number; total: number; size?: "md" | "lg"; label?: string }) {
+  // Any progress draws an arc long enough to see, not a speck at twelve o'clock; the track is a visible grey, never a placeholder.
+  const pct = total && done ? Math.max(8, Math.min(100, (100 * done) / total)) : 0;
   const box = size === "lg" ? "h-ring-lg w-ring-lg" : "h-ring w-ring";
   return (
     <span className={`relative inline-flex shrink-0 items-center justify-center ${box}`} role="img" aria-label={label ?? `${done} of ${total} done`}>
       <svg viewBox="0 0 36 36" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden="true">
-        <circle cx="18" cy="18" r={R} fill="none" strokeWidth={size === "lg" ? 2.6 : 3.4} className={tone === "dark" ? "stroke-surface/15" : "stroke-quiet"} />
+        <circle cx="18" cy="18" r={R} fill="none" strokeWidth={size === "lg" ? 2.6 : 3.4} className="stroke-border-strong" />
         {pct > 0 && (
-          <circle cx="18" cy="18" r={R} fill="none" strokeWidth={size === "lg" ? 2.6 : 3.4} strokeLinecap="round" strokeDasharray={`${pct} 100`} className={tone === "dark" ? "stroke-live" : "stroke-success"} />
+          <circle cx="18" cy="18" r={R} fill="none" strokeWidth={size === "lg" ? 2.6 : 3.4} strokeLinecap="round" strokeDasharray={`${pct} 100`} className="stroke-success" />
         )}
       </svg>
-      <span aria-hidden="true" className={`relative font-sans font-semibold tabular-nums ${size === "lg" ? "text-lg" : "text-xs"} ${tone === "dark" ? "text-primary-ink" : "text-ink"}`}>
+      <span aria-hidden="true" className={`relative font-sans font-semibold tabular-nums ${size === "lg" ? "text-lg" : "text-xs"} text-ink`}>
         {percent(done, total)}
       </span>
     </span>

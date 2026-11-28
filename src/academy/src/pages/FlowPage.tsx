@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { CLIENT_LEVELS, type Flow, type Step } from "../content/types.ts";
-import { flow as flowById, isOperator, scripts, shotFor, track } from "../lib/data.ts";
+import { area as areaById, flow as flowById, isOperator, scripts, shotFor, track } from "../lib/data.ts";
 import { ROLE_LABEL } from "../lib/labels.ts";
 import { go, href } from "../lib/router.ts";
 import { catalogue, progressStore, useProgress } from "../lib/progress.ts";
@@ -8,16 +8,18 @@ import { resumeStep, type FlowProgress } from "../progress/model.ts";
 import { milestones, nextUp, trackStats, type Next } from "../progress/derive.ts";
 import { useReducedMotion } from "../lib/motion.ts";
 import { useMedia, useSplit } from "../lib/media.ts";
-import { SHORT_QUERY } from "../theme/tokens.ts";
+import { SHORT_QUERY, type ConsoleSize } from "../theme/tokens.ts";
 import { useSwipe } from "../lib/swipe.ts";
-import { StepPager } from "../components/StepPager.tsx";
+import { StepPager, type StageActions } from "../components/StepPager.tsx";
+import { Crumbs } from "../components/PageHeader.tsx";
 import { ui } from "../components/ui.ts";
 import { Blocks } from "../components/Blocks.tsx";
 import { Inline } from "../components/Inline.tsx";
-import { LevelBadge, ReachChip } from "../components/Chips.tsx";
+import { ReachChip } from "../components/Chips.tsx";
 import { sentence } from "../content/text.ts";
 import { variationScript } from "../content/scripts.ts";
-import { Stage, type PlayerMode } from "../stage/Stage.tsx";
+import { stepOf } from "../bridge/player.ts";
+import { Stage, type PlayerMode, type StageStatus } from "../stage/Stage.tsx";
 import { mediaOf, type Media } from "../stage/media.ts";
 import { NotFound } from "./NotFound.tsx";
 
@@ -53,9 +55,18 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
   const [resumeShown, setResumeShown] = useState(resumedFrom !== null);
   const split = useSplit();
   const short = useMedia(SHORT_QUERY);
-  const mode: PlayerMode = !split ? "phone" : short ? "landscape" : "desk";
-  // On a phone the larger console is where a lesson starts: the console is what is being taught.
+  const narrow = useMedia("(max-width: 639px)");
+  const wide = useMedia("(min-width: 1024px)");
+  const mode: PlayerMode = short && !wide ? "landscape" : split ? "desk" : narrow ? "phone" : "tablet";
+  // One fixed console per device: a laptop's for a desk or tablet, a phone's for a phone either
+  // way up — and a phone's at every size for a flow about the phone itself.
+  const device: ConsoleSize = script?.device ?? (mode === "phone" || mode === "landscape" ? "phone" : "desk");
+  // The larger console (a phone): the stage over the whole screen, with a visible close.
   const [big, setBig] = useState(false);
+  const [status, setStatus] = useState<StageStatus>({ frame: "loading", live: false, replayable: false });
+  // "Done" is celebrated once the learner finishes here (or had finished before), never on arrival.
+  const [doneAtOpen] = useState(() => !!progressStore.get().progress.flows[f.id]?.done);
+  const [finishedHere, setFinishedHere] = useState(false);
   const pagerRef = useRef<HTMLDivElement>(null);
   const finishRef = useRef<HTMLElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -105,6 +116,16 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
     ro.observe(el);
     return () => ro.disconnect();
   }, [mode, total]);
+
+  // On a phone or tablet the controls are fixed to the bottom edge: the page leaves their height
+  // free under its last line, so the footer is never under them.
+  useEffect(() => {
+    if (mode !== "phone" && mode !== "tablet") return;
+    document.body.style.paddingBottom = `${pagerH}px`;
+    return () => {
+      document.body.style.paddingBottom = "";
+    };
+  }, [mode, pagerH]);
 
   // The end of the flow is in view: Next then takes the learner on to the next flow.
   useEffect(() => {
@@ -258,6 +279,7 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
   const toTop = () => window.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" });
 
   const toFinish = () => {
+    setFinishedHere(true);
     const el = finishRef.current;
     if (!el) return;
     scrolling.current = true;
@@ -279,23 +301,37 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
 
   const prereqs = f.learnFirst.flatMap((p) => flowById(p) ?? []);
   const mine = progress.flows[f.id];
-  const done = !!mine?.done;
+  const celebrate = !!mine?.done && (doneAtOpen || finishedHere);
   const furthest = Math.max(mine?.furthest ?? 0, active);
   const pathTitle = f.level ? track(f.level)?.title ?? f.level : null;
   // The next flow is always another flow: never the one being read, done or not.
   const next = nextUp(progress, f.level ? track(f.level) : undefined, catalogue, f.id);
 
+  const endClass = `${ui.primary} w-full min-w-0 px-3`;
   const end = atEnd && next ? (
-    <a href={href(`/flow/${next.flow.id}`)} className={`${ui.primary} min-w-0 px-4`} aria-label={`Next flow: ${next.flow.id} ${next.flow.title}`}>
+    <a href={href(`/flow/${next.flow.id}`)} className={endClass} aria-label={`Next flow: ${next.flow.id} ${next.flow.title}`}>
       <span className="truncate">Next: {next.flow.id}</span>
     </a>
   ) : atEnd ? (
-    <a href={href("/progress")} className={`${ui.primary} px-4`}>Your progress</a>
+    <a href={href("/progress")} className={endClass}><span className="truncate">Your progress</span></a>
   ) : (
-    <button type="button" onClick={toFinish} className={`${ui.primary} px-4`}>Finish</button>
+    <button type="button" onClick={toFinish} className={endClass}>Finish</button>
   );
   const stepText = <Inline text={f.steps[active - 1]?.text ?? ""} self={f.id} />;
-  const pager = (variant: "bar" | "inline" | "overlay", extra?: ReactNode) =>
+  // What the step's ring is about, in the script's words: beside the frame of a phone on its side.
+  const played = stepOf(branchScript ?? script, branch && branchScript ? branch.step : active);
+  const stepNote = played?.note ?? (played?.kind === "demo" ? played.highlight?.note : undefined);
+  const actions: StageActions = {
+    onTry: () => setInteractiveAt(active),
+    canTry: status.live && status.frame === "ready",
+    trying: interactive,
+    onReplay: () => {
+      setInteractiveAt(null);
+      setRun((r) => r + 1);
+    },
+    canReplay: status.replayable && !interactive,
+  };
+  const pager = (variant: "bar" | "inline" | "side") =>
     total > 0 ? (
       <StepPager
         variant={variant}
@@ -305,23 +341,22 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
         onPrev={prevStep}
         onNext={nextStep}
         end={end}
-        text={variant === "inline" ? undefined : stepText}
+        actions={branch ? undefined : actions}
         resumed={resumeShown && resumedFrom !== null ? { step: resumedFrom, onRestart: () => goTo(1) } : undefined}
-        extra={extra}
       />
     ) : null;
 
+  const areaInfo = areaById(f.area);
+  const crumbs = [
+    f.level && pathTitle ? { label: pathTitle, to: operator ? "/operator" : `/path/${f.level}` } : { label: "Browse", to: "/browse" },
+    { label: areaInfo?.title ?? `Area ${f.area}`, to: `${operator ? "/operator" : ""}/area/${f.area}` },
+  ];
   const chips = (
-    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-sm text-ink-muted">
-      <nav aria-label="Breadcrumb" className="flex items-center gap-2" data-print="hide">
-        {f.level && pathTitle ? <a className="hover:text-ink" href={href(operator ? "/operator" : `/path/${f.level}`)}>{pathTitle}</a> : <a className="hover:text-ink" href={href("/browse")}>Browse</a>}
-        <span aria-hidden="true">/</span>
-        <a className="hover:text-ink" href={href(`${operator ? "/operator" : ""}/area/${f.area}`)}>Area {f.area}</a>
-      </nav>
-      <span className="rounded-full bg-ink px-2.5 py-0.5 font-mono text-xs font-semibold text-primary-ink">{f.id}{f.aliases.length ? ` – ${f.aliases[f.aliases.length - 1]}` : ""}</span>
-      <LevelBadge level={f.level} />
-      <ReachChip reach={f.reach} />
-      {done && <span className="rounded-full bg-success-tint px-2.5 py-0.5 text-xs font-semibold text-success-text">Done</span>}
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-ink-muted">
+      <span data-print="hide"><Crumbs items={[...crumbs, { label: f.id }]} /></span>
+      {f.aliases.length > 0 && <span className={ui.chip}>also {f.aliases[f.aliases.length - 1]}</span>}
+      {f.reach !== "screen" && <ReachChip reach={f.reach} />}
+      {celebrate && <span className="rounded-full bg-success-tint px-2.5 py-0.5 text-xs font-semibold text-success-text">Done</span>}
       {prereqs.length > 0 && (
         <span className="flex flex-wrap items-center gap-1.5">
           <span>Learn first:</span>
@@ -333,14 +368,16 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
     </div>
   );
   const lead = f.whatYouLearn ? <Inline text={sentence(f.whatYouLearn)} self={f.id} /> : null;
+  // A kind named under a step only where a flow shows its steps more than one way.
+  const kinds = new Set(f.steps.map((s) => mediaOf(f, script, s.n)));
 
   const steps = total > 0 && (
     <section aria-labelledby="steps-h">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 id="steps-h" className={`${ui.eyebrow} text-ink-muted`}>{total} steps</h2>
+        <h2 id="steps-h" className={`${ui.eyebrow} text-ink-muted`}>{total === 1 ? "1 step" : `${total} steps`}</h2>
         <p className="hidden items-center gap-1.5 text-xs text-ink-muted mouse:flex" data-print="hide">
-          Move with <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-xxs border px-1 font-sans text-xs leading-none">←</kbd>
-          <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-xxs border px-1 font-sans text-xs leading-none">→</kbd>
+          Move with <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded-xs border px-1.5 font-sans text-sm leading-none text-ink">←</kbd>
+          <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded-xs border px-1.5 font-sans text-sm leading-none text-ink">→</kbd>
         </p>
       </div>
       <ol className="mt-3 space-y-2" aria-label="Steps">
@@ -350,6 +387,7 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
             step={s}
             flow={f}
             media={mediaOf(f, script, s.n)}
+            labelKind={kinds.size > 1}
             scripted={!!script?.steps.some((x) => x.step === s.n)}
             active={s.n === active}
             seen={s.n <= (mine?.furthest ?? 0)}
@@ -368,9 +406,9 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
     </section>
   );
   const about = <AboutFlow flow={f} />;
-  const finish = total > 0 ? <Finish flow={f} entry={mine} next={next} sectionRef={finishRef} /> : null;
+  const finish = total > 0 ? <Finish flow={f} entry={mine} celebrate={celebrate} next={next} sectionRef={finishRef} /> : null;
   const noSteps = total === 0 && (
-    <div className="rounded-lg border bg-ground p-6">
+    <div className="rounded-lg border bg-surface p-6">
       <p className="text-eyebrow font-semibold uppercase text-ink-muted">What the product does today</p>
       <div className="mt-2 text-ink-body">{f.stepsNote ? <Inline text={f.stepsNote} self={f.id} /> : <Blocks blocks={f.intro} self={f.id} />}</div>
     </div>
@@ -382,6 +420,7 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
       script={branchScript ?? script}
       active={branch && branchScript ? branch.step : active}
       mode={mode}
+      device={device}
       branch={
         variation && branch
           ? { title: variation.title, step: branch.step, total: variation.steps.length, onStep: (n) => setBranch({ index: branch.index, step: n }), onClose: () => setBranch(null) }
@@ -389,67 +428,110 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
       }
       captured={(n) => (branch && variation ? (n === variation.steps.length ? shotFor(f.id, `v${branch.index + 1}`) : undefined) : shotFor(f.id, n))}
       run={run}
-      nav={mode === "desk" ? (extra) => pager("inline", extra) : mode === "landscape" ? (extra) => pager("overlay", extra) : undefined}
-      expand={mode === "phone" ? { on: big, toggle: () => setBig((b) => !b) } : undefined}
+      nav={mode === "desk" ? pager("inline") : big ? pager("side") : undefined}
+      big={big}
+      onBig={mode === "phone" ? setBig : undefined}
+      stepText={stepText}
+      onStatus={setStatus}
+      reserve={mode === "phone" || mode === "tablet" ? pagerH || 64 : 0}
       interactive={interactive}
       onTry={() => setInteractiveAt(active)}
-      onReplay={() => {
+      onBack={() => {
         setInteractiveAt(null);
         setRun((r) => r + 1);
       }}
     />
   );
+  const title = (size: string) => (
+    <h1 className={`min-w-0 text-balance break-words font-display font-bold text-ink ${size}`}>{f.title}</h1>
+  );
 
   if (desk) {
     return (
       // A wide screen: everything under the header, in one view — a compact title band, the console as
-      // the hero with its controls pinned to its foot, and the steps and details in a column beside it.
+      // the hero with its caption and controls under it, and the steps and details in a column beside it.
       <article className={`${ui.container} flex h-player flex-col`} data-testid="player" data-mode="desk">
-        <header className="shrink-0 py-4 xl:py-5">
+        <header className="shrink-0 py-3 xl:py-4">
           {chips}
-          <div className="mt-2 flex flex-wrap items-baseline gap-x-8 gap-y-1">
-            <h1 className="line-clamp-2 min-w-0 max-w-5xl break-words font-display text-player-title font-bold text-ink">{f.title}</h1>
-            {lead && <p className="line-clamp-1 min-w-0 flex-1 basis-96 text-base text-ink-body 2xl:line-clamp-2">{lead}</p>}
-          </div>
+          <div className="mt-1.5">{title("line-clamp-2 max-w-5xl text-player-title")}</div>
+          {/* On a window of laptop height the lede goes to the top of the side column, so the console keeps the height. */}
+          {lead && <p className="mt-1 line-clamp-2 max-w-5xl text-pretty text-base text-ink-body compact:hidden">{lead}</p>}
         </header>
-        <div ref={gridRef} className={`grid min-h-0 flex-1 gap-6 pb-5 ${total > 0 ? "grid-cols-player 2xl:grid-cols-player-xl xl:gap-8" : ""}`}>
+        <div ref={gridRef} className={`grid min-h-0 flex-1 gap-6 pb-4 ${total > 0 ? "grid-cols-player-sm 2xl:grid-cols-player-xl xl:gap-8" : ""}`}>
           {stage && <div className="flex min-h-0 min-w-0 flex-col" data-print="hide">{stage}</div>}
-          <div ref={colRef} className="relative min-h-0 overflow-y-auto overscroll-contain pb-6 pr-1" data-testid="side-column">
-            {noSteps}
-            {steps}
-            {finish}
-            <div className="mt-8 space-y-6">
-              {variations}
-              {about}
+          <div className="relative min-h-0">
+            <div ref={colRef} className="h-full overflow-y-auto overscroll-contain pb-6 pr-1 pt-2" data-testid="side-column">
+              {lead && <p className="mb-5 hidden text-pretty text-base text-ink-body compact:block">{lead}</p>}
+              {noSteps}
+              {steps}
+              {finish}
+              <div className="mt-8 space-y-6">
+                {variations}
+                {about}
+              </div>
             </div>
+            {/* The column scrolls on its own: its ends fade, so no line is cut hard at the top or the foot. */}
+            <span className="pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-surface to-surface/0" aria-hidden="true" />
+            <span className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-surface to-surface/0" aria-hidden="true" />
           </div>
         </div>
       </article>
     );
   }
 
-  return (
-    <article className="w-full" style={pagerH ? ({ "--pager-h": `${pagerH}px` } as CSSProperties) : undefined} data-testid="player" data-mode={mode}>
-      <div ref={gridRef}>
-        {mode === "phone" ? (
-          <div className={`${ui.container} pt-2`}>
-            <h1 className="mb-2 truncate font-display text-base font-semibold text-ink">
-              <span className="mr-2 font-mono text-xs font-semibold text-primary-link">{f.id}</span>
-              {f.title}
-            </h1>
-            {stage}
+  if (mode === "landscape") {
+    return (
+      // A phone on its side: the frame takes the whole height (the site's header steps aside), and a
+      // slim strip beside it carries the way back, the title, the step's words and the controls.
+      <article className="w-full" data-testid="player" data-mode="landscape">
+        <div ref={gridRef} className="flex h-screen-d justify-center gap-5 py-2 pl-safe-l pr-safe-r">
+          <div className="w-phone-side shrink-0 pl-2">{stage}</div>
+          <aside className="flex min-w-0 max-w-xl flex-1 flex-col gap-2 py-1 pr-3" aria-label="This step">
+            <a href={href(operator ? "/operator" : f.level ? `/path/${f.level}` : "/learn")} className={`${ui.textLink} inline-flex min-h-touch items-center text-sm`}>← {pathTitle ?? "Academy"}</a>
+            {title("line-clamp-2 text-base leading-snug")}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-md border bg-surface p-3 text-sm text-ink" data-testid="caption-strip">
+              <p className="flex items-start gap-2" aria-live="polite" data-testid="caption">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold tabular-nums text-primary-ink" aria-hidden="true">{branch ? branch.step : active}</span>
+                <span className="min-w-0">{branch && variation ? <Inline text={stepNote ?? variation.title} self={f.id} /> : stepText}</span>
+              </p>
+              {!branch && stepNote && <p className="mt-2 text-ink-muted"><Inline text={stepNote} self={f.id} /></p>}
+            </div>
+            {pager("side")}
+          </aside>
+        </div>
+        <div className={`${ui.container} pb-10 pt-6`}>
+          {chips}
+          {lead && <p className="mt-3 max-w-read text-lead-sm text-ink-body">{lead}</p>}
+          <div className="mt-6 grid gap-10 lg:grid-cols-2">
+            <div className="min-w-0">{noSteps}{steps}{finish}</div>
+            <div className="min-w-0 space-y-6">{variations}{about}</div>
           </div>
-        ) : (
-          stage && <div className="h-player-short px-2 pt-2">{stage}</div>
-        )}
+        </div>
+      </article>
+    );
+  }
+
+  // A phone or a tablet held upright: the title in full, the frame as the hero, its caption under
+  // it, then the steps; the controls fixed to the bottom edge, in reach of a thumb.
+  return (
+    <article className="w-full" data-testid="player" data-mode={mode}>
+      <div ref={gridRef} className={`${ui.container} pt-3`}>
+        {mode === "tablet" && <div className="mb-2">{chips}</div>}
+        <div className="mb-3 flex items-start gap-2">
+          {mode === "phone" && <span className="mt-1 shrink-0 rounded-full bg-ink px-2 py-0.5 font-mono text-xs font-semibold text-primary-ink">{f.id}</span>}
+          {title(mode === "tablet" ? "text-title-sm" : "text-player-title-sm")}
+        </div>
+        {mode === "tablet" && lead && <p className="-mt-1 mb-3 max-w-read text-pretty text-base text-ink-body">{lead}</p>}
+        {stage}
       </div>
       <div className={`${ui.container} pb-10`}>
-        <header className="pb-6 pt-8">
-          {chips}
-          {mode === "landscape" && <h1 className="mt-3 break-words font-display text-title-sm font-bold text-ink">{f.title}</h1>}
-          {lead && <p className="mt-3 max-w-read text-lead-sm text-ink-body">{lead}</p>}
-        </header>
-        <div className="grid gap-10 lg:grid-cols-2">
+        {mode === "phone" && (
+          <header className="pb-4 pt-6">
+            {chips}
+            {lead && <p className="mt-3 max-w-read text-pretty text-lead-sm text-ink-body">{lead}</p>}
+          </header>
+        )}
+        <div className={`grid gap-10 lg:grid-cols-2 ${mode === "tablet" ? "pt-8" : ""}`}>
           <div className="min-w-0">
             {noSteps}
             {steps}
@@ -461,9 +543,8 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
           </div>
         </div>
       </div>
-      {mode === "phone" && pager("bar") && (
-        // Sticky to the bottom edge of the article: in reach of a thumb while the steps are read.
-        <div ref={pagerRef} className="sticky bottom-0 z-20 mt-6">{pager("bar")}</div>
+      {pager("bar") && !big && (
+        <div ref={pagerRef} className="fixed inset-x-0 bottom-0 z-30">{pager("bar")}</div>
       )}
     </article>
   );
@@ -472,9 +553,12 @@ function FlowView({ flow: f, initialStep }: { flow: Flow; initialStep: number | 
 /** Who can do it, where it starts, what it needs, the flow's own introduction, and where it comes from. */
 function AboutFlow({ flow: f }: { flow: Flow }) {
   const rows: [string, ReactNode][] = [];
+  // A flow with nothing to say about itself here (no who, no start, no introduction) shows no empty card.
+  const empty = !f.who && !f.startsAt && !f.needs && !f.whatYouLearn && f.intro.length === 0 && !f.where;
   if (f.who) rows.push(["Who can do it", <><Inline text={f.who} self={f.id} />{f.roles.length > 0 && <span className="text-ink-muted"> · {f.roles.map((r) => ROLE_LABEL[r]).join(", ")}</span>}</>]);
   if (f.startsAt) rows.push(["Starts at", <Inline text={f.startsAt} self={f.id} />]);
   if (f.needs) rows.push(["Needs", <Inline text={f.needs} self={f.id} />]);
+  if (empty) return null;
   return (
     <section aria-labelledby="about-flow" className="rounded-lg border bg-surface p-5">
       <h2 id="about-flow" className="font-display text-lg font-semibold text-ink">About this flow</h2>
@@ -498,10 +582,11 @@ function AboutFlow({ flow: f }: { flow: Flow }) {
   );
 }
 
-function StepCard({ step, flow, media, scripted, active, seen, showSection, onSelect, refCb }: {
+function StepCard({ step, flow, media, labelKind, scripted, active, seen, showSection, onSelect, refCb }: {
   step: Step;
   flow: Flow;
   media: Media;
+  labelKind: boolean;
   scripted: boolean;
   active: boolean;
   seen: boolean;
@@ -512,21 +597,21 @@ function StepCard({ step, flow, media, scripted, active, seen, showSection, onSe
   return (
     <li ref={refCb} data-step={step.n} id={`step-${step.n}`}>
       {showSection && <p className="mb-3 mt-6 text-eyebrow font-semibold uppercase text-ink-muted">{step.section}</p>}
-      {/* One card, one outline: the card's own border marks the step being read, and the keyboard's focus on its button (whose ring would end above the chip). */}
-      <div data-testid="step-card" className={`rounded-md border-2 bg-surface transition-colors ${active ? "border-primary shadow-card" : "border-transparent hover:border-border focus-within:border-primary"}`}>
-        <button type="button" onClick={onSelect} aria-current={active ? "step" : undefined} className="flex w-full items-start gap-3 rounded-md px-4 pt-3 text-left focus-visible:ring-0 focus-visible:ring-offset-0">
+      {/* The step being read has the card's outline; the keyboard's focus is a separate ring set off the card, so the two never look alike. */}
+      <div data-testid="step-card" className={`rounded-md border-2 bg-surface transition-colors ${active ? "border-primary shadow-card" : "border-transparent hover:border-border"}`}>
+        <button type="button" onClick={onSelect} aria-current={active ? "step" : undefined} className="flex w-full items-start gap-3 rounded-md px-4 pt-3 text-left focus-visible:outline-dashed focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink focus-visible:ring-0 focus-visible:ring-offset-0">
           <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums transition-colors ${active ? "bg-primary text-primary-ink" : seen ? "bg-primary-tint text-primary-link" : "bg-quiet text-quiet-text"}`}>
             {step.n}
             {seen && !active && <span className="sr-only">, seen</span>}
           </span>
-          <span className="min-w-0 flex-1 pt-0.5 text-base leading-relaxed text-ink">
+          <span className="min-w-0 flex-1 pt-0.5 text-base leading-relaxed text-ink [&_strong]:font-medium">
             <Inline text={step.text} self={flow.id} />
           </span>
         </button>
         <div className="min-w-0 pb-3 pl-14 pr-4 text-sm">
           {step.children.length > 0 && <Blocks blocks={step.children} self={flow.id} />}
-          {/* The live console is the rule and says so once, on its frame; a step shown another way names it. */}
-          {scripted && media !== "demo" && MEDIA_LABEL[media] && (
+          {/* A kind is named only where a flow shows its steps more than one way. */}
+          {labelKind && scripted && media !== "demo" && MEDIA_LABEL[media] && (
             <p className={`mt-3 ${ui.chip}`} data-print="hide">{MEDIA_LABEL[media]}</p>
           )}
         </div>
@@ -536,56 +621,63 @@ function StepCard({ step, flow, media, scripted, active, seen, showSection, onSe
 }
 
 /**
- * The end of a flow: how to know it worked, then — once it is done — the moment that says so, what
- * it added up to, and the next flow one tap away.
+ * The end of a flow: how to know it worked, then — once the learner has finished it here, or had
+ * before — the moment that says so, what it added up to, and the next flow one tap away. A light
+ * card with the one accent, as every card in the academy.
  */
-function Finish({ flow: f, entry, next, sectionRef }: { flow: Flow; entry: FlowProgress | undefined; next: Next | undefined; sectionRef: RefObject<HTMLElement | null> }) {
+function Finish({ flow: f, entry, celebrate, next, sectionRef }: { flow: Flow; entry: FlowProgress | undefined; celebrate: boolean; next: Next | undefined; sectionRef: RefObject<HTMLElement | null> }) {
   const progress = useProgress();
   const done = !!entry?.done;
   const t = f.level ? track(f.level) : undefined;
   const stats = t ? trackStats(progress, t) : undefined;
-  const earnedNow = done && entry?.doneAt
+  const earnedNow = celebrate && entry?.doneAt
     ? milestones(progress, catalogue, CLIENT_LEVELS).filter((m) => m.earned && m.at === entry.doneAt && !isOperator(f))
     : [];
   const summary = stats ? `${stats.done} of ${stats.total} on ${t?.title ?? f.level}${stats.complete ? ": path complete" : ""}` : "";
   return (
-    <section ref={sectionRef} tabIndex={-1} aria-labelledby="worked" className="relative mt-6 rounded-lg bg-night p-6 text-primary-ink focus:outline-none">
-      <p className="text-eyebrow font-semibold uppercase text-live">You know it worked when</p>
-      <p id="worked" className="mt-3 text-lead-sm">{f.workedWhen ? <Inline text={f.workedWhen} self={f.id} plainIds tone="dark" /> : "The last step above is what you see."}</p>
-      <p role="status" className="sr-only">{done ? `Flow done. ${summary}.` : ""}</p>
-      {done && (
-        <div className="mt-6 flex items-start gap-4 border-t border-surface/15 pt-6" data-print="hide" data-testid="flow-done">
-          <span className="flex h-medal w-medal shrink-0 items-center justify-center rounded-full bg-live text-night" aria-hidden="true">
+    <section ref={sectionRef} tabIndex={-1} aria-labelledby="worked" className="relative mt-6 rounded-lg border bg-surface p-6 shadow-card focus:outline-none" data-testid="worked">
+      <p className="text-eyebrow font-semibold uppercase text-primary-link">You know it worked when</p>
+      <p id="worked" className="mt-3 text-lead-sm text-ink">{f.workedWhen ? <Inline text={f.workedWhen} self={f.id} plainIds /> : "The last step above is what you see."}</p>
+      <p role="status" className="sr-only">{celebrate ? `Flow done. ${summary}.` : ""}</p>
+      {celebrate && (
+        <div className="mt-6 flex items-start gap-4 border-t pt-6" data-print="hide" data-testid="flow-done">
+          <span className="flex h-medal w-medal shrink-0 items-center justify-center rounded-full bg-primary-tint text-primary-link" aria-hidden="true">
             <svg viewBox="0 0 24 24" className="h-6 w-6"><path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </span>
           <div className="min-w-0">
-            <p className="font-display text-2xl font-semibold">Done{next ? <span className="text-primary-ink-soft"> — next: {next.flow.id}</span> : null}</p>
-            {summary && <p className="mt-1 text-sm text-primary-ink-soft">{summary}</p>}
+            <p className="font-display text-2xl font-semibold text-ink">Done</p>
+            {summary && <p className="mt-1 text-sm text-ink-muted">{summary}</p>}
             {earnedNow.length > 0 && (
               <ul className="mt-3 flex flex-wrap gap-2" aria-label="Milestones earned">
                 {earnedNow.map((m) => (
-                  <li key={m.id} className="rounded-full border border-live/50 px-3 py-1 text-xs font-semibold text-live">Milestone: {m.title}</li>
+                  <li key={m.id} className="rounded-full border border-primary-line px-3 py-1 text-xs font-semibold text-primary-link">Milestone: {m.title}</li>
                 ))}
               </ul>
             )}
           </div>
         </div>
       )}
-      <div className="mt-6 flex flex-wrap gap-3" data-print="hide">
-        {/* At most one filled action in the card — marking it done — so the step bar's Next stays the one primary. */}
-        {done && next && (
-          <a href={href(`/flow/${next.flow.id}`)} className={`${ui.lightOutline} min-w-0 px-5`}>
-            <span className="truncate">Next: {next.flow.id} {next.flow.title}</span>
+      <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3" data-print="hide">
+        {/* The step bar's Next stays the one filled action: here the next flow is a link that wraps, never cut. */}
+        {next && (
+          <a href={href(`/flow/${next.flow.id}`)} className={`${ui.textLink} min-w-0 py-2 text-base`}>
+            Next: {next.flow.id} {next.flow.title} →
           </a>
         )}
-        <button type="button" onClick={() => progressStore.setDone(f.id, !done)} className={done ? ui.lightOutline : ui.light} aria-pressed={done}>
-          {done ? "Done ✓" : "Mark as done"}
-        </button>
+        {done ? (
+          <button type="button" onClick={() => progressStore.setDone(f.id, false)} className={`${ui.textLink} min-h-touch text-sm text-ink-muted`} aria-pressed>
+            Mark as not done
+          </button>
+        ) : (
+          <button type="button" onClick={() => progressStore.setDone(f.id, true)} className={ui.quiet} aria-pressed={false}>
+            Mark as done
+          </button>
+        )}
         {!next && f.level && (
-          <a href={href("/progress")} className={ui.lightOutline}>{stats?.complete ? "Path complete: your progress" : "Your progress"}</a>
+          <a href={href("/progress")} className={ui.quiet}>{stats?.complete ? "Path complete: your progress" : "Your progress"}</a>
         )}
       </div>
-      {done && next?.before && <p className="mt-3 text-sm text-primary-ink-soft" data-print="hide">{next.flow.id} is a “learn first” for {next.before.id}, the next flow on this path.</p>}
+      {celebrate && next?.before && <p className="mt-3 text-sm text-ink-muted" data-print="hide">{next.flow.id} is a “learn first” for {next.before.id}, the next flow on this path.</p>}
     </section>
   );
 }
@@ -595,11 +687,11 @@ function Variations({ flow: f, branches, playing, onShow }: { flow: Flow; branch
   return (
     <section>
       <details className="group rounded-lg border bg-surface" open={f.steps.length === 0}>
-        <summary className="flex min-h-touch cursor-pointer list-none items-center justify-between gap-4 px-5 py-3 font-display text-lg font-semibold text-ink">
-          What else can happen
-          <span className="text-sm font-sans font-normal text-ink-muted group-open:hidden">Refusals, limits and other branches</span>
+        <summary className="flex min-h-touch cursor-pointer list-none flex-col justify-center gap-0.5 px-5 py-3">
+          <span className="font-display text-lg font-semibold text-ink">What else can happen</span>
+          <span className="text-sm text-ink-muted group-open:hidden">Refusals, limits and other branches</span>
         </summary>
-        <div className="border-t px-5 pb-5 pt-2 text-sm">
+        <div className="border-t px-5 pb-5 pt-2 text-sm [&>p:first-child]:first-letter:uppercase">
           {branches.length > 0 && onShow && (
             <div className="mb-4 mt-3" data-print="hide">
               <p className="text-eyebrow font-semibold uppercase text-ink-muted">Watch it in the live console</p>

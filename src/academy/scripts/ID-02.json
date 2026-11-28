@@ -16,7 +16,7 @@
         }
       ],
       "highlight": {
-        "text": "Waiting for your device…",
+        "text": "Sign in to endgame.example with a passkey?",
         "note": "The button waits while your device asks you to approve."
       }
     },

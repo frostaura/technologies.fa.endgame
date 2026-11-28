@@ -5,9 +5,11 @@ import { href } from "../lib/router.ts";
 import { catalogue, useProgress } from "../lib/progress.ts";
 import { nextUp, trackStats } from "../progress/derive.ts";
 import { FlowList } from "../components/FlowList.tsx";
+import { ListLayout } from "../components/ListLayout.tsx";
+import { PageHeader } from "../components/PageHeader.tsx";
 import { Medal, ProgressRing } from "../components/ProgressMarks.tsx";
 import { ResumeCard } from "../components/ResumeCard.tsx";
-import { Eyebrow, Page } from "../components/Shell.tsx";
+import { Page } from "../components/Shell.tsx";
 import { ui } from "../components/ui.ts";
 import { shortDate } from "../lib/format.ts";
 import { PathCards } from "./Cover.tsx";
@@ -15,12 +17,14 @@ import { PathCards } from "./Cover.tsx";
 export function Learn() {
   return (
     <Page>
-      <Eyebrow>Learn</Eyebrow>
-      <h1 className="mt-3 font-display text-title-sm font-bold text-ink sm:text-title">Choose a path</h1>
-      <p className="mt-4 max-w-read text-lead-sm text-ink-body sm:text-lead">Foundation is day one. Core is running an organisation. Advanced is owning the setup. Developer is the API, assistants and the app kit.</p>
+      <PageHeader
+        eyebrow="Learn"
+        title="Choose a path"
+        lede="Foundation is day one. Core is running an organisation. Advanced is owning the setup. Developer is the API, assistants and the app kit."
+      />
       <ResumeCard className="mt-8" />
       <PathCards />
-      <p className="mt-8 max-w-read text-sm text-ink-muted">Not sure where you fit? <a className={ui.textLink} href={href("/browse")}>Browse every flow</a> by area, by who you are or by how it is reached.</p>
+      <p className="mt-4 max-w-read text-sm text-ink-muted">Not sure where you fit? <a className={ui.textLink} href={href("/browse")}>Browse every flow</a> by area, by who you are or by how it is reached.</p>
     </Page>
   );
 }
@@ -32,16 +36,15 @@ export function PathPage({ level, operator = false }: { level: Level; operator?:
   const s = t ? trackStats(progress, t) : undefined;
   const next = nextUp(progress, t, catalogue);
   return (
-    <Page>
-      <div className="grid gap-8 lg:grid-cols-3 lg:gap-10">
-        <div className="lg:sticky lg:top-header lg:self-start">
-          <Eyebrow>{operator ? "Operator handbook" : "Path"}</Eyebrow>
-          <h1 className="mt-3 font-display text-title-sm font-bold text-ink sm:text-title">{t?.title ?? level}</h1>
-          <p className="mt-4 text-lead-sm text-ink-body sm:text-lead">{LEVEL_BLURB[level]}</p>
+    <ListLayout
+      crumbs={operator ? [{ label: "Operator handbook", to: "/operator" }, { label: t?.title ?? level }] : [{ label: "Learn", to: "/learn" }, { label: `${t?.title ?? level} path` }]}
+      title={t?.title ?? level}
+      lede={LEVEL_BLURB[level]}
+      aside={
+        <>
           {s && (
             <div className="mt-6 flex items-center gap-4" data-testid="path-progress">
-              <span className="hidden lg:inline-flex"><ProgressRing done={s.done} total={s.total} size="lg" label={`${s.done} of ${s.total} flows done`} /></span>
-              <span className="lg:hidden"><ProgressRing done={s.done} total={s.total} label={`${s.done} of ${s.total} flows done`} /></span>
+              <ProgressRing done={s.done} total={s.total} label={`${s.done} of ${s.total} flows done`} />
               <div className="min-w-0">
                 <p className="font-display text-2xl font-semibold tabular-nums text-ink">{s.done} of {s.total}</p>
                 <p className="text-sm text-ink-muted">{s.complete ? "flows done: path complete" : `flows done${s.started ? ` · ${s.started} started` : ""}`}</p>
@@ -67,11 +70,10 @@ export function PathPage({ level, operator = false }: { level: Level; operator?:
             )
           )}
           {t?.summary && <p className="mt-8 text-sm text-ink-muted">{t.summary}</p>}
-        </div>
-        <div className="min-w-0 lg:col-span-2">
-          <FlowList flows={flows} numbered next={next?.flow.id} first={next && !flows.some((f) => f.id === next.flow.id) ? next.flow : undefined} />
-        </div>
-      </div>
-    </Page>
+        </>
+      }
+    >
+      <FlowList flows={flows} numbered next={next?.flow.id} first={next && !flows.some((f) => f.id === next.flow.id) ? next.flow : undefined} />
+    </ListLayout>
   );
 }

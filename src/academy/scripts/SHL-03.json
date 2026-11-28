@@ -37,7 +37,7 @@
         }
       ],
       "highlight": {
-        "selector": "nav[aria-label='Where you are']",
+        "selector": "nav[aria-label='Where you are'], button[aria-label^='Where you are']",
         "note": "Where you are: the earlier steps are links; on the home screen they select a level in place."
       }
     },
@@ -56,6 +56,14 @@
       "highlight": {
         "selector": "header",
         "note": "On a phone: only the last two steps after “…”, and at most two rows."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "selector": "nav[aria-label='Where you are'], button[aria-label^='Where you are']",
+        "note": "On a phone the header is one row: “Up to” a level, where you are in full, then your account."
       }
     }
   ]

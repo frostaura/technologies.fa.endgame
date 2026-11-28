@@ -146,7 +146,25 @@
         "s3-change-failed",
         "s3-stage-rules",
         "s3-suggestions",
-        "s3-employee-paused"
+        "s3-employee-paused",
+        "talk-budget-stopped",
+        "talk-card-cancelled",
+        "talk-card-failed",
+        "talk-long-history",
+        "talk-many-parts",
+        "talk-midreply",
+        "talk-not-sent",
+        "talk-over-estimate",
+        "talk-part-states",
+        "talk-plan-approval-app",
+        "talk-plan-approval-employee",
+        "talk-plan-approval",
+        "talk-reply-interrupted",
+        "talk-retry-carried",
+        "talk-rich-replies-app",
+        "talk-rich-replies-employee",
+        "talk-rich-replies",
+        "talk-web-search-approval"
       ]
     },
     "start": {
@@ -165,6 +183,12 @@
       "items": {
         "$ref": "#/definitions/variation"
       }
+    },
+    "device": {
+      "enum": [
+        "phone"
+      ],
+      "description": "The console this flow is taught on at every window size: phone, for a flow about the phone itself (its bottom bar, its sheets). Unset, a desk or tablet window shows a laptop's console and a phone a phone's."
     }
   },
   "definitions": {
@@ -468,6 +492,10 @@
               "$ref": "#/properties/persona",
               "description": "From this step on, someone else is signed in to the same world (the operator acts, then the Owner reads what was logged). Needs a goto."
             },
+            "scenario": {
+              "$ref": "#/properties/scenario",
+              "description": "From this step on, another world: the step opens its goto in this scenario, built fresh. Needs a goto."
+            },
             "highlight": {
               "type": "object",
               "additionalProperties": false,
@@ -487,6 +515,15 @@
                 },
                 "note": {
                   "$ref": "#/definitions/note"
+                },
+                "region": {
+                  "const": true,
+                  "description": "The target is a region that shows the step's state, ringed as it is rather than as the card around it."
+                },
+                "none": {
+                  "type": "string",
+                  "minLength": 10,
+                  "description": "The step has nothing to ring at all; why. The ring is cleared."
                 }
               }
             },

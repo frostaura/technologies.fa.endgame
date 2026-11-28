@@ -9,7 +9,7 @@
       "step": 1,
       "kind": "demo",
       "highlight": {
-        "selector": "nav[aria-label='Where you are']",
+        "selector": "nav[aria-label='Where you are'], button[aria-label^='Where you are']",
         "note": "The full feed: Northwind / Notifications."
       }
     },

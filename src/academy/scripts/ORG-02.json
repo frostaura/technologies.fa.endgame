@@ -77,6 +77,9 @@
           }
         }
       ],
+      "highlight": {
+        "none": "“Starting research…” shows only while the organisation and the idea are made, which is over before a ring could be drawn; the next step shows the request it sends."
+      },
       "note": "Research this idea: the button reads “Starting research…” while the organisation and the idea are made."
     },
     {

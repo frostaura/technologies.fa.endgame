@@ -47,9 +47,9 @@
         }
       ],
       "highlight": {
-        "text": "Bringing it back",
-        "note": "It becomes the newest version, then it is rebuilt and restarted."
-      }
+        "none": "“Bringing it back” shows only while the version is restored, which is over before a ring could be drawn; the next step rings the version it leaves."
+      },
+      "note": "It becomes the newest version, then it is rebuilt and restarted."
     },
     {
       "step": 5,

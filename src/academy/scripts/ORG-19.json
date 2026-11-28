@@ -25,7 +25,7 @@
       "step": 3,
       "kind": "demo",
       "highlight": {
-        "selector": "nav[aria-label='Where you are']",
+        "selector": "nav[aria-label='Where you are'], button[aria-label^='Where you are']",
         "note": "Northwind in the breadcrumb is a name on the way down, not a button."
       }
     },

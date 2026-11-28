@@ -1,7 +1,9 @@
 /**
- * Where the academy's marks go (overlay.ts), as plain geometry so it can be tested: how far the
- * ring stands off the control it surrounds, and where the note beside it is set so it covers
- * neither the control nor the words around it.
+ * Where the academy's marks go (overlay.ts), as plain geometry so it can be tested: what the ring
+ * surrounds (the whole card a step's words sit in, not one line of them), how far it stands off
+ * it, how a page is scrolled to show it, and where the step's number sits on it. There is no note
+ * in the console: the academy sets a step's words in a strip under its frame, and the number on the
+ * ring is the same number that strip starts with.
  */
 
 export interface Box {
@@ -25,28 +27,40 @@ export interface Insets {
 
 /** The ring's line, in pixels: two of the accent and one light one outside it, so it shows on any ground (a blue band too). */
 export const RING_LINE = 3;
-/** How far the ring stands off its control when nothing is close by. */
-export const RING_PAD = 6;
-/** The space between the ring and the note. */
-export const NOTE_GAP = 10;
-/** The space kept between a mark and the edge of the page. */
-export const EDGE = 8;
-/** How much covering a pixel of the page's words or controls costs, against a pixel of distance. */
-const WORDS = 8;
+/** How far the ring stands off what it surrounds when nothing is close by: room to breathe, never hugging the words. */
+export const RING_PAD = 10;
+/** The least it stands off, even between two cards close together. */
+export const RING_MIN = 4;
+/** The room kept between what a step shows and the edge of the view it is scrolled into. */
+export const SNAP_MARGIN = 20;
+/** The step's number on the ring: a small round badge on its top-left corner. */
+export const MARKER = 24;
 
 const area = (b: Box) => Math.max(0, b.right - b.left) * Math.max(0, b.bottom - b.top);
+const height = (b: Box) => b.bottom - b.top;
+const width = (b: Box) => b.right - b.left;
 
 export function overlap(a: Box, b: Box): number {
-  return area({ left: Math.max(a.left, b.left), top: Math.max(a.top, b.top), right: Math.min(a.right, b.right), bottom: Math.min(a.bottom, b.bottom) });
+  return area(intersect(a, b));
+}
+
+export function intersect(a: Box, b: Box): Box {
+  return { left: Math.max(a.left, b.left), top: Math.max(a.top, b.top), right: Math.min(a.right, b.right), bottom: Math.min(a.bottom, b.bottom) };
+}
+
+/** How much of a box shows inside a view: 1 when all of it, 0 when none. */
+export function shownFraction(box: Box, view: Box): number {
+  const whole = area(box);
+  return whole > 0 ? area(intersect(box, view)) / whole : 0;
 }
 
 /**
- * How far the ring stands off each side of the control: `RING_PAD` when there is room, and where a
- * neighbour's words come closer (the line above, a label beside it), the ring's line is set in the
- * middle of the gap so it never paints over them.
+ * How far the ring stands off each side: `RING_PAD` when there is room, and where a neighbour's
+ * words come closer, the ring's line is set in the middle of the gap so it never paints over them —
+ * but never closer than `RING_MIN`, which keeps a line of breathing room around what is ringed.
  */
 export function ringInsets(target: Box, content: Box[], pad = RING_PAD, line = RING_LINE): Insets {
-  const fit = (gap: number) => Math.max(0, Math.min(pad, Math.floor((gap - line) / 2)));
+  const fit = (gap: number) => Math.max(Math.min(RING_MIN, pad), Math.min(pad, Math.floor((gap - line) / 2)));
   let top = Infinity;
   let bottom = Infinity;
   let left = Infinity;
@@ -64,64 +78,66 @@ export function ringInsets(target: Box, content: Box[], pad = RING_PAD, line = R
   return { top: fit(top), right: fit(right), bottom: fit(bottom), left: fit(left) };
 }
 
-/** The ring's outer box: the control, its insets and the line, kept inside the page. */
-export function ringBox(target: Box, insets: Insets, view: Size, line = RING_LINE): Box {
+/** The ring's outer box: what it surrounds, its insets and the line. Not clipped: `clip` decides what of it shows. */
+export function ringBox(target: Box, insets: Insets, line = RING_LINE): Box {
   return {
-    left: Math.max(2, target.left - insets.left - line),
-    top: Math.max(2, target.top - insets.top - line),
-    right: Math.min(view.width - 2, target.right + insets.right + line),
-    bottom: Math.min(view.height - 2, target.bottom + insets.bottom + line),
+    left: target.left - insets.left - line,
+    top: target.top - insets.top - line,
+    right: target.right + insets.right + line,
+    bottom: target.bottom + insets.bottom + line,
   };
 }
 
-interface Candidate {
-  left: number;
-  top: number;
-  rank: number;
+/** A ring that would stand off a subject touching the view's edge is drawn just inside the edge instead, whole. */
+export function keepInside(ring: Box, view: Box, line = 1): Box {
+  return { left: Math.max(ring.left, view.left + line), top: Math.max(ring.top, view.top + line), right: Math.min(ring.right, view.right - line), bottom: Math.min(ring.bottom, view.bottom - line) };
+}
+
+/** One element on the way up from what a step names: its box, and whether it is drawn as a card (a border, a shadow, a ground of its own, or a list item). */
+export interface Rung {
+  box: Box;
+  card: boolean;
 }
 
 /**
- * Where the note goes. Below the ring, else above it, else beside it — whichever covers least of
- * the page's words and controls, and never the ring itself while there is anywhere else to go. Only
- * a control taller than the page leaves no room outside it; then the note sits where it hides least.
+ * What the ring surrounds. A step's words name a heading, a label or a figure; what it teaches is
+ * the tile or card they sit in, so the ring goes round the nearest card above them — while that
+ * card stays a part of the view (at most `share` of its height), never the page or a whole column. With no such card, what was named, and a speck (a 6 px dot) grows to the
+ * first thing around it big enough to see.
  */
-export function placeNote(ring: Box, note: Size, view: Size, content: Box[], gap = NOTE_GAP): { left: number; top: number; score: number } {
-  const { width: w, height: h } = note;
-  const clampX = (x: number) => Math.max(EDGE, Math.min(x, view.width - EDGE - w));
-  const clampY = (y: number) => Math.max(EDGE, Math.min(y, view.height - EDGE - h));
-  const xs = [ring.left, ring.right - w, (ring.left + ring.right - w) / 2];
-  const ys = [ring.top, (ring.top + ring.bottom - h) / 2, ring.bottom - h];
-  const candidates: Candidate[] = [];
-  const add = (left: number, top: number, rank: number) => candidates.push({ left, top, rank });
-  xs.forEach((x, i) => add(clampX(x), ring.bottom + gap, i));
-  xs.forEach((x, i) => add(clampX(x), ring.top - gap - h, 10 + i));
-  ys.forEach((y, i) => add(ring.right + gap, clampY(y), 20 + i));
-  ys.forEach((y, i) => add(ring.left - gap - w, clampY(y), 30 + i));
-  // Anywhere on the page: only for a control that leaves no room around it.
-  for (let y = EDGE; y + h <= view.height - EDGE; y += 24) for (let x = EDGE; x + w <= view.width - EDGE; x += 40) add(x, y, 100);
-
-  let best = { left: clampX(ring.left), top: clampY(ring.bottom + gap), score: Infinity };
-  for (const c of candidates) {
-    if (c.left < EDGE - 0.5 || c.top < EDGE - 0.5 || c.left + w > view.width - EDGE + 0.5 || c.top + h > view.height - EDGE + 0.5) continue;
-    const score = noteCost(ring, note, content, c.left, c.top, c.rank, gap);
-    if (score < best.score) best = { left: c.left, top: c.top, score };
+export function chooseSubject(named: Box, chain: Rung[], view: Size, share = 0.62): Box {
+  // A card may span the width (a phone's cards do); it may not take most of the height.
+  const fits = (b: Box) => height(b) <= view.height * share && width(b) <= view.width + 1;
+  for (const rung of chain) {
+    if (!fits(rung.box)) break;
+    if (rung.card) return rung.box;
   }
-  return best;
+  if (width(named) >= 24 && height(named) >= 16) return named;
+  for (const rung of chain) {
+    if (!fits(rung.box)) break;
+    if (width(rung.box) >= 24 && height(rung.box) >= 16) return rung.box;
+  }
+  return named;
 }
 
 /**
- * What setting the note at (left, top) costs: beside the ring is preferred a little; a free spot
- * elsewhere wins over hiding a line of words, and the nearer the better. Covering words costs their
- * area; covering the ring costs more than anything else.
+ * How far to scroll a view so a subject shows whole: not at all when it already does, with the
+ * margin; else its top is set a margin under the view's top, so a card is read from its beginning
+ * and nothing above it is sliced; and a subject taller than the view is set so that what was named
+ * inside it is in view too.
  */
-export function noteCost(ring: Box, note: Size, content: Box[], left: number, top: number, rank = 100, gap = NOTE_GAP): number {
-  const box = { left, top, right: left + note.width, bottom: top + note.height };
-  const away = Math.hypot(Math.max(0, ring.left - box.right, box.left - ring.right), Math.max(0, ring.top - box.bottom, box.top - ring.bottom));
-  let score = rank < 100 ? rank * 2 : 200 + 2 * away;
-  const onRing = overlap(box, { left: ring.left - gap / 2, top: ring.top - gap / 2, right: ring.right + gap / 2, bottom: ring.bottom + gap / 2 });
-  if (onRing > 0) score += 1_000_000 + onRing;
-  // Covering words or a control is weighed well above distance: a note a little further off, over
-  // nothing, beats one beside the ring over a heading, a figure or a button.
-  for (const b of content) score += WORDS * overlap(box, b);
-  return score;
+export function snapScroll(subject: Box, named: Box, view: Box, margin = SNAP_MARGIN): number {
+  const roomy = { left: view.left, right: view.right, top: view.top + margin, bottom: view.bottom - margin };
+  if (subject.top >= roomy.top && subject.bottom <= roomy.bottom) return 0;
+  const by = subject.top - roomy.top;
+  if (height(subject) <= height(roomy)) return by;
+  // Taller than the view: its top, unless what was named would then be below the fold.
+  return named.bottom - by > roomy.bottom ? named.top - roomy.top : by;
+}
+
+/** The step's number: on the ring's top-left corner, kept inside the view. */
+export function markerAt(ring: Box, view: Box, size = MARKER): { left: number; top: number } {
+  const left = Math.min(Math.max(ring.left - size / 2, view.left + 2), view.right - size - 2);
+  const top = Math.min(Math.max(ring.top - size / 2, view.top + 2), view.bottom - size - 2);
+  return { left, top };
 }

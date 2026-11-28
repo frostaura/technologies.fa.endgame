@@ -29,7 +29,7 @@ builds, approvals and conversations move as they do live. It is published as sta
 | Story world | `demo/world/default.ts`, `story.ts`, `scenarios.ts` | Northwind and two more organisations, all invented, every address on `.example`. Scenarios and personas. | Names a real company or person. |
 | Device | `demo/device.ts` | `navigator.credentials` answered by an in-page "your device" sheet (approve or cancel). Embedded, it never answers on a timer: it waits for the lesson — a step that chooses on the sheet (it is not demo chrome, so a step can ring and click it), or a step's `wait`, during which the person approves. Standalone with `device=auto`, it approves itself after 0.7 s. | Is real WebAuthn. The development sign-in is never offered (`auth/options` says so, `auth/development` is 404) — except in the two scenarios that play a development deployment (`s1-development-sign-in`, `s1-development-apps`), for the Developer track. |
 | Hosted apps | `demo/hosted/**` | The Edge's own pages, copied from `Endgame.Edge/Pages/*.cs` and `Access/*.cs` with their wording and CSS, the access gate's decisions, and a small reading-list app behind them, at both addresses. | Runs the Edge's scripts: their passkey ceremonies and control-plane calls are answered by the demo. |
-| Bridge | `demo/bridge.ts`, `overlay.ts` | The academy's postMessage protocol and `window.endgameDemo`; the spotlight ring and the soft cursor, also on an Edge page drawn in its frame (it shares the origin). | Blocks a click: every overlay is `pointer-events: none`. |
+| Bridge | `demo/bridge.ts`, `overlay.ts`, `placement.ts` | The academy's postMessage protocol and `window.endgameDemo`; the spotlight ring with the step's number and the soft cursor, also on an Edge page drawn in its frame (it shares the origin). | Blocks a click: every overlay is `pointer-events: none`. Writes words over the console: a step's caption is the academy's, under its frame. |
 
 A link that leaves the console (`https://…`) is caught before the browser follows it: a hosted
 app's address opens its pages inside the demo; anything else shows a small notice. An in-page link
@@ -196,13 +196,14 @@ reply echoes the request's `id`. An `act` is acknowledged at once (`op: "act"`) 
 `{ op: "step-done", args: { id } }`; any failure is `{ op: "error", id, args: { message } }`.
 Unprompted, the demo emits `{ op: "ready", args: { embed, viewport } }` once and `{ op: "route", args: { route } }`
 on every change of address. The same operations are `window.endgameDemo.goto | highlight | act |
-clock | layout | reset` for tests.
+clock | layout | reset` for tests, with `state()`, `inspect(target)` and `ring()` (whether the ring is
+drawn, its box, the part of it in view and the area it is cut to) for the academy's checks.
 
 | op | args | Does |
 | --- | --- | --- |
 | `goto` | `{ route?, persona?, scenario? }` | Switches persona and/or scenario (a new scenario is a new world), then opens the route (default: the scenario's). |
-| `highlight` | `{ selector? \| testId? \| text? \| label?, note? }`; `{}` clears | Clears the ring and note already shown, waits (up to 4 s) until nothing on screen is still loading — no skeleton, no busy region — then scrolls the control into view (a control taller than the view at its top, its heading kept in view) and rings it, with the note beside it; waits up to 5 s for it. The ring stands off the control into the gap around it, never over a neighbour's words; the note goes below, above or beside the ring, wherever it covers least of the page and never the ring. |
-| `act` | `{ actions: Action[], instant? }` | Clears the step before's ring and note, then performs the actions with a soft cursor and typed text; `instant` performs them with no motion. Each waits up to 6 s for its target. `press: "Tab"` moves the focus to the next control, as the browser does; `hover` rests the pointer on a target, so what the page shows on hover appears; `attach: { files: [{ name, text? \| base64? }] }` adds files to the open conversation's composer, as a person picking them would (ARCH-012). A `wait` approves an open (or opening) device sheet; a `wait` for a time then lasts until the control plane has answered what the step started, played or instant alike. |
+| `highlight` | `{ selector? \| testId? \| text? \| label?, marker?, region?, none? }`; `{}` clears | Clears the ring already shown, waits (up to 4 s) until nothing on screen is still loading — no skeleton, no busy region — then finds the target (up to 5 s), scrolls what it shows into view and rings it with `marker` (the step's number) on its corner, and answers once the scroll has come to rest. `region: true` rings the target as it is (a region showing a state); `none: "<why>"` says the step has nothing to ring, and only clears. A `note` is accepted and never drawn. |
+| `act` | `{ actions: Action[], instant? }` | Clears the step before's ring, then performs the actions with a soft cursor and typed text; `instant` performs them with no motion. Each waits up to 6 s for its target. `press: "Tab"` moves the focus to the next control, as the browser does; `hover` rests the pointer on a target, so what the page shows on hover appears; `attach: { files: [{ name, text? \| base64? }] }` adds files to the open conversation's composer, as a person picking them would (ARCH-012). A `wait` approves an open (or opening) device sheet; a `wait` for a time then lasts until the control plane has answered what the step started, played or instant alike. |
 | `clock` | `{ play?, pause?, speed?, seek? }` | Plays, pauses, sets the speed, or jumps (a moment's name or milliseconds). |
 | `layout` | `{}` | Replies `{ op: "layout", args: { viewport, width, height, breakpoints, top, bottom } }`: the layout the console draws in this frame (`phone`, `tablet` or `desktop`), the frame's size, the widths it changes at (`lib/tokens.ts` `breakpoints`), and how much of the frame its own header takes at the top and its bottom bar at the foot, so an overlay drawn outside the frame can keep clear of them. Asking never changes anything. |
 | `reset` | `{}` | Rebuilds the scenario's world from scratch and opens its route, as a first visit: every key the console keeps in the tab's storage (all named `endgame.…` — the mode, the organisation chosen, the one entered, the address kept across a sign-in) is removed, and so is what the demo holds for the page's life (an open device sheet, a half-way passkey ceremony, the hosted apps' device and reading lists) — `demo/pristine.ts`. A `goto` to another scenario does the same. |
@@ -210,39 +211,53 @@ clock | layout | reset` for tests.
 A highlight that finds nothing replies `{ op: "highlight", args: { found: false } }` and draws
 nothing, so a lesson never breaks in front of a learner; an action whose target is missing is an
 `error`. Drift is caught at build instead: `tests-demo/academy-scripts.spec.ts` plays every academy
-step script against the built demo and fails, naming flow and step, on any action that errors or
-any highlight that finds nothing, unless `tests-demo/academy-allowlist.json` lists that step with
-its reason (`{ flow, step, reason }`, with `variation: n` for a step of a script's n-th variation);
-an allow-listed step that passes again fails too, so the list stays true. Each variation plays from
-its own start, as its own persona and scenario. `ACADEMY_FLOWS=ID,PPL` plays only the scripts whose
-flow id starts with one of those prefixes.
+step script, and every variation from its own start as its own persona and scenario, against the
+built demo on both consoles the academy frames — 1280 × 800 and 390 × 640 (a `device: "phone"`
+script on the phone's only) — and fails, naming flow, step and size, when a step: has an action
+that errors or a highlight that finds nothing; ends, on the phone, at another address than on the
+laptop; draws no ring, or a ring that is cut or runs outside the console (unless its highlight is
+`none`); draws a caption bubble; or rings what the step before rang with the same caption. A demo step with no highlight at all fails the run too: it says what
+it is about, or `none` and why. An entry in `tests-demo/academy-allowlist.json`
+(`{ flow, step, reason, variation?, size? }`) excuses a step, and an allow-listed step that passes
+again fails, so the list stays true. Each test records what it checked as its `steps` annotation.
+`ACADEMY_FLOWS=ID,PPL` plays only the scripts whose flow id starts with one of those prefixes.
 
 A step is one moment however it is reached. For the identity flows (`SAME_MOMENT`), the check plays
-the script a second time, catching up step by step as a link straight to a step does, and fails
+the script a second time on the laptop's console, catching up step by step as a link straight to a step does, and fails
 when a step's state (`endgameDemo.state()`: the address, who is signed in, the device sheet, the
 heading, once the control plane has answered) differs from the state the step-by-step play left.
 
 **At phone width.** The console's layout depends only on the width (and, on its side, the height)
-of its own viewport — inside the academy's frame, the frame's — so a frame under 640 px wide, or
-under 500 px tall and under 1024 px wide, shows the phone layout and a wider one the tablet
-(640–1023 px) or desktop layout, with no parameter or message: a phone's academy and a desktop's
-play the same scripts. The academy's desktop stage (about 800 px) is the tablet layout, which keeps
-every desktop hook — the conversation stays in the page. On a phone a step can name something the
-page holds but does not show: a section folded to its row (`[data-fold-body]`), a folded division,
-or the conversation in its closed sheet (`[data-talk-target]`). `highlight` and `act` then ask the
-place that holds it to show itself (an `endgame:reveal` event, which the fold and the shell answer by
-opening) and find it once shown, so a lesson written at desktop size needs no phone variant. The
-ring, the cursor and the note are fixed to the frame's viewport above every sheet and the bottom
-bar (`z-50`), so they stay on screen and legible when the target is inside a sheet or the bar.
+of its own viewport. The academy's frame always draws it at one of two fixed sizes (ARCH-010): a
+laptop's 1280 × 800, or a phone's 390 × 640, which is the phone layout with its bottom bar — so a
+lesson plays on the layout its script was written for, and the scripts are checked at both. On a
+phone a step can name something the page holds but does not show: a section folded to its row
+(`[data-fold-body]`), a folded division, or the conversation in its closed sheet
+(`[data-talk-target]`). `highlight` and `act` take what the words name outright and shown first;
+else they ask the place that holds it to show itself (an `endgame:reveal` event, which the fold and
+the shell answer by opening) and find it once shown — before taking a control that merely mentions
+the words (a folded row whose summary lists "Hiring" is not the "Hiring" link inside it). A field
+is found in a fold by its placeholder or label. So a lesson written at desktop size needs no phone
+variant. The ring and the cursor are fixed to the frame's viewport above every sheet and the bottom
+bar (`z-50`).
 
-**How the marks look** (`overlay.ts`, `placement.ts`). The note is set where it covers neither the
-ring nor the page's words (covering a pixel of words or a control costs eight pixels of distance),
-with a small pointer on the side facing the ring, aimed at its middle. While something modal — a
-dialog, a sheet, the device's prompt — covers the ringed control, the ring and note are hidden, and
-return when it closes. The cursor is a small arrow, not a dot: its tip rests just inside the lower
-edge of the control it presses (`approach` in `bridge.ts`), so it never sits over the label, and it
-fades out after the press. It carries `data-demo-cursor`, the note `data-demo-note`, so a capture can
-leave both out (`make academy-shots` does, for the print copies).
+**How the marks look** (`overlay.ts`, `placement.ts`). The ring goes round the card or tile a
+step's heading, label or figure sits in (`chooseSubject`: the nearest ancestor drawn as a card —
+a border, a shadow, a ground of its own, a list item — that takes at most 62 % of the view's
+height), not round one line of words; a control is ringed as itself, and a speck (a 6 px dot) grows
+to what is around it. A step about another thing inside a card an earlier step of the same lesson
+rang rings that thing, not the card again. The ring stands 10 px off what it surrounds, closing to
+the middle of a gap where a neighbour's words come nearer, never under 4 px. It is cut where the
+scroll area it sits in ends (a pane, a sheet, under the sticky header, above the bottom bar), and
+not drawn at all while what it marks is out of view or under a dialog. The step's number sits on
+its top-left corner (`data-demo-marker`). Before it is drawn, what it surrounds is scrolled so it
+shows whole (`snapScroll`): left where it is when it already does, with room around it; else its
+top is snapped 20 px under the top of the view it scrolls in (under a sticky header), so a card is
+never sliced and an approval shows with its Approve and Decline; one taller than the view keeps the
+named element in view. Embedded, the scrollbar corner takes the page's ground. The cursor is a
+small arrow: its tip rests just inside the lower edge of the control it presses (`approach` in
+`bridge.ts`), and it fades out after the press. It carries `data-demo-cursor`, so a capture can
+leave it out.
 
 A target is a CSS `selector`, a `testId`, or visible `text` / accessible `label`, matched in that
 order of preference: buttons, links and other controls by accessible name (exact, then prefix,

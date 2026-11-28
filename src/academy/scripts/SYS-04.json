@@ -8,15 +8,8 @@
     {
       "step": 1,
       "kind": "demo",
-      "act": [
-        {
-          "click": {
-            "text": "Technical"
-          }
-        }
-      ],
       "highlight": {
-        "text": "System status could not be loaded",
+        "text": "Endgame could not be asked how it is",
         "note": "The first check could not reach the control plane: nothing below is known."
       }
     },
@@ -31,8 +24,8 @@
         }
       ],
       "highlight": {
-        "selector": "ul[aria-label='Services']",
-        "note": "Try again checks, and the services appear."
+        "selector": "section[aria-label='Whether Endgame is working']",
+        "note": "Try again checks, and once the check answers, the page says how Endgame is."
       }
     }
   ],

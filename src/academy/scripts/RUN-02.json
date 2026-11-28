@@ -8,6 +8,13 @@
     {
       "step": 1,
       "kind": "demo",
+      "act": [
+        {
+          "clock": {
+            "pause": true
+          }
+        }
+      ],
       "highlight": {
         "text": "actions taken",
         "note": "Normal mode counts the actions; refusals would be counted too."
@@ -52,6 +59,11 @@
         "seek": "build:finished"
       },
       "act": [
+        {
+          "clock": {
+            "play": true
+          }
+        },
         {
           "wait": {
             "text": "Outcome"

@@ -4,7 +4,8 @@ import { approveWhileWaiting, deviceAsking } from "./device";
 import { currentAddress } from "@/lib/router";
 import { breakpoints } from "@/lib/tokens";
 import { currentViewport } from "@/lib/useViewport";
-import { clearSpotlight, moveCursor, pageRect, showSpotlight } from "./overlay";
+import { clearSpotlight, clipFor, coveringLayer, forgetSteps, moveCursor, pageRect, ringState, showSpotlight, subjectOf } from "./overlay";
+import { snapScroll } from "./placement";
 
 /**
  * The academy bridge (ARCH-009): a small postMessage protocol through which a parent frame drives
@@ -121,11 +122,11 @@ function documents(): Document[] {
 }
 
 /** The element a target names, or null; `field` prefers form controls (for typing and selecting), `show` is a spotlight's search. */
-export function find(target: Target | string, field = false, strict = false, show = false): HTMLElement | null {
+export function find(target: Target | string, field = false, strict = false, show = false, exactOnly = false): HTMLElement | null {
   laidOut = new WeakMap();
   try {
     for (const doc of documents()) {
-      const el = findIn(doc, target, field, strict, show);
+      const el = findIn(doc, target, field, strict, show, exactOnly);
       if (el) return el;
     }
     return null;
@@ -161,7 +162,8 @@ const TEXTS = "h1, h2, h3, h4, h5, h6, p, span, li, dt, dd, th, td, div, strong,
 const byLength = (name: (el: HTMLElement) => string) => (a: HTMLElement, b: HTMLElement) => Number(isDestructive(a)) - Number(isDestructive(b)) || name(a).length - name(b).length;
 
 /** `strict`: only a control or field that the words name — never a region or a run of text that merely holds them. */
-function findIn(document: Document, target: Target | string, field: boolean, strict = false, show = false): HTMLElement | null {
+/** `exactOnly`: only what the words name outright — a control, field, heading or run of words that is exactly them. */
+function findIn(document: Document, target: Target | string, field: boolean, strict = false, show = false, exactOnly = false): HTMLElement | null {
   const t: Target = typeof target === "string" ? { text: target } : target;
   if (t.selector) return [...document.querySelectorAll<HTMLElement>(t.selector)].find(visible) ?? null;
   if (t.testId) return [...document.querySelectorAll<HTMLElement>(`[data-testid="${CSS.escape(t.testId)}"]`)].find(visible) ?? null;
@@ -197,6 +199,7 @@ function findIn(document: Document, target: Target | string, field: boolean, str
     const words = smallest([...document.body.querySelectorAll<HTMLElement>(TEXTS)].filter((el) => textOf(el) === want && visible(el)));
     if (words) return words;
   }
+  if (exactOnly) return null;
   // Controls the words start, or are part of — whole words first, and a control that deletes or ends something last.
   const starts = controls.filter((c) => nameOf(c).startsWith(want) && holdsWhole(nameOf(c), want)).sort(byLength(nameOf))[0];
   if (starts) return starts;
@@ -254,7 +257,9 @@ export function revealHidden(target: Target | string): boolean {
   for (const box of document.querySelectorAll<HTMLElement>("[data-fold-body], [data-talk-target]")) {
     // Shown already (a `display: contents` box has no box of its own; its parent says whether it shows).
     if (box.getClientRects().length > 0 || (box.parentElement?.getClientRects().length ?? 0) > 0 && getComputedStyle(box).display !== "none" && !box.closest("[hidden]")) continue;
-    const holds = t.selector ? !!box.querySelector(t.selector) : t.testId ? !!box.querySelector(`[data-testid="${CSS.escape(t.testId)}"]`) : !!want && compact(box.textContent).includes(want);
+    // A field is named by its placeholder or label, which are not among its words.
+    const named = () => [...box.querySelectorAll("[placeholder], [aria-label]")].some((el) => compact(el.getAttribute("placeholder")).includes(want) || compact(el.getAttribute("aria-label")).includes(want));
+    const holds = t.selector ? !!box.querySelector(t.selector) : t.testId ? !!box.querySelector(`[data-testid="${CSS.escape(t.testId)}"]`) : !!want && (compact(box.textContent).includes(want) || named());
     if (!holds) continue;
     box.dispatchEvent(new CustomEvent("endgame:reveal", { bubbles: true }));
     asked = true;
@@ -262,12 +267,35 @@ export function revealHidden(target: Target | string): boolean {
   return asked;
 }
 
-async function waitFor(target: Target | string, field = false, ms = 6000, preferControls = false, show = false): Promise<HTMLElement> {
+/**
+ * `sheetsAfter`: from how many milliseconds a phone's sheets are looked in (`lookInSheets`) — never
+ * (Infinity) for a step waiting for something to appear, which must not open a sheet over it.
+ */
+async function waitFor(target: Target | string, field = false, ms = 6000, preferControls = false, show = false, sheetsAfter = Infinity): Promise<HTMLElement> {
   const until = performance.now() + ms;
   // What a step acts on is a control: while one may still be loading, plain text that happens to
   // hold the same words ("…replace it.", "Ask it again…") is not taken for it.
   const patient = preferControls ? performance.now() + Math.min(ms, 4000) : 0;
+  // What the words name outright, shown, comes first; then a folded section or a closed sheet that
+  // holds it is asked to open (on a phone, "Hiring" is a link inside a folded list whose own row
+  // merely mentions it); only then a control or text that holds the words is taken.
+  const unfoldUntil = performance.now() + Math.min(ms, 2500);
+  // On a phone, what a desktop shows in its header or in full on home (the mode, your account, a
+  // page's link, what needs you) is in a sheet: once the screen has had a moment, each is looked in.
+  const moreFrom = performance.now() + sheetsAfter;
+  let triedMore = false;
   for (;;) {
+    const exact = find(target, field, true, show, true);
+    if (exact) return exact;
+    if (performance.now() < unfoldUntil && revealHidden(target)) {
+      await sleep(80);
+      continue;
+    }
+    if (!triedMore && performance.now() > moreFrom) {
+      triedMore = true;
+      const inMore = await lookInSheets(target, field, show);
+      if (inMore) return inMore;
+    }
     const el = find(target, field, performance.now() < patient, show);
     if (el) return el;
     const asked = revealHidden(target);
@@ -276,34 +304,112 @@ async function waitFor(target: Target | string, field = false, ms = 6000, prefer
   }
 }
 
+/**
+ * The sheets a phone keeps a desktop's page in: the bottom bar's More (every page, your account,
+ * the mode) and home's "things need you" summary (the list a desktop shows in full).
+ */
+const SHEETS = ["[data-needs-summary]", "[data-bottom-nav] [aria-label^='More']"];
+
+/** The sheet `lookInSheets` opened to find what a step acts on: closed again once the act is done, as a person would. */
+let openedSheet: HTMLElement | null = null;
+
+/** Closes the sheet opened to act in, if what was pressed left it open (the mode switch does). */
+async function closeOpenedSheet() {
+  const sheet = openedSheet;
+  openedSheet = null;
+  if (!sheet || !sheet.isConnected || !visible(sheet)) return;
+  sheet.querySelector<HTMLElement>("[aria-label^='Close']")?.click();
+  await sleep(instantNow ? 60 : 250);
+}
+
+/** Opens each sheet in turn and finds what the words name outright in it; closes it again when it holds nothing. */
+async function lookInSheets(target: Target | string, field: boolean, show: boolean): Promise<HTMLElement | null> {
+  const open = () => [...document.querySelectorAll<HTMLElement>("[role=dialog]")].filter(visible);
+  // A prompt that asks something (the device, a confirmation) is never closed to look elsewhere; a
+  // sheet (the conversation, More) is, as a person closes it to reach the page.
+  for (const sheet of open()) {
+    const close = sheet.querySelector<HTMLElement>("[aria-label^='Close: ']");
+    if (!close) return null;
+    close.click();
+    await sleep(instantNow ? 120 : 300);
+  }
+  for (const selector of SHEETS) {
+    const opener = [...document.querySelectorAll<HTMLElement>(selector)].find(visible);
+    if (!opener) continue;
+    opener.click();
+    await sleep(instantNow ? 120 : 350);
+    // What the words name outright; else, inside the sheet just opened only, a control they begin or hold.
+    const sheet = open().at(-1);
+    const near = find(target, field, true, show, false);
+    const found = find(target, field, true, show, true) ?? (sheet && near && sheet.contains(near) ? near : null);
+    if (found) {
+      openedSheet = found.closest<HTMLElement>("[role=dialog]");
+      return found;
+    }
+    // Closed by its own Close, and only it.
+    for (const sheet of open()) sheet.querySelector<HTMLElement>("[aria-label^='Close']")?.click();
+    await sleep(instantNow ? 60 : 200);
+  }
+  return null;
+}
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
 const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/** How much of the page above a tall control stays in view: the page's heading, or the section's. */
-const CONTEXT = 96;
-/** Room kept above a control left where it is, and under it, clear of a phone's bottom bar and the note. */
-const EDGE_ROOM = 24;
-const FOOT_ROOM = 96;
+/** A sticky bar at the top of a scroll area (a pane's "Talking to …" header): the area's view starts under it. */
+function stickyTop(box: Element, el: Element): number {
+  let top = box.getBoundingClientRect().top + (box as HTMLElement).clientTop;
+  const start = top;
+  const near = [...box.children].flatMap((c) => [c, ...c.children]);
+  for (const c of near) {
+    if (c.contains(el)) continue;
+    const s = windowOf(c).getComputedStyle(c);
+    if (s.position !== "sticky") continue;
+    const r = c.getBoundingClientRect();
+    if (r.height > 0 && r.top <= start + 2) top = Math.max(top, r.bottom);
+  }
+  return top;
+}
+
+/** Fixed or sticky bars over the console's page (its header, a phone's bottom bar) that a step's subject must clear. */
+function pageBars(el: Element): { top: number; bottom: number } {
+  const win = windowOf(el);
+  if (win !== window) return { top: 0, bottom: win.innerHeight };
+  const clip = clipFor(document.body);
+  return { top: clip.top, bottom: clip.bottom };
+}
 
 /**
- * Brings an element into view in the demo's own page — and in an Edge page's frame, for a control
- * inside one — and never further out. `scrollIntoView` would also scroll the academy's page around
- * the embedded demo (they share an origin), which moves the learner off the step. A control that
- * fits is set in the middle; one taller than the view is set at its top, with what heads it kept in
- * view (the page's own top when the control starts near it), so it is read from its beginning.
+ * Brings what a step shows into view in the demo's own page — and in an Edge page's frame, for a
+ * control inside one — and never further out. `scrollIntoView` would also scroll the academy's page
+ * around the embedded demo (they share an origin), which moves the learner off the step. A subject
+ * already in view, with room around it, stays where it is; otherwise it is snapped so its top sits
+ * a margin under the top of the view it scrolls in (under a sticky header), so a card is read from
+ * its beginning and its actions at its foot show with it; one taller than the view keeps the
+ * element it holds in view (`snapScroll`). `subject` is what is shown (the card around a heading);
+ * `el` is what the step named.
  */
-function reveal(el: Element, smooth: boolean) {
+function reveal(el: Element, smooth: boolean, subject: Element = el) {
   const behavior: ScrollBehavior = smooth ? "smooth" : "auto";
+  const box4 = (r: DOMRect) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+  /** How far the scroll areas already asked have moved the element, for the ones outside them. */
+  let moved = 0;
   for (let box = el.parentElement; box && box !== el.ownerDocument.documentElement && box !== el.ownerDocument.body; box = box.parentElement) {
     const style = windowOf(box).getComputedStyle(box);
     if (box.scrollHeight > box.clientHeight && /(auto|scroll)/.test(style.overflowY)) {
-      const r = el.getBoundingClientRect();
+      const shown = box.contains(subject) ? subject : el;
       const b = box.getBoundingClientRect();
-      const by = r.height > b.height * 0.8 ? r.top - b.top : r.top - b.top - (b.height - r.height) / 2;
-      box.scrollBy({ top: by, behavior });
+      const view = { left: b.left, right: b.right, top: stickyTop(box, el), bottom: b.top + box.clientTop + box.clientHeight };
+      const s = box4(shown.getBoundingClientRect());
+      const n = box4(el.getBoundingClientRect());
+      const by = Math.max(-box.scrollTop, Math.min(snapScroll(s, n, view, 16), box.scrollHeight - box.clientHeight - box.scrollTop));
+      if (by) {
+        box.scrollBy({ top: by, behavior });
+        moved += by;
+      }
     }
     // A drawing wider than its frame (the organisation graph) is moved sideways to it, inside the frame only.
     if (box.scrollWidth > box.clientWidth && /(auto|scroll)/.test(style.overflowX)) {
@@ -313,17 +419,29 @@ function reveal(el: Element, smooth: boolean) {
     }
   }
   const win = windowOf(el);
-  const r = el.getBoundingClientRect();
-  const fromTop = win.scrollY + r.top;
-  let by = r.top - (win.innerHeight - r.height) / 2;
-  if (r.height > win.innerHeight * 0.8) by = fromTop < win.innerHeight / 2 ? -win.scrollY : r.top - CONTEXT;
-  // A tidy position, never an arbitrary slice of the page: a control already well in view stays where
-  // it is, and one that fits on the page's first screen is shown with the page at its top.
-  else if (r.top >= EDGE_ROOM && r.bottom <= win.innerHeight - FOOT_ROOM) by = 0;
-  else if (fromTop + r.height <= win.innerHeight - FOOT_ROOM) by = -win.scrollY;
+  const bars = pageBars(el);
+  const shift = (r: DOMRect) => ({ left: r.left, right: r.right, top: r.top - moved, bottom: r.bottom - moved });
+  const s = shift(subject.getBoundingClientRect());
+  const n = shift(el.getBoundingClientRect());
+  const by = snapScroll(s, n, { left: 0, right: win.innerWidth, top: bars.top, bottom: bars.bottom });
   if (by) win.scrollBy({ top: by, behavior });
   const frame = win.frameElement;
   if (frame && win !== window) reveal(frame, smooth);
+}
+
+/** Resolves once the page and every scroll area have stopped moving (a smooth scroll ends), at most `ms`. */
+async function scrolledToRest(el: Element, ms = 1500) {
+  const until = performance.now() + ms;
+  let last = "";
+  let still = 0;
+  while (performance.now() < until) {
+    const r = el.getBoundingClientRect();
+    const now = `${Math.round(r.top)},${Math.round(r.left)},${window.scrollY}`;
+    still = now === last ? still + 1 : 0;
+    last = now;
+    if (still >= 3) return;
+    await new Promise((res) => requestAnimationFrame(res));
+  }
 }
 
 /** A region still loading: a skeleton's shimmer, or a region marked busy. */
@@ -423,13 +541,15 @@ function tabFrom(from: HTMLElement) {
 
 async function perform(action: Action) {
   if ("click" in action) {
-    const el = await waitFor(action.click, false, 6000, true);
+    const el = await waitFor(action.click, false, 6000, true, false, 1200);
     await approach(el);
     focusUnlessEmbedded(el);
     el.click();
+    await sleep(instantNow ? 30 : 200);
+    await closeOpenedSheet();
   } else if ("hover" in action) {
     // The pointer comes to rest on it, as a mouse would: what the page shows on hover (a line's name) appears.
-    const el = await waitFor(action.hover, false, 6000);
+    const el = await waitFor(action.hover, false, 6000, false, false, 1200);
     await approach(el);
     const win = windowOf(el);
     const r = el.getBoundingClientRect();
@@ -439,7 +559,7 @@ async function perform(action: Action) {
     el.dispatchEvent(new win.MouseEvent("mouseover", at));
     el.dispatchEvent(new win.MouseEvent("mouseenter", { ...at, bubbles: false }));
   } else if ("type" in action) {
-    const el = await waitFor(action.type.into, true, 6000, true);
+    const el = await waitFor(action.type.into, true, 6000, true, false, 1200);
     await approach(el);
     focusUnlessEmbedded(el);
     if (instantNow || reduced()) setValue(el, action.type.text);
@@ -452,12 +572,15 @@ async function perform(action: Action) {
       }
     }
   } else if ("select" in action) {
-    const el = await waitFor(action.select.into, true, 6000, true);
+    const el = await waitFor(action.select.into, true, 6000, true, false, 1200);
     await approach(el);
     const want = norm(action.select.value);
     if (el.tagName === "SELECT") {
       const list = el as HTMLSelectElement;
-      const option = [...list.options].find((o) => norm(o.textContent) === want || norm(o.value) === want) ?? [...list.options].find((o) => norm(o.textContent).startsWith(want));
+      const pick = () => [...list.options].find((o) => norm(o.textContent) === want || norm(o.value) === want) ?? [...list.options].find((o) => norm(o.textContent).startsWith(want));
+      // A list filled from the control plane (the levels of the tree) may still be filling in.
+      let option = pick();
+      for (const until = performance.now() + 3000; !option && performance.now() < until; option = pick()) await sleep(100);
       if (!option) throw new Error(`The list ${JSON.stringify(action.select.into)} has no ${action.select.value}.`);
       setValue(el, option.value);
     } else {
@@ -531,23 +654,46 @@ export const endgameDemo = {
   /** Resolves once the new screen has been drawn, so what a step then acts on is that screen's. */
   async goto(args: { route?: string; persona?: string; scenario?: string }) {
     clearSpotlight();
+    forgetSteps();
+    openedSheet = null;
     keepFocusOut(performance.now() + 2000);
     goto(args);
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   },
-  async highlight(args: Target & { note?: string }) {
-    // The ring and note of the step before name what that step showed; they go while this one is found.
+  /**
+   * Rings what a step is about. `marker` is the step's number, drawn on the ring; `region` rings a
+   * region as it is (a step showing a state, not a control); `none` says, with its reason, that the
+   * step has nothing to ring, and clears the ring. Any `note` is the academy's to show under its
+   * frame: nothing is written over the console.
+   */
+  async highlight(args: Target & { note?: string; marker?: number; region?: boolean; none?: string }) {
+    // The ring of the step before names what that step showed; it goes while this one is found.
     clearSpotlight();
-    if (!args.selector && !args.testId && !args.text && !args.label) return;
+    openedSheet = null;
+    if (args.none) return true;
+    const target: Target = { selector: args.selector, testId: args.testId, text: args.text, label: args.label };
+    if (!target.selector && !target.testId && !target.text && !target.label) return;
     // A spotlight is guidance, not an action: when nothing matches, the step still goes on, unlit.
-    await settled(4000, () => find(args, false, false, true));
-    const el = await waitFor(args, false, 5000, false, true).catch(() => null);
+    await settled(4000, () => find(target, false, false, true));
+    // A spotlight looks in a phone's sheets only once what it names has had time to appear on the page.
+    const el = await waitFor(target, false, 5000, false, true, 2500).catch(() => null);
     if (!el) {
       clearSpotlight();
       return false;
     }
-    reveal(el, !reduced());
-    showSpotlight(el, args.note ?? null, () => find(args, false, false, true));
+    // On a phone, a page's conversation or More is a sheet over it: a step about the page closes the
+    // sheet first (its own "Close: …"), as the laptop's docked pane never hides the page. A prompt
+    // that asks something (the device, a confirmation) is never closed for it.
+    const layer = coveringLayer(el);
+    const close = layer?.querySelector<HTMLElement>("[aria-label^='Close: ']");
+    if (close) {
+      close.click();
+      await sleep(300);
+    }
+    const subject = subjectOf(el, !!args.region);
+    reveal(el, !reduced(), subject);
+    showSpotlight(el, { marker: typeof args.marker === "number" ? args.marker : null, region: !!args.region, keep: () => reveal(el, false, subject) }, () => find(target, false, false, true));
+    await scrolledToRest(el);
     return true;
   },
   async act(actions: Action[], instant = false) {
@@ -583,10 +729,13 @@ export const endgameDemo = {
   },
   inspect,
   state,
+  /** What the ring shows now (drawn, its box, the part in view, the area it is cut to): for the academy's checks. */
+  ring: ringState,
   /** Resolves once nothing on the screen is still loading (at most `ms`). */
   settled,
   reset() {
     clearSpotlight();
+    forgetSteps();
     reset();
   },
 };
@@ -609,6 +758,11 @@ function keepFocusOut(until: number) {
 export function installBridge(embedded: boolean) {
   embeddedNow = embedded;
   if (embedded) {
+    // In the academy's rounded frame, the corner where two scrollbars meet takes the page's own
+    // ground rather than the browser's black square.
+    const corner = document.createElement("style");
+    corner.textContent = "::-webkit-scrollbar-corner { background: transparent; }";
+    document.head.append(corner);
     // A screen that focuses a field by itself (a form or a confirmation the step opened) would pull
     // focus — and the browser's scroll — out of the academy page and into the frame. While a step
     // plays, and just after, that focus is not taken.
@@ -637,7 +791,7 @@ async function handle(m: Envelope) {
         post({ id: m.id, op: "goto" });
         break;
       case "highlight":
-        post({ id: m.id, op: "highlight", args: { found: (await endgameDemo.highlight(args as Target & { note?: string })) !== false } });
+        post({ id: m.id, op: "highlight", args: { found: (await endgameDemo.highlight(args as Target & { note?: string; marker?: number; region?: boolean; none?: string })) !== false } });
         break;
       case "act": {
         post({ id: m.id, op: "act" });

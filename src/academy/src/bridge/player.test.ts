@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { variationScript, type StepScript } from "../content/scripts.ts";
-import { plan, planExplore } from "./player.ts";
+import { plan, planExplore, scenarioAt } from "./player.ts";
 
 const script: StepScript = {
   flow: "ID-01",
@@ -34,8 +34,13 @@ describe("the step player", () => {
     expect(p.at(-1)).toEqual({ op: "highlight", args: {}, catchUp: false });
   });
 
-  it("a step with no demo media sends the console nothing when moving on by one", () => {
-    expect(plan(script, 2, 3)).toEqual([]);
+  it("a step with no demo media only clears the ring of the step before when moving on by one", () => {
+    expect(plan(script, 2, 3)).toEqual([{ op: "highlight", args: {}, catchUp: false }]);
+  });
+
+  it("a step the script leaves out clears the ring too, so no step shows another's", () => {
+    expect(plan(script, 4, 5)).toEqual([{ op: "highlight", args: {}, catchUp: false }]);
+    expect(ops(plan(script, 0, 5)).at(-1)).toBe("highlight");
   });
 
   it("jumping resets and replays earlier steps instantly, without their spotlights", () => {
@@ -66,6 +71,13 @@ describe("the step player", () => {
     const jump = plan(handover, 0, 3);
     expect(jump[1]?.args).toMatchObject({ persona: "operator" });
     expect(jump.filter((o) => o.op === "goto").map((o) => o.args.persona)).toEqual(["operator", "owner", "owner"]);
+  });
+
+  it("a step can open another world, which the steps after it keep", () => {
+    const s: StepScript = { ...script, steps: [{ step: 1, kind: "demo" }, { step: 2, kind: "demo", goto: "/", scenario: "talk-long-history", highlight: { selector: "[data-work-card]" } }, { step: 3, kind: "demo", highlight: { text: "x" } }] };
+    expect(plan(s, 1, 2)[0]?.args).toMatchObject({ route: "/", scenario: "talk-long-history" });
+    expect(scenarioAt(s, 3)).toBe("talk-long-history");
+    expect(scenarioAt(s, 1)).toBe(script.scenario);
   });
 
   it("an unscripted screen flow opens on its own start address", () => {

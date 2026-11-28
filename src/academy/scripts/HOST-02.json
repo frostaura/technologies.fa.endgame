@@ -40,6 +40,14 @@
         "text": "Endgame could not reach it just now.",
         "note": "Anything else: “This app is temporarily unavailable”. No page ever names machinery."
       }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "Try again",
+        "note": "Each page offers “Try again”; the slow one also tries again by itself."
+      }
     }
   ]
 }

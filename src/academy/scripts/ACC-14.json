@@ -12,6 +12,14 @@
         "text": "This app is paused",
         "note": "Stock Counter's project spent its monthly budget: 503, and the app is never woken."
       }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "text": "Try again",
+        "note": "“Try again” is the same address; for its owner, a link to raise the budget in Endgame."
+      }
     }
   ],
   "variations": [

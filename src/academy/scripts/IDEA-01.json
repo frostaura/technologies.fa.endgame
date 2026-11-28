@@ -80,9 +80,9 @@
         }
       ],
       "highlight": {
-        "text": "Starting research…",
-        "note": "Pressed: the organisation is created first, then the idea."
-      }
+        "none": "“Starting research…” shows only while the organisation and the idea are made, which is over before a ring could be drawn; the next step rings the research it starts."
+      },
+      "note": "Pressed: the organisation is created first, then the idea."
     },
     {
       "step": 6,

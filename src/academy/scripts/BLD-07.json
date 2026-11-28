@@ -37,7 +37,7 @@
         }
       ],
       "highlight": {
-        "text": "Shown by the screen's own test",
+        "text": "Part 2 of 3",
         "note": "How a screen presents something is shown by the screen’s own test, which Endgame ran itself and saw pass."
       }
     },
@@ -48,6 +48,22 @@
         "text": "is finished: it works.",
         "note": "Each check is the QA engineer’s own task, finished with its own line."
       }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "highlight": {
+        "none": "The preview is destroyed once checked: nothing is left on screen to show."
+      },
+      "note": "The preview and its test data are destroyed afterwards; any e-mail it sent was held, never delivered."
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "none": "The flow repeats step 4 here: nothing more is left on screen to show."
+      },
+      "note": "A check never reaches a real inbox."
     }
   ]
 }

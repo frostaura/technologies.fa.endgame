@@ -14,9 +14,9 @@
         }
       ],
       "highlight": {
-        "text": "Skip to the content",
-        "note": "The first Tab lands here, top left. Beside the academy the console does not have your keyboard, so try Tab in it yourself to see the link appear."
-      }
+        "none": "The skip link shows only while it has the keyboard, and the console does not take the keyboard while a lesson plays; the step says so."
+      },
+      "note": "The first Tab lands here, top left. Beside the academy the console does not have your keyboard, so try Tab in it yourself to see the link appear."
     },
     {
       "step": 2,

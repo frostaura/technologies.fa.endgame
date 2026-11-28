@@ -1,0 +1,67 @@
+{
+  "$schema": "../schema/step-script.schema.json",
+  "flow": "SHL-07",
+  "persona": "owner",
+  "scenario": "established",
+  "start": "/",
+  "device": "phone",
+  "steps": [
+    {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "selector": "[data-bottom-nav]",
+        "note": "Home, Talk, Alerts with its unread count, the balance and More. The current one is marked."
+      }
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Talk to Northwind"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "[role=dialog]",
+        "region": true,
+        "note": "Talk opens this page’s conversation as a full-screen sheet; the message box stays at its foot."
+      }
+    },
+    {
+      "step": 3,
+      "kind": "demo",
+      "act": [
+        {
+          "click": {
+            "text": "Close: Talk to Northwind"
+          }
+        },
+        {
+          "wait": 400
+        },
+        {
+          "click": {
+            "text": "More: every page, your account and the mode"
+          }
+        }
+      ],
+      "highlight": {
+        "selector": "[role=dialog]",
+        "region": true,
+        "note": "More opens a sheet: every page you may open, then your account, the organisation and the mode."
+      }
+    },
+    {
+      "step": 4,
+      "kind": "demo",
+      "goto": "/apps/{app}",
+      "highlight": {
+        "text": "Ask about this app",
+        "note": "Long pages open folded: each section a named row, one tap to open."
+      }
+    }
+  ]
+}

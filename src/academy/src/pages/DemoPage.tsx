@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { DemoBridge, type BridgeState } from "../bridge/bridge.ts";
 import { DEMO_SRC } from "../stage/DemoFrame.tsx";
 import { href } from "../lib/router.ts";
-import { Mark } from "../components/Mark.tsx";
 
 /** The live demo, full screen, with a slim way back. */
 export function DemoPage({ back }: { back: string }) {
@@ -14,15 +13,16 @@ export function DemoPage({ back }: { back: string }) {
   }, []);
   return (
     <div className="flex h-screen-d flex-col bg-surface">
-      {/* One slim bar over the console's own header: the way back and what this is, together at the left. */}
-      <div className="flex h-10 shrink-0 items-center gap-3 border-b bg-ground px-2 text-sm sm:px-4">
-        <a href={back} className="-ml-1 inline-flex min-h-touch items-center gap-2 rounded-full px-2 font-medium text-ink hover:text-primary-link">
-          <Mark className="h-5 w-5" />
-          <span aria-hidden="true">←</span> Back to the academy
+      {/* One slim bar over the console's own header, with no logo of its own (the console's is right under it):
+          the way back, and that this is sample data. Longer words only where there is room for them. */}
+      <div className="flex h-11 shrink-0 items-center gap-3 border-b bg-surface px-2 text-sm sm:px-4">
+        <a href={back} aria-label="Back to the academy" className="inline-flex min-h-touch shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 font-medium text-ink hover:text-primary-link">
+          <span aria-hidden="true">←</span> Academy
         </a>
         <span className="h-4 border-l" aria-hidden="true" />
-        <span className="min-w-0 truncate text-ink-muted">Live demo, on sample data — nothing you do here is kept</span>
-        <a href={href("/learn")} className="ml-auto hidden shrink-0 font-medium text-primary-link hover:underline sm:inline">Learn it step by step</a>
+        <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-border-strong px-2.5 py-0.5 text-xs font-semibold text-ink-body">Sample data</span>
+        <span className="hidden min-w-0 truncate text-ink-muted md:inline">Live demo: nothing you do here is kept</span>
+        <a href={href("/learn")} className="ml-auto hidden shrink-0 whitespace-nowrap px-2 font-medium text-primary-link hover:underline sm:inline">Learn it step by step</a>
       </div>
       {state === "unavailable" ? (
         <div className="mx-auto flex max-w-read flex-1 flex-col justify-center px-4">

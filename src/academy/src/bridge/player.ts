@@ -32,9 +32,16 @@ export function personaAt(script: StepScript, n: number): StepScript["persona"] 
   return who;
 }
 
+/** The world at step n: the script's scenario, or the last one a step up to n opened. */
+export function scenarioAt(script: StepScript, n: number): StepScript["scenario"] {
+  let world = script.scenario;
+  for (const s of demoSteps(script, n)) if (s.scenario) world = s.scenario;
+  return world;
+}
+
 function opsFor(script: StepScript, s: DemoStep, catchUp: boolean): PlannedOp[] {
   const ops: PlannedOp[] = [];
-  const who = { persona: personaAt(script, s.step), scenario: script.scenario };
+  const who = { persona: personaAt(script, s.step), scenario: scenarioAt(script, s.step) };
   if (s.goto) ops.push({ op: "goto", args: { route: s.goto, ...who }, catchUp });
   if (s.clock) ops.push({ op: "clock", args: { ...s.clock }, catchUp });
   if (s.act) ops.push({ op: "act", args: { actions: s.act, ...(catchUp ? { instant: true } : {}) }, catchUp });
@@ -52,8 +59,11 @@ export function plan(script: StepScript, from: number, to: number, replay = fals
   const who = { persona: script.persona, scenario: script.scenario };
   const target = stepOf(script, to);
   const forwardByOne = !replay && from > 0 && to === from + 1;
+  // A step with no console play of its own (a request, a step the script leaves out) still clears
+  // the ring of the step before: it names what that step showed, not this one.
+  const clear: PlannedOp = { op: "highlight", args: {}, catchUp: false };
   if (forwardByOne) {
-    if (target?.kind !== "demo") return [];
+    if (target?.kind !== "demo") return [clear];
     return opsFor(script, target, false);
   }
   const ops: PlannedOp[] = [
@@ -62,6 +72,7 @@ export function plan(script: StepScript, from: number, to: number, replay = fals
   ];
   for (const s of demoSteps(script, to - 1)) ops.push(...opsFor(script, s, true));
   if (target?.kind === "demo") ops.push(...opsFor(script, target, false));
+  else ops.push(clear);
   return ops;
 }
 

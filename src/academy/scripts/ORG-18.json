@@ -37,7 +37,7 @@
       "kind": "demo",
       "goto": "/?organisation=northwind",
       "highlight": {
-        "text": "You are inside Northwind as a FrostAura operator",
+        "selector": "[aria-label='God mode']",
         "note": "The coral band names the organisation you are inside, with Leave Northwind."
       }
     },
@@ -45,7 +45,7 @@
       "step": 3,
       "kind": "demo",
       "highlight": {
-        "selector": "nav[aria-label='Manage']",
+        "selector": "nav[aria-label='Manage'], [data-bottom-nav] [aria-label^='More']",
         "note": "Everything else is home as an Admin sees it, People and Secrets included; the balance and the bell are Northwind's."
       }
     },

@@ -464,7 +464,9 @@ describe("the token layer holds nothing dead (ARCH-011)", () => {
 
   it("paints with every colour role it names", () => {
     const paint = "(?:bg|text|border|border-[trblxy]|ring|ring-offset|fill|stroke|outline|divide|shadow|accent|caret|decoration|placeholder)";
-    expect(Object.keys(flatRoles()).filter((name) => !used(`${paint}-${name}`))).toEqual([]);
+    // Or read by name from the role object, where code paints with it (the mark's lit node, drawn as an SVG fill in an Edge page).
+    const read = (name: string) => !name.includes("-") && new RegExp(`\\.${name}\\}`).test(text);
+    expect(Object.keys(flatRoles()).filter((name) => !used(`${paint}-${name}`) && !read(name))).toEqual([]);
   });
 
   it("uses every named width and height", () => {

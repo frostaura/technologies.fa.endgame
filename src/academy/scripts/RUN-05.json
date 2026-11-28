@@ -38,6 +38,16 @@
           "wait": {
             "text": "Resumed"
           }
+        },
+        {
+          "wait": {
+            "text": "Working"
+          }
+        },
+        {
+          "clock": {
+            "pause": true
+          }
         }
       ],
       "highlight": {

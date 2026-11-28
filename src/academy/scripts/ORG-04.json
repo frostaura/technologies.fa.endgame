@@ -44,7 +44,7 @@
           "step": 1,
           "kind": "demo",
           "highlight": {
-            "text": "credits left",
+            "selector": "a[href='/credits']",
             "note": "Northwind is at its overdraft limit: the Credits chip's dot turns red, and it still leads to Credits."
           }
         }

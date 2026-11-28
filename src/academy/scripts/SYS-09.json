@@ -6,6 +6,22 @@
   "start": "/",
   "steps": [
     {
+      "step": 1,
+      "kind": "demo",
+      "highlight": {
+        "none": "The “Opening Endgame” skeleton shows only while the session is checked, over before a ring could be drawn; step 3 rings what it leaves."
+      },
+      "note": "While the session is checked, a header skeleton: “Opening Endgame”."
+    },
+    {
+      "step": 2,
+      "kind": "demo",
+      "highlight": {
+        "none": "A 401 goes to sign-in (ID-04 shows it); this world’s session check cannot be reached instead."
+      },
+      "note": "A 401 is treated as signed out and goes to sign-in."
+    },
+    {
       "step": 3,
       "kind": "demo",
       "highlight": {

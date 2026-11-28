@@ -9,9 +9,6 @@ export const ui = {
   outline: `${pill} border-2 border-ink text-ink hover:bg-ink hover:text-primary-ink`,
   success: `${pill} bg-success-text text-primary-ink hover:bg-ink`,
   quiet: `${pill} border text-ink hover:bg-ground`,
-  /** On the dark (night) panels. */
-  light: `${pill} bg-surface text-ink hover:bg-primary-tint`,
-  lightOutline: `${pill} border-2 border-primary-ink-soft text-primary-ink hover:bg-surface/10`,
   danger: `${pill} bg-attention-text text-primary-ink hover:bg-attention-strong`,
   /** A square, label-less control with an accessible name: 44 px, the smallest comfortable touch. */
   icon: "inline-flex min-h-touch min-w-touch shrink-0 items-center justify-center rounded-full text-ink transition-colors hover:bg-ground disabled:cursor-not-allowed disabled:opacity-40",
