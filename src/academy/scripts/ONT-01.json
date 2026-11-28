@@ -24,7 +24,8 @@
         }
       ],
       "highlight": {
-        "selector": "ul[aria-label='Key']",
+        "selector": "#chart-panel",
+        "region": true,
         "note": "Who works on what: the people, team by team — what each works on, and who reports to whom."
       }
     },
@@ -39,7 +40,8 @@
         }
       ],
       "highlight": {
-        "selector": "ul[aria-label='Key']",
+        "selector": "#chart-panel",
+        "region": true,
         "note": "How data flows: each app against the services it uses, and which way the data goes."
       }
     }
