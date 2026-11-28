@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { contrastRatio, flatRoles } from "../../../frontend/src/lib/tokens.ts";
-import { INLINE_STYLE, type Tone } from "./inlineStyle.ts";
+import { INLINE_STYLE } from "./inlineStyle.ts";
 
-/** The ground each tone's text is drawn on: the page, and the night panel ("You know it worked when"). */
-const GROUND: Record<Tone, string> = { light: "surface", dark: "night" };
+/** The ground inline text is drawn on: the page's surface (every card is light). */
+const GROUND = "surface";
 const roles = flatRoles();
 
 function rgb(hex: string): [number, number, number] {
@@ -32,20 +32,13 @@ function paint(classes: string, kind: "text" | "bg", ground: string): string | n
 }
 
 describe("every inline style is legible on the ground it is drawn on (WCAG AA)", () => {
-  for (const tone of ["light", "dark"] as const) {
-    for (const [name, classes] of Object.entries(INLINE_STYLE[tone])) {
-      it(`${tone}: ${name}`, () => {
-        const ground = roles[GROUND[tone]] ?? "";
-        const bg = paint(classes, "bg", ground) ?? ground;
-        const text = paint(classes, "text", bg);
-        expect(text, `${name} names its text colour`).not.toBeNull();
-        expect(contrastRatio(text ?? "", bg)).toBeGreaterThanOrEqual(4.5);
-      });
-    }
+  for (const [name, classes] of Object.entries(INLINE_STYLE)) {
+    it(name, () => {
+      const ground = roles[GROUND] ?? "";
+      const bg = paint(classes, "bg", ground) ?? ground;
+      const text = paint(classes, "text", bg);
+      expect(text, `${name} names its text colour`).not.toBeNull();
+      expect(contrastRatio(text ?? "", bg)).toBeGreaterThanOrEqual(4.5);
+    });
   }
-  it("a dark panel's inline text is not the light page's ink", () => {
-    // The defect this holds off: **"Sign out"** drawn in the page's ink on the night panel.
-    expect(contrastRatio(roles.ink ?? "", roles.night ?? "")).toBeLessThan(4.5);
-    expect(INLINE_STYLE.dark.strong).not.toMatch(/\btext-ink\b/);
-  });
 });

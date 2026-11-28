@@ -24,14 +24,6 @@
     {
       "step": 3,
       "kind": "demo",
-      "highlight": {
-        "text": "The organisations",
-        "note": "Under the panel, every organisation in one table — standing, balance, last active — and the top-up requests waiting for your answer."
-      }
-    },
-    {
-      "step": 4,
-      "kind": "demo",
       "act": [
         {
           "click": {
@@ -51,6 +43,14 @@
       "highlight": {
         "text": "Top-ups asked for",
         "note": "Beside it, every organisation at a glance: organisations, top-ups asked for, and below zero."
+      }
+    },
+    {
+      "step": 5,
+      "kind": "demo",
+      "highlight": {
+        "text": "The organisations",
+        "note": "Under the panel, every organisation in one table — standing, balance, last active — and the top-up requests waiting for your answer."
       }
     }
   ]

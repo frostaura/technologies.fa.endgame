@@ -51,8 +51,6 @@ export const roles = {
     line: p.blue[200],
     soft: p.blue[300],
     ink: p.white,
-    /** Secondary text set on the primary band. */
-    "ink-soft": p.blue[100],
   },
   /**
    * People and the factory once had hues of their own. The house look is black on white with one accent,
@@ -78,8 +76,6 @@ export const roles = {
     wash: p.coral[25],
     line: p.coral[200],
   },
-  /** The verdict band. */
-  night: p.navy,
   /** The lit node of the mark. */
   live: p.mint,
   /** Avatar fills for named employees, picked by a stable hash of the name. */
